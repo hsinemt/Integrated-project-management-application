@@ -6,6 +6,10 @@ const UserSchema = new Schema({
         type: String,
         required: true,
     },
+    lastname: {
+        type: String,
+        required: true,
+    },
     email: {
         type: String,
         required: true,
@@ -16,8 +20,13 @@ const UserSchema = new Schema({
         required: true,
         length: 8,
     },
-    birthday: {
-        type: Date,
+    // birthday: {
+    //     type: Date,
+    //     required: true,
+    // },
+    role: {
+        type: String,
+        enum: ['admin', 'student', 'tutor', 'module manager'],
         required: true,
     }
 });
