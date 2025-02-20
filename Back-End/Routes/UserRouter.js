@@ -1,9 +1,13 @@
 const express = require('express');
-const { signup } = require('../Controllers/UserController');
+const { signup,sendVerifyOtp, verifyEmail} = require('../Controllers/UserController');
 
-const {signupValidation} = require('../Middlewares/UserValidation')
+const {signupValidation,userToken} = require('../Middlewares/UserValidation')
+
 const router = express.Router();
 
 router.post('/signup', signupValidation, signup);
+// router.post('/login',login);
+router.post('/sendVerifyOtp',userToken,sendVerifyOtp);
+router.post('/verifyAccount',userToken,verifyEmail);
 
 module.exports = router;
