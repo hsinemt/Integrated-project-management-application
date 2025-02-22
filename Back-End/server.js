@@ -2,8 +2,9 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const UserRouter = require('./Routes/UserRouter');
 const cookieParser = require('cookie-parser');
+const UserRouter = require('./Routes/UserRouter');
+const authRoutes = require('./Routes/authRouter');
 
 require('dotenv').config();
 require('./Config/db');
@@ -18,6 +19,8 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors({credentials: true}));
 app.use('/user', UserRouter);
+app.use('/auth', authRoutes);
 
-app.listen(PORT, () => {console.log(`Server is running on ${PORT}`)
+app.listen(PORT, () => {
+    console.log(`Server is running on ${PORT}`);
 });
