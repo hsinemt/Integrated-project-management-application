@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+//const options = {discriminatorKey: 'role', collection: 'users'};
+
 const UserSchema = new Schema({
     name: {
         type: String,
@@ -20,11 +22,32 @@ const UserSchema = new Schema({
         required: true,
         length: 8,
     },
-    role: { 
-        type: String, 
-        enum: ["admin", "manager", "tutor", "student"], 
-        default: "student" 
-      }
+    verifyOtp: {
+        type: String,
+        default: ''
+    },
+    verifyOtpExpirationAt: {
+        type: Number,
+        default: 0
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    resetOtp:{
+        type: String,
+        default: ''
+    },
+    resetOtpExpirationAt: {
+        type: Number,
+        default: 0
+    },
+    role: {
+        type: String,
+        enum: ['admin', 'student', 'tutor', 'module manager'],
+        required: true,
+    }
 });
  const UserModel = mongoose.model('User', UserSchema);
+
  module.exports = UserModel;
