@@ -1,12 +1,14 @@
 # Default ignored files
 /shelf/
-/workspace.xml
+workspace.xml
+
 # Editor-based HTTP Client requests
 /httpRequests/
+
 # Datasource local storage ignored files
 /dataSources/
 
-# Ignore .env file
+# Ignore .env file (for security reasons)
 .env
 
 # Ignore node_modules directory
@@ -30,12 +32,10 @@ build/
 out/
 
 # Ignore npm/yarn cache
-.npm
-.yarn
-.yarn-cache
+.npm/
+.yarn/
+.yarn-cache/
 
 # Ignore dependency lock files (optional)
 package-lock.json
 yarn.lock
-
-#
