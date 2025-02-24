@@ -1,56 +1,36 @@
-# Default ignored files
-/shelf/
-/workspace.xml
-# Editor-based HTTP Client requests
-/httpRequests/
-# Datasource local storage ignored files
-/dataSources/
-
-# Ignore .env file
-.env
-
-echo ".env" >> .gitignore
-
-# Ignore node_modules directory
+# Node.js
 node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
 
-# Ignore IDE-specific files
-.idea/
-*.iml
-*.swp
-*.swo
-.DS_Store
-.vscode/
+# Environnement de développement
+.env
+.env.local
+.env.*.local
 
-# Ignore logs
+# Dossiers de build
+/dist
+/build
+
+# Fichiers de logs
 *.log
-logs/
 
-# Ignore build/output directories
-dist/
-build/
-out/
+# IDE et éditeurs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
 
-# Ignore npm/yarn cache
-.npm
-.yarn
-.yarn-cache
+# MacOS
+.DS_Store
 
-# Ignore dependency lock files (optional)
-package-lock.json
-yarn.lock
-
-# Ignore debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Ignore OS-specific files
+# Windows
 Thumbs.db
-ehthumbs.db
-[Dd]esktop.ini
-$RECYCLE.BIN/
 
-# Ignore testing and coverage directories
+# GitHub secret scanning (avoid committing secrets)
+*.env
+
+# Autres fichiers spécifiques à l'outil
 coverage/
-.nyc_output/
+*.tgz
