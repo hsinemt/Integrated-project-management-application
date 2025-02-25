@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   displayName: String,
   profileUrl: String,
   email: { type: String, unique: true, sparse: true },
+  role: { type: String, default: "etudiant" },
   avatarUrl: String
 });
 
