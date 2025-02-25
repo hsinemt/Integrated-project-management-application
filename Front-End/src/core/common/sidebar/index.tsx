@@ -62,7 +62,6 @@ const Sidebar = () => {
         return "";
     }
   };
-
   const location = useLocation();
   const dispatch = useDispatch();
   const previousLocation = usePreviousRoute();
@@ -72,11 +71,15 @@ const Sidebar = () => {
     setSubopen(currentMenu);
     // Select all 'submenu' elements
     const submenus = document.querySelectorAll(".submenu");
+    // Loop through each 'submenu'
     submenus.forEach((submenu) => {
+      // Find all 'li' elements within the 'submenu'
       const listItems = submenu.querySelectorAll("li");
       submenu.classList.remove("active");
+      // Check if any 'li' has the 'active' class
       listItems.forEach((item) => {
         if (item.classList.contains("active")) {
+          // Add 'active' class to the 'submenu'
           submenu.classList.add("active");
           return;
         }
@@ -90,7 +93,6 @@ const Sidebar = () => {
   const onMouseLeave = () => {
     dispatch(setExpandMenu(false));
   };
-
   return (
     <>
       <div
@@ -123,16 +125,12 @@ const Sidebar = () => {
             <p className="fs-10">System Admin</p>
           </div>
         </div>
-
         <Scrollbars>
           <div className="sidebar-inner slimscroll">
             <div id="sidebar-menu" className="sidebar-menu">
               <ul>
                 {SidebarDataTest?.map((mainLabel, index) => (
                   <React.Fragment key={`main-${index}`}>
-                    {/* Afficher seulement certains éléments du menu selon le rôle */}
-                    {(userRole === 'admin' || mainLabel?.tittle !== 'Admin-only') && (
-                      <>
                         <li className="menu-title">
                           <span>{mainLabel?.tittle}</span>
                         </li>
@@ -208,7 +206,6 @@ const Sidebar = () => {
                                           {item?.submenuItems ? (
                                             <ul
                                               style={{
-                                                display: subsidebar === item?.label ? "block" : "none",
                                               }}
                                             >
                                               {item?.submenuItems?.map((items: any, k: any) => (
@@ -236,8 +233,6 @@ const Sidebar = () => {
                             })}
                           </ul>
                         </li>
-                      </>
-                    )}
                   </React.Fragment>
                 ))}
               </ul>
@@ -248,6 +243,5 @@ const Sidebar = () => {
     </>
   );
 };
-
 
 export default Sidebar;

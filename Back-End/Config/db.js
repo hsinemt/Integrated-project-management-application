@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
-const mongo_url = process.env.MONGODB_URL;
+const mongoURI = process.env.MONGODB_URL || 'mongodb://localhost:27017/user';
 
-mongoose.connect(mongo_url).then(() => {
-    console.log('MongoDB Connected');
-}).catch((err) => {
-    console.log('MongoDB Connection Error: ', err);
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 })
+  .then(() => console.log('✅ Connexion à MongoDB réussie'))
+  .catch(err => console.error('❌ Erreur de connexion à MongoDB:', err));

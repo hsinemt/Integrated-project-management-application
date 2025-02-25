@@ -263,58 +263,48 @@ const Register = () => {
                           <span className="span-or">Or</span>
                         </div>
                         <div className="mt-2">
-                          <div className="d-flex align-items-center justify-content-center flex-wrap">
-                            <div className="text-center me-2 flex-fill">
-                              <Link
-                                  to="#"
-                                  className="br-10 p-2 btn btn-info d-flex align-items-center justify-content-center"
-                              >
-                                <ImageWithBasePath
-                                    className="img-fluid m-1"
-                                    src="assets/img/icons/facebook-logo.svg"
-                                    alt="Facebook"
-                                />
-                              </Link>
-                            </div>
-                            <div className="text-center me-2 flex-fill">
-                              <Link
-                                  to="#"
-                                  className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
-                              >
-                                <ImageWithBasePath
-                                    className="img-fluid m-1"
-                                    src="assets/img/icons/google-logo.svg"
-                                    alt="Facebook"
-                                />
-                              </Link>
-                            </div>
-                            <div className="text-center flex-fill">
-                              <Link
-                                  to="#"
-                                  className="bg-dark br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
-                              >
-                                <ImageWithBasePath
-                                    className="img-fluid m-1"
-                                    src="assets/img/icons/apple-logo.svg"
-                                    alt="Apple"
-                                />
-                              </Link>
-                            </div>
-                          </div>
+                        <div className="d-flex align-items-center justify-content-center flex-wrap">
+                        <div className="text-center me-2 flex-fill">
+  <a
+    href="http://localhost:3000/auth/github" 
+    className="br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
+  >
+    <ImageWithBasePath
+      className="img-fluid m-1"
+      src="assets/img/icons/github-logo.svg"
+      alt="GitHub"
+    />
+  </a>
+</div>
+
+<div className="text-center me-2 flex-fill">
+  <a
+    href="http://localhost:3000/auth/google" 
+    className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
+  >
+    <ImageWithBasePath
+      className="img-fluid m-1"
+      src="assets/img/icons/google-logo.svg"
+      alt="Google"
+    />
+  </a>
+</div>
+
                         </div>
                       </div>
-                      <div className="mt-5 pb-4 text-center">
-                        <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
-                      </div>
                     </div>
-                  </form>
-                </div>
+                    <div className="mt-5 pb-4 text-center">
+                      <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
+                    </div>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
+
   );
 };
-
 export default Register;
