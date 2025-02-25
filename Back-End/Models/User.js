@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const options = { discriminatorKey: 'kid' };
 
 const UserSchema = new Schema({
     name: {
@@ -25,6 +26,6 @@ const UserSchema = new Schema({
         enum: ["admin", "manager", "tutor", "student"], 
         default: "student" 
       }
-});
- const UserModel = mongoose.model('User', UserSchema);
- module.exports = UserModel;
+    }, options);
+    const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
+     module.exports = UserModel;
