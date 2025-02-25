@@ -13,7 +13,8 @@ passport.use(new GitHubStrategy({
       const emails = profile.emails || [];
       const primaryEmail = emails.length > 0 ? emails[0].value : null;
 
-      let user = await User.findOne({ githubId: profile.id });
+      // Vérifier si l'utilisateur existe par email ou githubId
+      let user = await User.findOne({ $or: [{ githubId: profile.id }, { email: primaryEmail }] });
 
       if (!user) {
         user = new User({
@@ -25,6 +26,10 @@ passport.use(new GitHubStrategy({
           avatarUrl: profile.photos?.[0]?.value
         });
 
+        await user.save();
+      } else if (!user.githubId) {
+        // Si l'utilisateur existe mais sans githubId, on l'associe
+        user.githubId = profile.id;
         await user.save();
       }
 

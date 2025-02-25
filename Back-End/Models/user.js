@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
-
 const userSchema = new mongoose.Schema({
-  githubId: { type: String, unique: true },
+  githubId: { type: String, unique: true, sparse: true }, // Ajout de sparse
   googleId: { type: String, unique: true, sparse: true },
   username: { type: String, unique: true },
   displayName: String,

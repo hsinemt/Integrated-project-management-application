@@ -10,15 +10,22 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      let user = await User.findOne({ googleId: profile.id });
+      const email = profile.emails?.[0]?.value;
+
+      // Vérifier si l'utilisateur existe déjà par googleId ou email
+      let user = await User.findOne({ $or: [{ googleId: profile.id }, { email: email }] });
 
       if (!user) {
         user = new User({
           googleId: profile.id,
           username: profile.displayName,
-          email: profile.emails?.[0]?.value,
+          email: email,
           avatarUrl: profile.photos?.[0]?.value
         });
+        await user.save();
+      } else if (!user.googleId) {
+        // Si l'utilisateur existe mais sans googleId, on l'associe
+        user.googleId = profile.id;
         await user.save();
       }
 

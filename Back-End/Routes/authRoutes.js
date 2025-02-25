@@ -34,4 +34,13 @@ router.get('/users', async (req, res) => {
   }
 });
 
+router.delete('/delete-null-github', async (req, res) => {
+  try {
+      const result = await User.deleteMany({ githubId: null });
+      res.json({ message: `✅ ${result.deletedCount} utilisateurs supprimés.` });
+  } catch (err) {
+      res.status(500).json({ error: '❌ Erreur lors de la suppression.' });
+  }
+});
+
 module.exports = router;
