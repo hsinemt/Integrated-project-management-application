@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
 
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(cors({credentials: true}));
+app.use(cors({ credentials: true, origin: 'http://localhost:3000' }));
 app.use('/user', UserRouter);
 
 app.listen(PORT, () => {console.log(`Server is running on ${PORT}`)

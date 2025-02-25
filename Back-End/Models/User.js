@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-//const options = {discriminatorKey: 'role', collection: 'users'};
+const options = {discriminatorKey: 'role', collection: 'users'};
 
 const UserSchema = new Schema({
     name: {
@@ -44,10 +44,10 @@ const UserSchema = new Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'student', 'tutor', 'module manager'],
+        enum: ['admin', 'student', 'tutor', 'manager'],
         required: true,
     }
-});
+},options);
  const UserModel = mongoose.model('User', UserSchema);
 
  module.exports = UserModel;

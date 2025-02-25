@@ -5,16 +5,19 @@ const signupValidation = (req, res, next) => {
     const schema = Joi.object({
         name: Joi.string().min(3).max(50).required(),
         lastname: Joi.string().min(3).max(50).required(),
-        email: Joi.string().email().required(),
+        //email: Joi.string().email().required(),
+        email: Joi.string()
+            .email()
+            .pattern(/^[a-zA-Z0-9._%+-]+@esprit\.tn$/)
+            .required(),
         password: Joi.string().min(4).max(64).required(),
         // birthday: Joi.date().required(),
-        role: Joi.string().valid('admin', 'student', 'tutor', 'module manager').required()
+        role: Joi.string().valid('student').required()
     });
     const {error} = schema.validate(req.body);
     if (error) {
         return res.status(400)
         .json({message: "Bad Request", error});
-
     }
     next();
 
