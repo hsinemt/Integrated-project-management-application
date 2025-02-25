@@ -18,7 +18,7 @@ router.post('/reset-password', async (req, res) => {
         }
 
         // Generate a random token
-        const token = crypto.randomBytes(20).toString('hex');
+        const token = crypto.randomInt(1000, 9999); // Generates a number between 1000 and 9999
         user.resetOtp = token;
         user.resetOtpExpirationAt = Date.now() + 3600000; // 1 hour
 
