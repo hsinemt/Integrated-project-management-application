@@ -1,16 +1,115 @@
-const express = require('express');
-const {authMiddleware, roleMiddleware } = require('../Middlewares/UserValidation');
+const express = require("express");
+const { authMiddleware } = require("../Middlewares/UserValidation");
+const { login, getProfile } = require("../Controllers/userControllers");
+const User = require("../Models/user");
+const multer = require("multer");
+const path = require("path");
+
 const router = express.Router();
-const {login,getProfile} = require('../Controllers/userControllers');
+
+// Set up multer storage
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Unique file name
+  },
+});
+
+const upload = multer({ storage });
+
+// Get user profile
 router.get("/profile", authMiddleware, getProfile);
+
+// User login
 router.post("/login", login);
+
+// Upload profile image
+router.post("/upload", authMiddleware, upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+    console.log("Image URL sent to frontend:", imageUrl);  // Log the image URL here
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id, // Authenticated user's ID
+      { images: imageUrl },
+      { new: true }
+    );
+
+    res.json({ success: true, message: "Image uploaded successfully", user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ message: "Error uploading image", error });
+  }
+});
+
+
+// Role-based dashboard access
 router.get("/dashboard/:role", authMiddleware, (req, res) => {
   const allowedRoles = ["admin", "manager", "tutor", "student"];
   if (!allowedRoles.includes(req.params.role) || req.params.role !== req.user.role) {
-      return res.status(403).json({ message: "Access denied" });
+    return res.status(403).json({ message: "Access denied" });
   }
   res.json({ message: `Welcome ${req.params.role}` });
 });
 
+router.post('/update-skills', async (req, res) => {
+  try {
+    const { userId, skills } = req.body;
 
+    // Find the user and update their skills
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { skills },
+      { new: true } // Return the updated user
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Skills updated successfully',
+      updatedSkills: updatedUser.skills, // Send the updated skills back
+    });
+  } catch (error) {
+    console.error('Error updating skills:', error);
+    res.status(500).json({ message: 'Error updating skills', error });
+  }
+});
+
+const bcrypt = require('bcrypt');
+
+router.put('/update-profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name, lastname, birthday, password } = req.body;
+
+    // Hash the password if it's provided
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+    // Find the user and update their profile
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { name, lastname, birthday, password: hashedPassword },
+      { new: true } // Return the updated user
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      updatedUser,
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ message: 'Error updating profile', error });
+  }
+});
 module.exports = router;

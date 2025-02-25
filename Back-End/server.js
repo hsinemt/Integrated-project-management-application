@@ -3,7 +3,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const UserRouter = require('./Routes/UserRouter');
-
+const path = require("path");
 require('dotenv').config();
 require('./Config/db');
 
@@ -18,3 +18,5 @@ app.use('/user', UserRouter);
 
 app.listen(PORT, () => {console.log(`Server is running on ${PORT}`)
 });
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
