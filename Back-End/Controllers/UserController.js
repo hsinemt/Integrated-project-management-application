@@ -31,38 +31,36 @@ const login = async (req, res) => {
             return res.status(400).json({ message: "reCAPTCHA validation failed" });
         }
 
+        // Récupérer l'utilisateur
         const user = await UserModel.findOne({ email });
         if (!user) return res.status(400).json({ message: "Wrong Email" });
 
+        // Vérifier le mot de passe
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: "Wrong password" });
 
+        // Générer le token JWT avec le rôle inclus
         const token = jwt.sign(
-            { id: user._id, role: user.role },
+            { id: user._id, role: user.role }, // Inclut le rôle dans le token
             process.env.JWT_SECRET,
             { expiresIn: "3h" }
         );
 
-        // Définir les routes basées sur les rôles
-        const roleRoutes = {
-            admin: "/dashboard/admin",
-            manager: "/dashboard/manager",
-            tutor: "/dashboard/tutor",
-            student: "/dashboard/student"
-        };
+        // Redirection universelle vers /index
+        const redirectTo = "/index";
 
-        // Modifier la redirection pour tout le monde vers /index
-        const redirectTo = "/index"; // Tous les utilisateurs seront redirigés vers /index
-
+        // Retourner la réponse avec le token et le rôle
         res.json({ 
             token, 
-            role: user.role, 
+            role: user.role, // ✅ Le rôle est renvoyé ici
             redirectTo 
         });
     } catch (error) {
+        console.error("Login error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
+
 
 
 

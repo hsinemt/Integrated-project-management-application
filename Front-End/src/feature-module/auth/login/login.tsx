@@ -47,6 +47,7 @@ const Login = () => {
 
       if (response.data && response.data.token) {
         localStorage.setItem("token", response.data.token);
+        localStorage.setItem("role", response.data.role); // ✅ Stocker le rôle
 
         // Rediriger en fonction du rôle de l'utilisateur
         const redirectTo = response.data.redirectTo || "/admin/dashboard";
@@ -59,8 +60,7 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
-
-  };
+};
 
   return (
     <div className="container-fluid">
