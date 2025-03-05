@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -11,6 +11,67 @@ import {
 } from "../../data/redux/sidebarSlice";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { HorizontalSidebarData } from '../../data/json/horizontalSidebar'
+import axios from 'axios';
+
+const Profile = () => {
+	const route = all_routes;
+	const [user, setUser] = useState({
+	  _id: "", // Add _id to the user state
+	  name: "",
+	  lastname: "",
+	  email: "",
+	  birthday: "",
+	  password: "",
+	  images: "",
+	  skills: [], // Add skills to the user state
+	});
+  
+	const [selectedFile, setSelectedFile] = useState<File | null>(null);
+	const [previewImage, setPreviewImage] = useState<string | null>(null);
+	const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  
+	useEffect(() => {
+	  const fetchProfile = async () => {
+		try {
+		  const token = localStorage.getItem("token");
+		  if (!token) {
+			console.error("No token found in localStorage");
+			return;
+		  }
+  
+		  const response = await axios.get("http://localhost:5000/user/profile", {
+			headers: { Authorization: `${token}` },
+		  });
+  
+		  if (response.data) {
+			const formattedBirthday = response.data.birthday
+			  ? response.data.birthday.split("T")[0]
+			  : "";
+			setUser({
+			  _id: response.data._id, // Set the _id property
+			  name: response.data.name,
+			  lastname: response.data.lastname,
+			  email: response.data.email,
+			  birthday: formattedBirthday,
+			  password: "",
+			  images: response.data.images,
+			  skills: response.data.skills || [], // Add skills from the backend
+			});
+  
+			// Set the selected skills with the user's current skills
+			setSelectedSkills(response.data.skills || []);
+		  } else {
+			console.error("User data is empty");
+		  }
+		} catch (error) {
+		  console.error("Error fetching profile:", error);
+		}
+	  };
+  
+	  fetchProfile();
+	}, []);
+}
+
 const Header = () => {
   const routes = all_routes;
   const dispatch = useDispatch();
@@ -75,6 +136,62 @@ const Header = () => {
       }
     }
   };
+
+  const [user, setUser] = useState({
+	_id: "", // Add _id to the user state
+	name: "",
+	lastname: "",
+	email: "",
+	birthday: "",
+	password: "",
+	images: "",
+	skills: [], // Add skills to the user state
+  });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  useEffect(() => {
+	const fetchProfile = async () => {
+	  try {
+		const token = localStorage.getItem("token");
+		if (!token) {
+		  console.error("No token found in localStorage");
+		  return;
+		}
+
+		const response = await axios.get("http://localhost:5000/user/profile", {
+		  headers: { Authorization: `${token}` },
+		});
+
+		if (response.data) {
+		  const formattedBirthday = response.data.birthday
+			? response.data.birthday.split("T")[0]
+			: "";
+		  setUser({
+			_id: response.data._id, // Set the _id property
+			name: response.data.name,
+			lastname: response.data.lastname,
+			email: response.data.email,
+			birthday: formattedBirthday,
+			password: "",
+			images: response.data.images,
+			skills: response.data.skills || [], // Add skills from the backend
+		  });
+
+		  // Set the selected skills with the user's current skills
+		  setSelectedSkills(response.data.skills || []);
+		} else {
+		  console.error("User data is empty");
+		}
+	  } catch (error) {
+		console.error("Error fetching profile:", error);
+	  }
+	};
+
+	fetchProfile();
+  }, []);
 
   return (
     <>
@@ -332,7 +449,7 @@ const Header = () => {
 												<Link to={routes.activity}>
 													<div className="d-flex">
 														<span className="avatar avatar-lg me-2 flex-shrink-0">
-															<ImageWithBasePath src="assets/img/profiles/avatar-27.jpg" alt="Profile"/>
+															<ImageWithBasePath src="g" alt="Profile"/>
 														</span>
 														<div className="flex-grow-1">
 															<p className="mb-1"><span
@@ -402,7 +519,11 @@ const Header = () => {
 							<div className="dropdown profile-dropdown">
 								<Link to="#" className="dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
 									<span className="avatar avatar-sm online">
-										<ImageWithBasePath src="assets/img/profiles/avatar-12.jpg" alt="Img" className="img-fluid rounded-circle"/>
+									<img 
+  src="https://res.cloudinary.com/dqtrzwnf4/image/upload/v1741093746/tasks/lwuupu8py2amn16jjklx.png" 
+  alt="img"
+/>
+
 									</span>
 								</Link>
 								<div className="dropdown-menu shadow-none">
@@ -410,11 +531,15 @@ const Header = () => {
 										<div className="card-header">
 											<div className="d-flex align-items-center">
 												<span className="avatar avatar-lg me-2 avatar-rounded">
-													<ImageWithBasePath src="assets/img/profiles/avatar-12.jpg" alt="img"/>
+												<img 
+  src="https://res.cloudinary.com/dqtrzwnf4/image/upload/v1741093746/tasks/lwuupu8py2amn16jjklx.png" 
+  alt="img"
+/>
+
 												</span>
 												<div>
-													<h5 className="mb-0">Kevin Larry</h5>
-													<p className="fs-12 fw-medium mb-0">warren@example.com</p>
+													<h5 className="mb-0">{user.name}</h5>
+													<p className="fs-12 fw-medium mb-0">{user.email}</p>
 												</div>
 											</div>
 										</div>

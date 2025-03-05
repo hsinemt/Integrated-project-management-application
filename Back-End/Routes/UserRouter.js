@@ -1,6 +1,6 @@
 const express = require("express");
 const { authMiddleware } = require("../Middlewares/UserValidation");
-const { login, getProfile } = require("../Controllers/userControllers");
+const { login, getProfile,getStudentProfile } = require("../Controllers/userControllers");
 const User = require("../Models/user");
 const multer = require("multer");
 const path = require("path");
@@ -20,6 +20,10 @@ const upload = multer({ storage });
 // Get user profile
 router.get("/profile", authMiddleware, getProfile);
 
+
+
+
+router.get('/profilegroupe', authMiddleware, getStudentProfile);
 // User login
 router.post("/login", login);
 

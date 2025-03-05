@@ -4,6 +4,7 @@ import axios from "axios";
 import { all_routes } from "../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
 import SkillTags from "./SkillTags"; // Import the new SkillTags component
+import Swal from "sweetalert2";
 
 const Profile = () => {
   const route = all_routes;
@@ -119,7 +120,13 @@ const Profile = () => {
           ...prevUser,
           skills: response.data.updatedSkills,
         }));
-        alert("Skills updated successfully!");
+        Swal.fire({
+          title: "Success!",
+          text: "Skills updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+        
       }
     } catch (error) {
       console.error("Error saving skills:", error);
@@ -156,11 +163,23 @@ const Profile = () => {
       console.log("Backend response:", response.data);
 
       if (response.data.success) {
-        alert("Profile updated successfully!");
+        Swal.fire({
+          title: "Success!",
+          text: "Profile updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+        
       }
     } catch (error) {
       console.error("Error updating profile:", error);
-      alert("Failed to update profile. Please try again.");
+      Swal.fire({
+        title: "Error!",
+        text: "Failed to update profile. Please try again.",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+      
     }
   };
 

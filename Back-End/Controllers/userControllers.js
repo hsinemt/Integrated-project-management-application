@@ -1,7 +1,8 @@
 const bcrypt = require("bcrypt");
 const UserModel = require("../Models/user");
 const jwt = require("jsonwebtoken");
-
+const GroupeModel = require('../models/Group');
+const Task = require('../Models/task');
 
 const login = async (req, res) => {
     try {
@@ -48,7 +49,40 @@ const getProfile = async (req, res) => {
     }
 };
 
+const getStudentProfile = async (req, res) => {
+    try {
+        const student = await UserModel.findById(req.user.id).select("-password");
+        if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Fetch the group and populate `id_projects`
+        const group = await GroupeModel.findOne({ id_students: student._id }).populate('id_projects');
+        if (!group) {
+            return res.status(404).json({ message: "Group not found" });
+        }
+
+        // Fetch tasks related to the group's projects
+        const tasks = await Task.find({
+            project: { $in: group.id_projects.map(project => project._id) },
+            group: group._id  // Ensure tasks are related to the specific group
+        });
+
+        res.json({
+            student,
+            group,
+            projects: group.id_projects, // Projects for the group
+            tasks // Filtered tasks for the group
+        });
+    } catch (error) {
+        console.error("Error in getStudentProfile:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+
+
 
 module.exports = {
-    login,getProfile
+    login,getProfile,getStudentProfile
 };
