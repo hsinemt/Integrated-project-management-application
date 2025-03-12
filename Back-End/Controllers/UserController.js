@@ -29,7 +29,7 @@ const signup = async (req, res) => {
         user.password = await bcrypt.hash(password, 10);
         await user.save();
 
-        const token = jwt.sign({id: user._id}, process.env.JWT_SECRET, {expiresIn: '2d'});
+        const token = jwt.sign({id: user._id}, process.env.JWT_SECRET, {expiresIn: '1h'});
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -42,10 +42,10 @@ const signup = async (req, res) => {
             to: email,
             subject: 'welcome to our platform',
             text: `Welcome to our platform. Your account has been registered with email: ${email}`
-        }
+        };
         await transporter.sendMail(mailOptions);
 
-        // await sendVerifyOtp({ body: { userId: user._id } }, res);
+        //await sendVerifyOtp({ body: { userId: user._id } }, res);
         // try {
         //     await sendVerifyOtp({ userId: user._id  });
         // } catch (otpError) {
@@ -56,8 +56,10 @@ const signup = async (req, res) => {
             .json({
                 message: 'User successfully created',
                 success: true,
-                // token: token
-            })
+                email: email,
+                token,
+                user: { id: user._id, name, lastname, email, role, avatar: user.avatar }
+            });
     } catch(err) {
         console.error("error in signup",err);
         res.status(500)
@@ -92,7 +94,12 @@ const login = async (req, res) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'none':'strict',
             maxAge: 2 * 24 * 60 * 60 * 1000
         });
-        return res.json({success: true, message: `${email} You are logged in successfully`});
+        return res.json({
+            success: true,
+            message: `${email} You are logged in successfully`,
+            token,
+            user: { id: user._id, email: user.email, role: user.role, avatar: user.avatar },
+        });
 
     }catch(err) {
         return res.json({success: false, message: err.message});
@@ -100,36 +107,44 @@ const login = async (req, res) => {
 }
 
 //send the verification code
-const sendVerifyOtp = async (req, res) => {
-    try{
-        const {userId} = req.body;
 
-        const user = await UserModel.findById( userId );
-        if(user.isVerified){
-            return res.json({success: false, message:"account already verified"});
+const sendVerifyOtp = async (req, res) => {
+    try {
+        const { email } = req.body;
+        //console.log("Received request to send OTP to:", email);
+        const user = await UserModel.findOne({ email });
+        if (!user) {
+            console.log("User not found:", email);
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        if (user.isVerified) {
+            //console.log("User already verified:", email);
+            return res.status(400).json({ success: false, message: 'Account already verified' });
         }
 
-       const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        //console.log("Generated OTP:", otp);
 
         user.verifyOtp = otp;
-        user.verifyOtpExpirationAt = Date.now() + 24 * 60 * 60 * 1000
-
+        user.verifyOtpExpirationAt = Date.now() + 24 * 60 * 60 * 1000;
         await user.save();
 
         const mailOption = {
-                from: process.env.SENDER_EMAIL,
-                to: user.email,
-                subject: 'Account verification OTP',
-                text: `your OTP is ${otp}. Verify Your Account using this otp`
-        }
-        await transporter.sendMail(mailOption);
-        res.json({success: true, message: `Verification OTP sent on email ${user.email}`});
+            from: process.env.SENDER_EMAIL,
+            to: user.email,
+            subject: 'Account verification OTP',
+            text: `Your OTP is ${otp}. Verify your account using this OTP.`,
+        };
 
-    }catch(err){
-        res.json({success: false, message: err.message});
+        //console.log("Sending email to:", user.email);
+        await transporter.sendMail(mailOption);
+
+        res.json({ success: true, message: `Verification OTP sent to ${user.email}` });
+    } catch (err) {
+        console.error("Error sending OTP:", err);
+        res.status(500).json({ success: false, message: err.message });
     }
 };
-
 
 const verifyEmail = async (req, res) => {
 
@@ -158,6 +173,7 @@ const verifyEmail = async (req, res) => {
         return res.json({success: false, message: err.message});
     }
 };
+
 const addManager = async (req, res) => {
     try {
         const { name, lastname, email, password, speciality } = req.body;
@@ -262,7 +278,9 @@ const getAllUsers = async (req, res) => {
         // console.error("Error fetching users:", error);
         res.status(500).json({ message: 'Error fetching users', error: error.message });
     }
-};module.exports = {
+};
+
+module.exports = {
     signup,
     sendVerifyOtp,
     verifyEmail,

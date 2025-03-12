@@ -3,6 +3,7 @@ export const all_routes = {
   adminDashboard: "/index",
   employeeDashboard: "/employee-dashboard",
   // leadsDashboard: "/leads-dashboard",
+  usersDashboard: "/super-admin/users",
   dealsDashboard: "/deals-dashboard",
 
   //Application routes

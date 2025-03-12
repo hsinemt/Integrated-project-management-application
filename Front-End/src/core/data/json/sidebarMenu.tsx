@@ -20,6 +20,11 @@ export const SidebarDataTest = [
 
         submenuItems: [
           { label: "Admin Dashboard", link: routes.adminDashboard },
+          {
+            label: 'Users List',
+            link: routes.usersDashboard,
+            base: 'usersManagement',
+          },
           { label: "Manager Management",},
           { label: "Student Management",  },
           { label: "Tutor Management"},
@@ -59,15 +64,15 @@ export const SidebarDataTest = [
         materialicons: '',
         submenuItems: [
           {
-            label: 'Dashboard',
-            // link: routes.superAdminDashboard,
-            base: 'super-admin-dashboard',
+            label: 'Peojects Management',
+            link: routes.project,
+            base: 'project-grid'
           },
-          {
-            label: 'Groups List',
-            // link: routes.superAdminCompanies,
-            base: 'companies',
-          },
+          // {
+          //   label: 'Groups List',
+          //   link: routes.superAdminCompanies,
+          //   base: 'companies',
+          // },
 
 
         ],

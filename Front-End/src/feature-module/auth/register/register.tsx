@@ -56,6 +56,7 @@ const Register = () => {
     {
       const response = await registerUser(formData);
       setMessage(response.message);
+      localStorage.setItem("userEmail", response.email);
       // i use it for testing token
       // if (response.token) {
       //   localStorage.setItem('token', response.token);
@@ -65,7 +66,7 @@ const Register = () => {
     }catch(error: any){
       console.error("Error:", error);
       if(error.response){
-        setMessage(error.response.data.message);
+        setMessage(error.response.message);
       }else{
         setMessage("registraion failed, please try again later");
       }

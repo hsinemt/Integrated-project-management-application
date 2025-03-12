@@ -58,12 +58,15 @@ import Task from "../projects/task/task";
 import TaskDetails from "../projects/task/taskdetails";
 import TaskBoard from "../projects/task/task-board";
 import Companies from "../super-admin/companies";
+import usersManagement from "../super-admin/users/UsersManagement";
+
 import Subscription from "../super-admin/subscription";
 import Packages from "../super-admin/packages/packagelist";
 import PackageGrid from "../super-admin/packages/packagelist";
 import Domain from "../super-admin/domin";
 import PurchaseTransaction from "../super-admin/purchase-transaction";
 import React from "react";
+import UsersManagement from "../super-admin/users/UsersManagement";
 
 const routes = all_routes;
 
@@ -190,11 +193,16 @@ export const publicRoutes = [
     element: <TaskBoard />,
     route: Route,
   },
-  // {
-  //   path: routes.superAdminCompanies,
-  //   element: <Companies />,
-  //   route: Route,
-  // },
+  {
+    path: routes.usersDashboard,
+    element: <UsersManagement />,
+    route: Route,
+  },
+  {
+    path: routes.superAdminCompanies,
+    element: <Companies />,
+    route: Route,
+  },
   {
     path: routes.superAdminSubscriptions,
     element: <Subscription />,
