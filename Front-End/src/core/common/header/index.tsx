@@ -84,10 +84,10 @@ const Header = () => {
 
 				<div className="header-left">
 					<Link to={routes.adminDashboard} className="logo">
-						<ImageWithBasePath src="assets/img/logo.svg" alt="Logo"/>
+						<ImageWithBasePath src="assets/img/projexus-logo.svg" alt="Logo"/>
 					</Link>
 					<Link to={routes.adminDashboard} className="dark-logo">
-						<ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo"/>
+						<ImageWithBasePath src="assets/img/white-projexus-logo.svg" alt="Logo"/>
 					</Link>
 				</div>
 
@@ -110,7 +110,7 @@ const Header = () => {
 								<span className="input-icon-addon">
 									<i className="ti ti-search"></i>
 								</span>
-								<input type="text" className="form-control" placeholder="Search in HRMS" />
+								<input type="text" className="form-control" placeholder="Search in Projexus" />
 								<span className="input-group-text">
 									<kbd>CTRL + / </kbd>
 								</span>

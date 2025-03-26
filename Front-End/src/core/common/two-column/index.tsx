@@ -60,7 +60,7 @@ const TwoColumnSidebar = () => {
         <div className="sidebar sidebar-twocol">
             <div className="twocol-mini">
                 <Link to={routes.adminDashboard} className="logo-small">
-                    <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo"/>
+                    <ImageWithBasePath src="assets/img/small-projexus-logo.svg" alt="Logo"/>
                 </Link>
                 <Scrollbars>
                 <div className="sidebar-left slimscroll">
@@ -93,10 +93,10 @@ const TwoColumnSidebar = () => {
             <div className="sidebar-right">
                 <div className="sidebar-logo mb-4">
                     <Link to={routes.adminDashboard} className="logo logo-normal">
-                        <ImageWithBasePath src="assets/img/logo.svg" alt="Logo"/>
+                        <ImageWithBasePath src="assets/img/projexus-logo.svg" alt="Logo"/>
                     </Link>
                     <Link to={routes.adminDashboard} className="dark-logo">
-                        <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo"/>
+                        <ImageWithBasePath src="assets/img/white-projexus-logo.svg" alt="Logo"/>
                     </Link>
                 </div>
                 <div className="sidebar-scroll">

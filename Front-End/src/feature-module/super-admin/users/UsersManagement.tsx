@@ -17,13 +17,36 @@ const UsersManagement = () => {
   const [data, setData] = useState<users_type[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedUser, setSelectedUser] = useState<users_type | null>(null);
+  const generateAvatarUrl = (user: { name: string; lastname: string; role: string; }) => {
+    const nameInitial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+    const lastnameInitial = user.lastname ? user.lastname.charAt(0).toUpperCase() : '';
+    const initials = nameInitial + lastnameInitial;
 
+    const roleColors: { [key: string]: string } = {
+      'admin': '8e44ad',
+      'manager': '2980b9',
+      'tutor': '27ae60',
+      'student': 'e67e22',
+      'default': '7f8c8d'
+    };
+    const roleColor = roleColors[user.role] || roleColors['default'];
+
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&backgroundColor=${roleColor}&radius=50`;
+
+  };
+
+// Update the useEffect hook to add avatars
   useEffect(() => {
     const getData = async () => {
       try {
         const result = await fetchUsers();
-        //console.log("Fetched Users in Component:", result);
-        setData(result);
+        // Add avatar URLs to each user
+        const usersWithAvatars = result.map(user => ({
+          ...user,
+          avatar: user.avatar || generateAvatarUrl(user),
+          Status: 'Active' // Assuming all users are active by default
+        }));
+        setData(usersWithAvatars);
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
@@ -33,26 +56,33 @@ const UsersManagement = () => {
     getData();
   }, []);
 
+// Update the refreshUserList function
   const refreshUserList = async () => {
     try {
       const result = await fetchUsers();
-      setData(result);
+      const usersWithAvatars = result.map(user => ({
+        ...user,
+        avatar: user.avatar || generateAvatarUrl(user),
+        Status: 'Active'
+      }));
+      setData(usersWithAvatars);
     } catch (error) {
       console.error('Error refreshing user list:', error);
     }
   };
 
+
   const columns = [
     {
       title: "Name",
       dataIndex: "name",
-      render: (text: String, record: any) => (
+      render: (text: String, record: users_type) => (
           <div className="d-flex align-items-center file-name-icon">
             <Link to="#" className="avatar avatar-md border rounded-circle">
-              <ImageWithBasePath
-                  src={`assets/img/company/${record.Image}`}
-                  className="img-fluid"
-                  alt="img"
+              <img
+                  src={record.avatar || generateAvatarUrl(record)}
+                  className="img-fluid rounded-circle"
+                  alt={`${record.name} ${record.lastname}`}
               />
             </Link>
             <div className="ms-2">
@@ -61,7 +91,6 @@ const UsersManagement = () => {
               </h6>
             </div>
           </div>
-
       ),
       sorter: (a: any, b: any) => a.name.length - b.name.length,
     },

@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, {useEffect, useState} from 'react'
+import {Link, useNavigate} from 'react-router-dom'
 import { all_routes } from '../../router/all_routes'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import CommonSelect from '../../../core/common/commonSelect'
@@ -9,33 +9,216 @@ import CommonTagsInput from '../../../core/common/Taginput'
 import CommonTextEditor from '../../../core/common/textEditor'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
 
+import {  initialProjectData,project,getAllProjects,deleteProject,ProjectType,ApiResponse,getProjectsCount} from '../../../api/projectsApi/addProject/project'
+
+
+declare global {
+  interface Window {
+    bootstrap?: {
+      Modal: {
+        getInstance(element: Element): { show(): void; hide(): void } | null;
+        new(element: Element): { show(): void; hide(): void };
+      };
+    };
+  }
+}
+
 const Project = () => {
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<ProjectType[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [formData, setFormData] = useState<ProjectType>(initialProjectData);
+  const [projectFeatures, setProjectFeatures] = useState<string[]>([]);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [visibleProjects, setVisibleProjects] = useState<number>(8);
+  const [projectCount, setProjectCount] = useState<number>(0);
+
+  const getProjectsPerRow = () => {
+    return 3;
+  };
+  const fetchProjectCount = async () => {
+    try {
+      const count = await getProjectsCount();
+      setProjectCount(count);
+    } catch (error) {
+      console.error('Error fetching project count:', error);
+    }
+  };
+
+  useEffect(() => {
+    const deleteModal = document.getElementById('delete_modal');
+    if (deleteModal) {
+      deleteModal.addEventListener('show.bs.modal', (event: Event) => {
+        const target = (event as any).relatedTarget as HTMLElement;
+
+        if (target) {
+          const projectId = target.getAttribute('data-project-id');
+          if (projectId) {
+            setProjectToDelete(projectId);
+          }
+        }
+      });
+    }
+
+    fetchProjects();
+    fetchProjectCount();
+
+    return () => {
+      if (deleteModal) {
+        deleteModal.removeEventListener('show.bs.modal', () => {});
+      }
+    };
+  }, []);
 
   const getModalContainer = () => {
     const modalElement = document.getElementById('modal-datepicker');
-    return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null
+    return modalElement ? modalElement : document.body;
   };
 
-  const [tags, setTags] = useState<string[]>(["Jerald", "Andrew", "Philip", "Davis"]);
-  const [tags1, setTags1] = useState<string[]>(["Hendry", "James"]);
-  const [tags2, setTags2] = useState<string[]>(["Dwight"]);
-  const [tags3, setTags3] = useState<string[]>(["Collab", "Promotion", "Rated"]);
 
-  const clinetChoose = [
-    { value: "Anthony Lewis", label: "Anthony Lewis" },
-    { value: "Brian Villalobos", label: "Brian Villalobos" },
-  ];
-  const statusChoose = [
-    { value: "Select", label: "Select" },
-    { value: "Active", label: "Active" },
-    { value: "Inactive", label: "Inactive" },
-  ];
-  const priorityChoose = [
-    { value: "Select", label: "Select" },
-    { value: "High", label: "High" },
-    { value: "Medium", label: "Medium" },
-    { value: "Low", label: "Low" },
-  ];
+  const fetchProjects = async () => {
+    setLoading(true);
+    try {
+      const projectsList = await getAllProjects();
+
+      if (projectsList.length > 0) {
+      }
+
+      setProjects(projectsList);
+    } catch (error: unknown) {
+      console.error('Error fetching projects:', error);
+      alert(error instanceof Error ? error.message : 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getCreatorName = (project: ProjectType) => {
+
+
+    if (project.creator && project.creator.name && project.creator.lastname) {
+      return `${project.creator.name} ${project.creator.lastname}`;
+    }
+    return "Unknown creator";
+  }
+  const handleLoadMore = () => {
+    setVisibleProjects(prev => prev + getProjectsPerRow() * 2);
+  };
+
+  const findProjectTitle = (projectId: string | null) => {
+    if (!projectId) return '';
+    const project = projects.find(p => p._id === projectId);
+    return project ? project.title : '';
+  };
+  const handleModalDelete = () => {
+    if (projectToDelete) {
+      handleDeleteConfirmWithId(projectToDelete);
+    } else {
+      console.error('No project selected for deletion');
+    }
+  };
+
+  const handleDeleteConfirmWithId = async (projectId: string) => {
+    if (!projectId) {
+      console.error('No project ID provided to handleDeleteConfirmWithId');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await deleteProject(projectId);
+
+      const deleteModal = document.getElementById('delete_modal');
+      if (deleteModal && window.bootstrap?.Modal) {
+        const modalInstance = window.bootstrap.Modal.getInstance(deleteModal);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+      }
+
+      if (response && response.success) {
+        fetchProjects();
+        fetchProjectCount();
+        setTimeout(() => {
+          alert('Project deleted successfully');
+        }, 300);
+      } else {
+        setTimeout(() => {
+          alert(response?.message || 'Failed to delete project');
+        }, 300);
+      }
+    } catch (error: unknown) {
+      console.error('Error deleting project:', error);
+      setTimeout(() => {
+        if (error instanceof Error) {
+          alert(`Error: ${error.message}`);
+        } else {
+          alert('An unknown error occurred while deleting the project');
+        }
+      }, 300);
+    } finally {
+      setLoading(false);
+      setProjectToDelete(null);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!formData.title || !formData.description || formData.keyFeatures.length === 0) {
+      alert('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('You need to be logged in to create a project');
+        setLoading(false);
+        return;
+      }
+
+      const response = await project(formData);
+
+      if (response.success) {
+        setFormData(initialProjectData);
+        setProjectFeatures([]);
+
+        const modal = document.getElementById('add_project');
+        if (modal && window.bootstrap?.Modal) {
+          const modalInstance = window.bootstrap.Modal.getInstance(modal);
+          if (modalInstance) {
+            modalInstance.hide();
+          }
+        }
+        fetchProjects();
+        fetchProjectCount();
+
+        const successModal = document.getElementById('success_modal');
+        if (successModal && window.bootstrap?.Modal) {
+          const bsModal = new window.bootstrap.Modal(successModal);
+          bsModal.show();
+        }
+      } else {
+        alert(response.message || 'Failed to add project');
+      }
+    } catch (error: unknown) {
+      console.error('Error adding project:', error);
+      alert(error instanceof Error ? error.message : 'An error occurred while adding the project');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   return (
       <>
@@ -54,7 +237,7 @@ const Project = () => {
                           <i className="ti ti-smart-home" />
                         </Link>
                       </li>
-                      <li className="breadcrumb-item">Employee</li>
+                      <li className="breadcrumb-item">Management</li>
                       <li className="breadcrumb-item active" aria-current="page">
                         Projects Grid
                       </li>
@@ -221,1437 +404,253 @@ const Project = () => {
               </div>
               {/* Project Grid */}
               <div className="row">
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Office Management</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
+                {loading ? (
+                    <div className="col-12 text-center py-5">
+                      <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
                       </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          An office management app project streamlines administrative
-                          tasks by integrating tools for scheduling, communication, and
-                          task management, enhancing overall productivity and
-                          efficiency.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-39.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Anthony Lewis</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">14 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">6</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-02.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-03.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-05.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +1
-                          </Link>
-                        </div>
+                      <p className="mt-2">Loading projects...</p>
+                    </div>
+                ) : projects.length === 0 ? (
+                    <div className="col-12 text-center py-5">
+                      <div className="alert alert-info">
+                        <i className="ti ti-info-circle me-2"></i>
+                        No projects found. Create your first project by clicking the "Add Project" button.
                       </div>
                     </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Clinic Management </Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A clinic management project streamlines patient records,
-                          appointments, and billing processes to improve operational
-                          efficiency.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-40.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Sophie Headrick</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
+                ) : (
+                    // Only display the number of projects specified by visibleProjects state
+                    projects.slice(0, visibleProjects).map((project) => (
+                        <div className="col-xxl-3 col-lg-4 col-md-6" key={project._id}>
+                          <div className="card">
+                            <div className="card-body">
+                              <div className="d-flex align-items-center justify-content-between mb-2">
+                                <h6>
+                                  <Link to={`/project-details/${project._id}`}>{project.title}</Link>
+                                </h6>
+                                <div className="dropdown">
+                                  <Link
+                                      to="#"
+                                      className="d-inline-flex align-items-center"
+                                      data-bs-toggle="dropdown"
+                                      aria-expanded="false"
+                                  >
+                                    <i className="ti ti-dots-vertical" />
+                                  </Link>
+                                  <ul className="dropdown-menu dropdown-menu-end p-3">
+                                    <li>
+                                      <Link
+                                          to="#"
+                                          className="dropdown-item rounded-1"
+                                          data-bs-toggle="modal"
+                                          data-inert={true}
+                                          data-bs-target="#edit_project"
+                                      >
+                                        <i className="ti ti-edit me-2" />
+                                        Edit
+                                      </Link>
+                                    </li>
+                                    <li>
+                                      <Link
+                                          to="#"
+                                          className="dropdown-item rounded-1"
+                                          data-bs-toggle="modal" data-inert={true}
+                                          data-bs-target="#delete_modal"
+                                          data-project-id={project._id}
+                                      >
+                                        <i className="ti ti-trash me-1" />
+                                        Delete
+                                      </Link>
+                                    </li>
+                                  </ul>
+                                </div>
+                              </div>
+                              <div className="mb-3 pb-3 border-bottom">
+                                <p className="text-truncate line-clamb-3 mb-0">
+                                  {project.description}
+                                </p>
+                              </div>
+                              <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                                <div className="d-flex align-items-center file-name-icon">
+                                  <Link
+                                      to="#"
+                                      className="avatar avatar-sm avatar-rounded flex-shrink-0"
+                                  >
+                                    <ImageWithBasePath
+                                        src="assets/img/users/user-39.jpg"
+                                        className="img-fluid"
+                                        alt="img"
+                                    />
+                                  </Link>
+                                  <div className="ms-2">
+                                    <h6 className="fw-normal fs-12">
+                                      <Link to="#">{getCreatorName(project)}</Link>
+                                    </h6>
+                                    <span className="fs-12 fw-normal ">{project.creator?.role}</span>
+                                  </div>
+                                </div>
+                                <div className="d-flex align-items-center">
+                                  <div>
+                                    <span className="fs-12 fw-normal ">Deadline</span>
+                                    <p className="mb-0 fs-12">14 Jan 2024</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="d-flex align-items-center justify-content-between">
+                                <div className="d-flex align-items-center">
+                <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
+                  <i className="ti ti-checklist text-success fs-16" />
+                </span>
+                                  <p>
+                                    <small>Tasks : </small>
+                                    <span className="text-dark">6</span>/10
+                                  </p>
+                                </div>
+                                <div className="avatar-list-stacked avatar-group-sm">
+                <span className="avatar avatar-rounded">
+                  <ImageWithBasePath
+                      className="border border-white"
+                      src="assets/img/profiles/avatar-02.jpg"
+                      alt="img"
+                  />
+                </span>
+                                  <span className="avatar avatar-rounded">
+                  <ImageWithBasePath
+                      className="border border-white"
+                      src="assets/img/profiles/avatar-03.jpg"
+                      alt="img"
+                  />
+                </span>
+                                  <span className="avatar avatar-rounded">
+                  <ImageWithBasePath
+                      className="border border-white"
+                      src="assets/img/profiles/avatar-05.jpg"
+                      alt="img"
+                  />
+                </span>
+                                  <Link
+                                      className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
+                                      to="#"
+                                  >
+                                    +1
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">15 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">7</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-06.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-07.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-08.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
+                    ))
+                )}
+
+                {/* Show "Load More" button only if there are more projects to load */}
+                {!loading && projects.length > 0 && visibleProjects < projects.length && (
+                    <div className="col-md-12">
+                      <div className="text-center mb-4">
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleLoadMore}
+                        >
+                          <i className="ti ti-loader-3 me-1" />
+                          Load More
+                        </button>
                       </div>
                     </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Educational Platform</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          An educational platform project provides a centralized space
-                          for delivering online courses, tracking progress, and managing
-                          student assessments.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-41.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Cameron Drake</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">16 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">5</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-09.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-10.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-11.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
+                )}
+              </div>
+              {/* / Project Grid */}
+
+              {/* Delete Modal */}
+              <div className="modal fade" id="delete_modal">
+                <div className="modal-dialog modal-dialog-centered">
+                  <div className="modal-content">
+                    <div className="modal-body text-center">
+        <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+          <i className="ti ti-trash-x fs-36" />
+        </span>
+                      <h4 className="mb-1">Confirm Delete</h4>
+                      <p className="mb-3">
+                        You want to delete this project, this can't be undone once
+                        you delete.
+                      </p>
+                      <div className="d-flex justify-content-center">
+                        <Link
+                            to="#"
+                            className="btn btn-light me-3"
+                            data-bs-dismiss="modal"
+                        >
+                          Cancel
+                        </Link>
+                        <button
+                            className="btn btn-danger"
+                            onClick={() => handleModalDelete()}
+                            disabled={loading}
+                        >
+                          {loading ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                Deleting...
+                              </>
+                          ) : 'Yes, Delete'}
+                        </button>
                       </div>
                     </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}> Chat &amp; Call Mobile App</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A chat and call mobile app enables users to send messages,
-                          make voice and video calls, and share media seamlessly across
-                          devices.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-42.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Doris Crowley</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">17 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">6</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-12.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-13.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-14.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Travel Planning Website</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A travel planning website helps users explore destinations,
-                          compare flights and accommodations, and create personalized
-                          itineraries.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-43.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Thomas Bordelon</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal">Manager</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">18 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">8</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-15.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-16.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-17.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Service Booking Software</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          Service booking software enables users to schedule
-                          appointments, manage bookings, and handle payments for various
-                          services.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-45.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Kathleen Gutierrez</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">19 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">8</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-18.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-19.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-20.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Hotel Booking App</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A hotel booking app allows users to search, compare, and book
-                          accommodations with ease, offering a wide range of options.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-46.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Bruce Wright</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">20 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">8</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-24.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-23.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-22.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +1
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>
-                            Car &amp; Bike Rental Software
-                          </Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          Car and bike rental software allows users to browse, reserve,
-                          and rent vehicles efficiently through an online platform.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-47.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Rebecca Smtih</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">17 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">6</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-12.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-13.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-14.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Navigation and Safety App</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A navigation and safety app provides real-time GPS guidance,
-                          traffic updates, and route optimization to help users reach
-                          their destinations efficiently.A navigation and safety app
-                          provides real-time GPS guidance, traffic updates, and route
-                          optimization to help users reach their destinations
-                          efficiently.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-28.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Connie Waters</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">14 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">6</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-02.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-03.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-05.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +1
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>Food Order App</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          A food order app allows users to browse menus, place orders,
-                          and track delivery from their favorite restaurants with ease.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-42.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Lori Broaddus</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">15 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">7</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-06.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-07.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-08.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>POS Admin Software</Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          POS admin software enables businesses to manage sales, track
-                          inventory, and process transactions efficiently through a
-                          centralized platform.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-48.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Stephen Dias</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal ">CEO</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">22 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">5</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-26.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-27.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-28.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-xxl-3 col-lg-4 col-md-6">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6>
-                          <Link to={all_routes.projectdetails}>
-                            Invoicing &amp; Billing Software
-                          </Link>
-                        </h6>
-                        <div className="dropdown">
-                          <Link
-                              to="#"
-                              className="d-inline-flex align-items-center"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                          >
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#edit_project"
-                              >
-                                <i className="ti ti-edit me-2" />
-                                Edit
-                              </Link>
-                            </li>
-                            <li>
-                              <Link
-                                  to="#"
-                                  className="dropdown-item rounded-1"
-                                  data-bs-toggle="modal" data-inert={true}
-                                  data-bs-target="#delete_modal"
-                              >
-                                <i className="ti ti-trash me-1" />
-                                Delete
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="mb-3 pb-3 border-bottom">
-                        <p className="text-truncate line-clamb-3 mb-0">
-                          Invoicing and billing software automates the creation,
-                          sending, and tracking of invoices, making payment processes
-                          quicker and more efficient.
-                        </p>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                        <div className="d-flex align-items-center file-name-icon">
-                          <Link
-                              to="#"
-                              className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                          >
-                            <ImageWithBasePath
-                                src="assets/img/users/user-50.jpg"
-                                className="img-fluid"
-                                alt="img"
-                            />
-                          </Link>
-                          <div className="ms-2">
-                            <h6 className="fw-normal fs-12">
-                              <Link to="#">Angela Thomas</Link>
-                            </h6>
-                            <span className="fs-12 fw-normal">Project Leader</span>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <div>
-                            <span className="fs-12 fw-normal ">Deadline</span>
-                            <p className="mb-0 fs-12">23 Jan 2024</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                          <i className="ti ti-checklist text-success fs-16" />
-                        </span>
-                          <p>
-                            <small>Tasks : </small>
-                            <span className="text-dark">8</span>/10
-                          </p>
-                        </div>
-                        <div className="avatar-list-stacked avatar-group-sm">
-                        <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-29.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-30.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <span className="avatar avatar-rounded">
-                          <ImageWithBasePath
-                              className="border border-white"
-                              src="assets/img/profiles/avatar-03.jpg"
-                              alt="img"
-                          />
-                        </span>
-                          <Link
-                              className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                              to="#"
-                          >
-                            +2
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-12">
-                  <div className="text-center mb-4">
-                    <Link to="#" className="btn btn-primary">
-                      <i className="ti ti-loader-3 me-1" />
-                      Load More
-                    </Link>
                   </div>
                 </div>
               </div>
-              {/* / Project Grid */}
+              {/* /Delete Modal */}
+              {/* Delete Success Modal */}
+              <div className="modal fade" id="delete_success_modal" role="dialog">
+                <div className="modal-dialog modal-dialog-centered modal-sm">
+                  <div className="modal-content">
+                    <div className="modal-body">
+                      <div className="text-center p-3">
+          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+            <i className="ti ti-check fs-24" />
+          </span>
+                        <h5 className="mb-2">Project Deleted Successfully</h5>
+                        <p className="mb-3">The project has been removed from the system.</p>
+                        <div className="row g-2">
+                          <div className="col-12">
+                            <button className="btn btn-dark w-100" data-bs-dismiss="modal">
+                              OK
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delete Error Modal */}
+              <div className="modal fade" id="delete_error_modal" role="dialog">
+                <div className="modal-dialog modal-dialog-centered modal-sm">
+                  <div className="modal-content">
+                    <div className="modal-body">
+                      <div className="text-center p-3">
+          <span className="avatar avatar-lg avatar-rounded bg-danger mb-3">
+            <i className="ti ti-alert-circle fs-24" />
+          </span>
+                        <h5 className="mb-2">Error Deleting Project</h5>
+                        {/*
+            If you want to show a dynamic message from the API,
+            you can store it in a state and display it here
+          */}
+                        <p className="mb-3">Something went wrong while deleting this project.</p>
+                        <div className="row g-2">
+                          <div className="col-12">
+                            <button className="btn btn-dark w-100" data-bs-dismiss="modal">
+                              OK
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
             </div>
             <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
               <p className="mb-0">2014 - 2025 © SmartHR.</p>
@@ -1673,7 +672,7 @@ const Project = () => {
               <div className="modal-header header-border align-items-center justify-content-between">
                 <div className="d-flex align-items-center">
                   <h5 className="modal-title me-2">Add Project </h5>
-                  <p className="text-dark">Project ID : PRO-0004</p>
+                  <p className="text-dark">Project N° : PRO-{String(projectCount + 1).padStart(4, '0')}</p>
                 </div>
                 <button
                     type="button"
@@ -1684,7 +683,7 @@ const Project = () => {
                   <i className="ti ti-x" />
                 </button>
               </div>
-              <div className="add-info-fieldset ">
+              <div className="add-info-fieldset">
                 <div className="contact-grids-tab p-3 pb-0">
                   <ul className="nav nav-underline" id="myTab" role="tablist">
                     <li className="nav-item" role="presentation">
@@ -1703,27 +702,28 @@ const Project = () => {
                     <li className="nav-item" role="presentation">
                       <button
                           className="nav-link"
-                          id="member-tab"
+                          id="features-tab"
                           data-bs-toggle="tab"
-                          data-bs-target="#member"
+                          data-bs-target="#features"
                           type="button"
                           role="tab"
                           aria-selected="false"
                       >
-                        Members
+                        Key Features
                       </button>
                     </li>
                   </ul>
                 </div>
-                <div className="tab-content" id="myTabContent">
-                  <div
-                      className="tab-pane fade show active"
-                      id="basic-info"
-                      role="tabpanel"
-                      aria-labelledby="basic-tab"
-                      tabIndex={0}
-                  >
-                    <form>
+
+                <form onSubmit={handleSubmit}>
+                  <div className="tab-content" id="myTabContent">
+                    <div
+                        className="tab-pane fade show active"
+                        id="basic-info"
+                        role="tabpanel"
+                        aria-labelledby="basic-tab"
+                        tabIndex={0}
+                    >
                       <div className="modal-body">
                         <div className="row">
                           <div className="col-md-12">
@@ -1745,29 +745,30 @@ const Project = () => {
                                         multiple
                                     />
                                   </div>
-                                  <Link
-                                      to="#"
+                                  <button
+                                      type="button"
                                       className="btn btn-light btn-sm"
                                   >
                                     Cancel
-                                  </Link>
+                                  </button>
                                 </div>
                               </div>
                             </div>
                           </div>
                           <div className="col-md-12">
                             <div className="mb-3">
-                              <label className="form-label">Project Name</label>
-                              <input type="text" className="form-control" />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Client</label>
-                              <CommonSelect
-                                  className='select'
-                                  options={clinetChoose}
+                              <label className="form-label">Project Title *</label>
+                              <input
+                                  type="text"
+                                  className="form-control"
+                                  placeholder="Enter project title"
+                                  maxLength={100}
+                                  name="title"
+                                  value={formData.title}
+                                  onChange={handleInputChange}
+                                  required
                               />
+                              <small className="text-muted">Maximum 100 characters</small>
                             </div>
                           </div>
                           <div className="col-md-12">
@@ -1786,8 +787,8 @@ const Project = () => {
                                         placeholder="DD-MM-YYYY"
                                     />
                                     <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
+                              <i className="ti ti-calendar text-gray-7" />
+                            </span>
                                   </div>
                                 </div>
                               </div>
@@ -1805,47 +806,28 @@ const Project = () => {
                                         placeholder="DD-MM-YYYY"
                                     />
                                     <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
+                              <i className="ti ti-calendar text-gray-7" />
+                            </span>
                                   </div>
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Priority</label>
-                                  <CommonSelect
-                                      className='select'
-                                      options={priority}
-                                      defaultValue={priority[0]}
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Project Value</label>
-                                  <input
-                                      type="text"
-                                      className="form-control"
-                                      defaultValue="$"
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Price Type</label>
-                                  <input
-                                      type="text"
-                                      className="form-control"
-                                      defaultValue=""
-                                  />
                                 </div>
                               </div>
                             </div>
                           </div>
                           <div className="col-md-12">
                             <div className="mb-3">
-                              <label className="form-label">Description</label>
-                              <CommonTextEditor />
+                              <label className="form-label">Description *</label>
+                              <textarea
+                                  className="form-control"
+                                  rows={4}
+                                  placeholder="Enter project description"
+                                  name="description"
+                                  value={formData.description}
+                                  onChange={(e) => setFormData({
+                                    ...formData,
+                                    description: e.target.value
+                                  })}
+                                  required
+                              ></textarea>
                             </div>
                           </div>
                           <div className="col-md-12">
@@ -1865,441 +847,128 @@ const Project = () => {
                           >
                             Cancel
                           </button>
-                          <button className="btn btn-primary" type="button" data-bs-dismiss="modal">
-                            Save
+                          <button
+                              className="btn btn-primary"
+                              type="button"
+                              onClick={() => {
+                                document.getElementById('features-tab')?.click();
+                              }}
+                          >
+                            Next
                           </button>
                         </div>
                       </div>
-                    </form>
-                  </div>
-                  <div
-                      className="tab-pane fade"
-                      id="member"
-                      role="tabpanel"
-                      aria-labelledby="member-tab"
-                      tabIndex={0}
-                  >
-                    <form>
+                    </div>
+
+                    <div
+                        className="tab-pane fade"
+                        id="features"
+                        role="tabpanel"
+                        aria-labelledby="features-tab"
+                        tabIndex={0}
+                    >
                       <div className="modal-body">
                         <div className="row">
                           <div className="col-md-12">
                             <div className="mb-3">
-                              <label className="form-label me-2">Team Members</label>
+                              <label className="form-label me-2">Key Features *</label>
                               <CommonTagsInput
-                                  value={tags}
-                                  onChange={setTags}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
+                                  value={projectFeatures}
+                                  onChange={(features: string[]) => {
+                                    setProjectFeatures(features);
+                                    setFormData({
+                                      ...formData,
+                                      keyFeatures: features
+                                    });
+                                  }}
+                                  placeholder="Add feature and press enter"
+                                  className="custom-input-class"
                               />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label me-2">Team Leader</label>
-                              <CommonTagsInput
-                                  value={tags1}
-                                  onChange={setTags1}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label me-2">
-                                Project Manager
-                              </label>
-                              <CommonTagsInput
-                                  value={tags2}
-                                  onChange={setTags2}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div>
-                              <label className="form-label">Tags</label>
-                              <CommonTagsInput
-                                  value={tags3}
-                                  onChange={setTags3}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Status</label>
-                              <CommonSelect
-                                  className='select'
-                                  options={statusChoose}
-                                  defaultValue={statusChoose[0]}
-                              />
+                              <small className="text-muted">Enter at least one key feature</small>
                             </div>
                           </div>
                         </div>
                       </div>
                       <div className="modal-footer">
-                        <div className="d-flex align-items-center justify-content-end">
+                        <div className="d-flex align-items-center justify-content-between w-100">
                           <button
                               type="button"
-                              className="btn btn-outline-light border me-2"
-                              data-bs-dismiss="modal"
+                              className="btn btn-outline-primary"
+                              onClick={() => {
+                                document.getElementById('basic-tab')?.click();
+                              }}
                           >
-                            Cancel
+                            Back
                           </button>
-                          <button
-                              className="btn btn-primary"
-                              type="button"
-                              data-bs-toggle="modal" data-inert={true}
-                              data-bs-target="#success_modal"
-                          >
-                            Save
-                          </button>
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light border me-2"
+                                data-bs-dismiss="modal"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                type="submit"
+                                disabled={loading}
+                            >
+                              {loading ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Saving...
+                                  </>
+                              ) : (
+                                  'Save Project'
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </form>
+                    </div>
                   </div>
-                </div>
+                </form>
               </div>
             </div>
           </div>
         </div>
         {/* /Add Project */}
-        {/* Edit Project */}
-        <div className="modal fade" id="edit_project" role="dialog">
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content">
-              <div className="modal-header header-border align-items-center justify-content-between">
-                <div className="d-flex align-items-center">
-                  <h5 className="modal-title me-2">Edit Project </h5>
-                  <p className="text-dark">Project ID : PRO-0004</p>
-                </div>
-                <button
-                    type="button"
-                    className="btn-close custom-btn-close"
-                    data-bs-dismiss="modal"
-                    aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <div className="add-info-fieldset ">
-                <div className="contact-grids-tab p-3 pb-0">
-                  <ul className="nav nav-underline" id="myTab1" role="tablist">
-                    <li className="nav-item" role="presentation">
-                      <button
-                          className="nav-link active"
-                          id="basic-tab1"
-                          data-bs-toggle="tab"
-                          data-bs-target="#basic-info1"
-                          type="button"
-                          role="tab"
-                          aria-selected="true"
-                      >
-                        Basic Information
-                      </button>
-                    </li>
-                    <li className="nav-item" role="presentation">
-                      <button
-                          className="nav-link"
-                          id="member-tab1"
-                          data-bs-toggle="tab"
-                          data-bs-target="#member1"
-                          type="button"
-                          role="tab"
-                          aria-selected="false"
-                      >
-                        Members
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-                <div className="tab-content" id="myTabContent1">
-                  <div
-                      className="tab-pane fade show active"
-                      id="basic-info1"
-                      role="tabpanel"
-                      aria-labelledby="basic-tab1"
-                      tabIndex={0}
-                  >
-                    <form>
-                      <div className="modal-body">
-                        <div className="row">
-                          <div className="col-md-12">
-                            <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                              <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                                <i className="ti ti-photo text-gray-2 fs-16" />
-                              </div>
-                              <div className="profile-upload">
-                                <div className="mb-2">
-                                  <h6 className="mb-1">Upload Project Logo</h6>
-                                  <p className="fs-12">Image should be below 4 mb</p>
-                                </div>
-                                <div className="profile-uploader d-flex align-items-center">
-                                  <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                                    Upload
-                                    <input
-                                        type="file"
-                                        className="form-control image-sign"
-                                        multiple
-                                    />
-                                  </div>
-                                  <Link
-                                      to="#"
-                                      className="btn btn-light btn-sm"
-                                  >
-                                    Cancel
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Project Name</label>
-                              <input
-                                  type="text"
-                                  className="form-control"
-                                  defaultValue="Office Management"
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Client</label>
-                              <CommonSelect
-                                  className='select'
-                                  options={clinetChoose}
-                                  defaultValue={clinetChoose[1]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="row">
-                              <div className="col-md-6">
-                                <div className="mb-3">
-                                  <label className="form-label">Start Date</label>
-                                  <div className="input-icon-end position-relative">
-                                    <DatePicker
-                                        className="form-control datetimepicker"
-                                        format={{
-                                          format: "DD-MM-YYYY",
-                                          type: "mask",
-                                        }}
-                                        getPopupContainer={getModalContainer}
-                                        placeholder="DD-MM-YYYY"
-                                    />
-                                    <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-6">
-                                <div className="mb-3">
-                                  <label className="form-label">End Date</label>
-                                  <div className="input-icon-end position-relative">
-                                    <DatePicker
-                                        className="form-control datetimepicker"
-                                        format={{
-                                          format: "DD-MM-YYYY",
-                                          type: "mask",
-                                        }}
-                                        getPopupContainer={getModalContainer}
-                                        placeholder="DD-MM-YYYY"
-                                    />
-                                    <span className="input-icon-addon">
-                                    <i className="ti ti-calendar text-gray-7" />
-                                  </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Priority</label>
-                                  <CommonSelect
-                                      className='select'
-                                      options={priorityChoose}
-                                      defaultValue={priorityChoose[1]}
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Project Value</label>
-                                  <input
-                                      type="text"
-                                      className="form-control"
-                                      defaultValue="$"
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-md-4">
-                                <div className="mb-3">
-                                  <label className="form-label">Price Type</label>
-                                  <input
-                                      type="text"
-                                      className="form-control"
-                                      defaultValue=""
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Description</label>
-                              <CommonTextEditor />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="input-block mb-0">
-                              <label className="form-label">Upload Files</label>
-                              <input className="form-control" type="file" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="modal-footer">
-                        <div className="d-flex align-items-center justify-content-end">
-                          <button
-                              type="button"
-                              className="btn btn-outline-light border me-2"
-                              data-bs-dismiss="modal"
-                          >
-                            Cancel
-                          </button>
-                          <button className="btn btn-primary" type="button" data-bs-dismiss="modal">
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-                  <div
-                      className="tab-pane fade"
-                      id="member1"
-                      role="tabpanel"
-                      aria-labelledby="member-tab1"
-                      tabIndex={0}
-                  >
-                    <form>
-                      <div className="modal-body">
-                        <div className="row">
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label me-2">Team Members</label>
-                              <CommonTagsInput
-                                  value={tags}
-                                  onChange={setTags}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label me-2">Team Leader</label>
-                              <CommonTagsInput
-                                  value={tags1}
-                                  onChange={setTags1}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label me-2">
-                                Project Manager
-                              </label>
-                              <CommonTagsInput
-                                  value={tags2}
-                                  onChange={setTags2}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div>
-                              <label className="form-label">Tags</label>
-                              <CommonTagsInput
-                                  value={tags3}
-                                  onChange={setTags3}
-                                  placeholder="Add new"
-                                  className="custom-input-class" // Optional custom class
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Status</label>
-                              <CommonSelect
-                                  className='select'
-                                  options={statusChoose}
-                                  defaultValue={statusChoose[1]}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="modal-footer">
-                        <div className="d-flex align-items-center justify-content-end">
-                          <button
-                              type="button"
-                              className="btn btn-outline-light border me-2"
-                              data-bs-dismiss="modal"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                              className="btn btn-primary"
-                              type="button"
-                              data-bs-toggle="modal" data-inert={true}
-                              data-bs-target="#success_modal"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* /Edit Project */}
-        {/* Add Project Success */}
+
+        {/* Success Modal */}
         <div className="modal fade" id="success_modal" role="dialog">
           <div className="modal-dialog modal-dialog-centered modal-sm">
             <div className="modal-content">
               <div className="modal-body">
                 <div className="text-center p-3">
-                <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
-                  <i className="ti ti-check fs-24" />
-                </span>
+          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+            <i className="ti ti-check fs-24" />
+          </span>
                   <h5 className="mb-2">Project Added Successfully</h5>
                   <p className="mb-3">
-                    Stephan Peralt has been added with Client ID :{" "}
-                    <span className="text-primary">#pro - 0004</span>
+                    Project has been added with ID:{" "}
+                    <span className="text-primary">#pro-0004</span>
                   </p>
                   <div>
                     <div className="row g-2">
                       <div className="col-6">
-                        <Link to={all_routes.project} className="btn btn-dark w-100">
+                        <Link to="#" className="btn btn-dark w-100" onClick={() => {
+                          const modal = document.getElementById('success_modal');
+                          if (modal && window.bootstrap?.Modal) {
+                            const modalInstance = window.bootstrap.Modal.getInstance(modal);
+                            if (modalInstance) {
+                              modalInstance.hide();
+                            }
+                          }
+                        }}>
                           Back to List
                         </Link>
                       </div>
                       <div className="col-6">
                         <Link
-                            to={all_routes.projectdetails}
+                            to="#"
                             className="btn btn-primary w-100"
                         >
-                          Detail Page
+                          View Details
                         </Link>
                       </div>
                     </div>
@@ -2309,9 +978,9 @@ const Project = () => {
             </div>
           </div>
         </div>
-        {/* /Add Project Success */}
-      </>
+        {/* /Success Modal */}
 
+      </>
   )
 }
 

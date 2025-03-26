@@ -54,29 +54,29 @@ export const SidebarDataTest = [
 
         ],
       },
-      {
-        label: 'Tutor ',
-        link: 'index',
-        submenu: true,
-        showSubRoute: false,
-        icon: 'user-star',
-
-        materialicons: '',
-        submenuItems: [
-          {
-            label: 'Peojects Management',
-            link: routes.project,
-            base: 'project-grid'
-          },
-          // {
-          //   label: 'Groups List',
-          //   link: routes.superAdminCompanies,
-          //   base: 'companies',
-          // },
-
-
-        ],
-      },
+      // {
+      //   label: 'Tutor ',
+      //   link: 'index',
+      //   submenu: true,
+      //   showSubRoute: false,
+      //   icon: 'user-star',
+      //
+      //   materialicons: '',
+      //   submenuItems: [
+      //     {
+      //       label: 'Projects Management',
+      //       link: routes.project,
+      //       base: 'project-grid'
+      //     },
+      //     // {
+      //     //   label: 'Groups List',
+      //     //   link: routes.superAdminCompanies,
+      //     //   base: 'companies',
+      //     // },
+      //
+      //
+      //   ],
+      // },
       {
         label: 'Student',
         link: 'task',
@@ -254,12 +254,12 @@ export const SidebarDataTest = [
   //     },
   //   ],
   // },
-  // {
-  //   tittle: 'PROJECTS',
-  //   icon: 'layers',
-  //   showAsTab: false,
-  //   separateRoute: false,
-  //   submenuItems: [
+  {
+    tittle: 'PROJECTS',
+    icon: 'layers',
+    showAsTab: false,
+    separateRoute: false,
+    submenuItems: [
       // {
       //   label: 'Clients',
       //   link: routes.clientgrid,
@@ -270,32 +270,34 @@ export const SidebarDataTest = [
       //   materialicons: 'person',
       //   submenuItems: [],
       // },
-  //     {
-  //       label: 'Projects',
-  //       link: routes.project,
-  //       submenu: true,
-  //       showSubRoute: false,
-  //       icon: 'box',
-  //       base: 'projects',
-  //       materialicons: 'topic',
-  //       submenuItems: [
-  //         {
-  //           label: 'Projects',
-  //           link: routes.project,
-  //           base: 'project-grid',
-  //           base2: 'project-list',
-  //           base3: 'project-details',
-  //         },
-  //         { label: 'Tasks', link: 'tasks', base: 'tasks' },
-  //         {
-  //           label: 'Task Board',
-  //           link: routes.taskboard,
-  //           base: 'task-board',
-  //         },
-  //       ],
-  //     },
-  //   ],
-  // },
+      {
+        label: 'Projects',
+        link: routes.project,
+        submenu: true,
+        showSubRoute: false,
+        icon: 'box',
+        base: 'projects',
+        materialicons: 'topic',
+        submenuItems: [
+          {
+            label: 'Projects',
+            link: routes.project,
+            base: 'project-grid',
+            base2: 'project-list',
+            base3: 'project-details',
+          },
+          // { label: 'Tasks',
+          //   link: 'tasks',
+          //   base: 'tasks' },
+          // {
+          //   label: 'Task Board',
+          //   link: routes.taskboard,
+          //   base: 'task-board',
+          // },
+        ],
+      },
+    ],
+  },
   // {
   //   tittle: 'CRM',
   //   icon: 'file',

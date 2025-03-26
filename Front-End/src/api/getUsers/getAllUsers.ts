@@ -8,6 +8,7 @@ export type users_type={
     lastname: string;
     email: string;
     role: string;
+    avatar?: string;
 
 
 }

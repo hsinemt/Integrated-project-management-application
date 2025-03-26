@@ -187,7 +187,7 @@ const addManager = async (req, res) => {
             return res.status(409).json({ success: false, message: `The email ${email} already exists, try another email` });
         }
 
-        const manager = new ManagerModel({ name, lastname, email, password, role: 'manager', speciality });
+        const manager = new ManagerModel({ name, lastname, email, password, role: 'Manager', speciality });
         manager.password = await bcrypt.hash(password, 10);
         await manager.save();
 
@@ -219,7 +219,7 @@ const addTutor = async (req, res) => {
             return res.status(409).json({ success: false, message: `The email ${email} already exists, try another email` });
         }
 
-        const tutor = new TutorModel({ name, lastname, email, password, role: 'tutor', classe });
+        const tutor = new TutorModel({ name, lastname, email, password, role: 'Tutor', classe });
         tutor.password = await bcrypt.hash(password, 10);
         await tutor.save();
 
