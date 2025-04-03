@@ -173,6 +173,7 @@ exports.deleteProject = async (req, res) => {
         });
     }
 };
+
 exports.getProjectsCount = async (req, res) => {
     try {
         const count = await Project.countDocuments();
