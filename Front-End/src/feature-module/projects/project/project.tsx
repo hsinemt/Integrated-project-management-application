@@ -141,7 +141,7 @@ const Project = () => {
         fetchProjects();
         fetchProjectCount();
         setTimeout(() => {
-          alert('Project deleted successfully');
+          //('Project deleted successfully');
         }, 300);
       } else {
         setTimeout(() => {
