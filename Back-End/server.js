@@ -5,15 +5,12 @@ const passport = require('passport');
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
-const { HfInference } = require('@huggingface/inference');
-const Project = require('./Models/Project'); // Assurez-vous que le chemin est correct
-
-const authRoutes = require('./Routes/authRoutes');
-const taskRoutes = require('./Routes/taskRoutes');
+const authRoutes = require('./routes/authRoutes');
+const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
 
-// 🔹 Sécurité avec Helmet
+// Sécurité avec Helmet
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -24,17 +21,19 @@ app.use(helmet({
     }
 }));
 
-// 🔹 CORS : Autoriser le front-end à se connecter
+// CORS - Autoriser plusieurs origines
 app.use(cors({ 
-    origin: "http://localhost:5173", 
-    credentials: true 
+    origin: ['http://localhost:5173', 'http://localhost:3001'], // Ajout de localhost:3001
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Méthodes autorisées
+    allowedHeaders: ['Content-Type', 'Authorization'], // En-têtes autorisés
 }));
 
-// 🔹 Middleware JSON et URL-encoded
+// Middleware JSON et URL-encoded
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔹 Connexion à MongoDB
+// Connexion à MongoDB
 mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://hsinemtiraoui:1899@cluster0.32ybj.mongodb.net/ipm?retryWrites=true&w=majority&appName=Cluster0&ssl=true', {
     useNewUrlParser: true,
     useUnifiedTopology: true
@@ -44,125 +43,62 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://hsinemtiraoui:1899@clus
     console.error('❌ Erreur de connexion MongoDB:', error.message);
 });
 
-// 🔹 Chargement des modèles MongoDB
-require('./Models/user'); 
-require('./Models/Group');
-    require('./Models/Project');
+// Chargement des modèles
+require('./Models/user');
+require('./models/Group');
+require('./models/Project');
 require('./Models/tasks');
 
-// 🔹 Configuration Passport.js
-require('./Config/passportConfig');
-require('./Config/passportGoogle');
+// Configuration Passport.js
+require('./config/passportConfig');
+require('./config/passportGoogle');
 
-// 🔹 Sessions
+// Sessions
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }
+    cookie: { secure: false } // À mettre à true en production avec HTTPS
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// 🔹 Initialisation de l'API Hugging Face
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+// Routes API
+app.use('/auth', authRoutes);
+app.use('/api/tasks', taskRoutes);
 
-
+// Route pour récupérer tous les projets
 app.get('/api/projects', async (req, res) => {
     try {
-        const projects = await ProjectModel.find();  // Utilisez ProjectModel ici
+        const Project = mongoose.model('Projects');
+        const projects = await Project.find();
         res.status(200).json(projects);
     } catch (error) {
+        console.error("❌ Erreur lors de la récupération des projets :", error);
         res.status(500).json({ message: 'Erreur lors de la récupération des projets', error: error.message });
     }
 });
 
-
-// 🔹 Route pour générer des tâches avec l'IA Hugging Face
-app.post('/api/tasks/generate', async (req, res) => {
+// Route pour récupérer tous les groupes
+app.get('/api/groups', async (req, res) => {
     try {
-        const { groupId, projectId } = req.body;
-
-        if (!groupId || !projectId) {
-            return res.status(400).json({ message: 'GroupId et ProjectId sont requis' });
-        }
-
-        // Importation des modèles
-        const Task = mongoose.model('Task');
-        const Group = mongoose.model('Groupes');
-        const Projects = mongoose.model('Projects');
-
-        // Vérification des données
-        const project = await Projects.findById(projectId);
-        const group = await Group.findById(groupId).populate('id_students');
-
-        if (!project) {
-            return res.status(404).json({ message: 'Projet non trouvé' });
-        }
-        if (!group) {
-            return res.status(404).json({ message: 'Groupe non trouvé' });
-        }
-
-        const students = group.id_students;
-        if (students.length === 0) {
-            return res.status(400).json({ message: 'Aucun étudiant dans le groupe' });
-        }
-
-        const tasks = [];
-
-        for (let student of students) {
-            try {
-                // 🔹 Générer une tâche avec Hugging Face
-                const response = await hf.textGeneration({
-                    model: "mrm8488/t5-base-finetuned-task-generation",
-                    inputs: `Génère une tâche pour le projet : ${project.description}`
-                });
-
-                const taskDescription = response.generated_text || "Tâche générée automatiquement.";
-
-                // 🔹 Création et sauvegarde de la tâche
-                const newTask = new Task({
-                    name: `Tâche pour ${student._id}`,
-                    description: taskDescription,
-                    priority: 'Medium',
-                    date: new Date(),
-                    état: 'To Do',
-                    assignedTo: student._id,
-                    project: project._id,
-                    group: group._id
-                });
-
-                await newTask.save();
-                tasks.push(newTask);
-            } catch (huggingFaceError) {
-                console.error("⚠️ Erreur API Hugging Face :", huggingFaceError);
-            }
-        }
-
-        if (tasks.length === 0) {
-            return res.status(500).json({ message: 'Aucune tâche n’a pu être générée' });
-        }
-
-        res.status(201).json({ message: 'Tâches générées avec succès', tasks });
-
+        const Group = mongoose.model('Groups');
+        const groups = await Group.find();
+        res.status(200).json(groups);
     } catch (error) {
-        console.error("❌ Erreur lors de la génération des tâches :", error);
-        res.status(500).json({ message: 'Erreur serveur', error: error.message });
+        console.error("❌ Erreur lors de la récupération des groupes :", error);
+        res.status(500).json({ message: 'Erreur lors de la récupération des groupes', error: error.message });
     }
 });
 
-// 🔹 Routes API
-app.use('/auth', authRoutes);
-app.use('/tasks', taskRoutes);
-
-// 🔹 Gestion des erreurs globales
+// Gestion des erreurs globales
 app.use((err, req, res, next) => {
     console.error('❌ Erreur serveur :', err.message);
     res.status(500).json({ success: false, error: err.message });
 });
 
-// 🔹 Démarrage du serveur
+// Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
