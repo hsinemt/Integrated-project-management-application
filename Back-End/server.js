@@ -4,6 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const UserRouter = require('./Routes/UserRouter');
 const taskRoutes = require('./Routes/taskRoutes');
+
+const tutorRoutes = require('./Routes/tutorRoutes');
 require('dotenv').config();
 require('./Config/db');
 
@@ -20,7 +22,7 @@ app.use('/user', UserRouter); // User routes
 
 app.use('/projects', taskRoutes);
 
-
+app.use('/tutor', tutorRoutes); // Prefix: /api/tasks
 // Serve static files from the "uploads" directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

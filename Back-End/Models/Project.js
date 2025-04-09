@@ -8,11 +8,7 @@ const projectSchema = new mongoose.Schema({
     description: {
         type: String,
     },
-    group: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Groupes',
-        required: true,
-    },
+
 });
 
 // Prevent overwriting the model

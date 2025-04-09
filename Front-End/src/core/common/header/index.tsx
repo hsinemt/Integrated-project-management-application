@@ -55,9 +55,10 @@ const Profile = () => {
 			  birthday: formattedBirthday,
 			  password: "",
 			  images: response.data.images,
+			  
 			  skills: response.data.skills || [], // Add skills from the backend
 			});
-  
+			console.log("User data:", response.data.images);
 			// Set the selected skills with the user's current skills
 			setSelectedSkills(response.data.skills || []);
 		  } else {
@@ -520,8 +521,10 @@ const Header = () => {
 								<Link to="#" className="dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
 									<span className="avatar avatar-sm online">
 									<img 
-  src="https://res.cloudinary.com/dqtrzwnf4/image/upload/v1741093746/tasks/lwuupu8py2amn16jjklx.png" 
-  alt="img"
+
+src={user.images?.startsWith("/uploads") ? `http://localhost:5000${user.images}` : user.images || "https://via.placeholder.com/150"}
+ alt="img"
+
 />
 
 									</span>
@@ -532,7 +535,8 @@ const Header = () => {
 											<div className="d-flex align-items-center">
 												<span className="avatar avatar-lg me-2 avatar-rounded">
 												<img 
-  src="https://res.cloudinary.com/dqtrzwnf4/image/upload/v1741093746/tasks/lwuupu8py2amn16jjklx.png" 
+  src={user.images?.startsWith("/uploads") ? `http://localhost:5000${user.images}` : user.images || "https://via.placeholder.com/150"}
+  
   alt="img"
 />
 

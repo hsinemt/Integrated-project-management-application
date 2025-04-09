@@ -109,11 +109,17 @@ const Profile = () => {
         return;
       }
 
+
       const response = await axios.post(
         "http://localhost:5000/user/update-skills",
         { userId: user._id, skills: selectedSkills },
-        { headers: { Authorization: `${token}` } }
+        {
+          headers: {
+            Authorization: `${token}`,
+          },
+        }
       );
+
 
       if (response.data.success) {
         setUser((prevUser) => ({

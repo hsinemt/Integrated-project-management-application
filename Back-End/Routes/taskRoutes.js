@@ -5,7 +5,10 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const upload = multer({ dest: 'uploadsimage/' });
+const Project = require('../models/Project');
 
+
+User = require('../models/User');
 // Configure Cloudinary
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -56,11 +59,15 @@ router.put('/tasks/:taskId/image', upload.single('image'), async (req, res) => {
 // POST a new task for a specific project
 router.post('/:projectId/tasks', async (req, res) => {
     const projectId = req.params.projectId;
-    const { name, description, priority, date, état, image } = req.body;
+    const { name, description, priority, date, état, image, studentId } = req.body;
 
     // Validate projectId
     if (!mongoose.Types.ObjectId.isValid(projectId)) {
         return res.status(400).json({ message: "Invalid project ID" });
+    }
+
+    if (studentId && !mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: "Invalid student ID" });
     }
 
     try {
@@ -70,12 +77,21 @@ router.post('/:projectId/tasks', async (req, res) => {
             return res.status(404).json({ message: "Project not found" });
         }
 
+        // If studentId is provided, check if the student exists in the users collection
+        let student = null;
+        if (studentId) {
+            student = await User.findOne({ _id: studentId, role: "student" });
+            if (!student) {
+                return res.status(404).json({ message: "Student not found or not a student" });
+            }
+        }
+
         // Validate required fields
         if (!name || !description || !priority || !date) {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
-        // Create a new task
+        // Create a new task with student assigned
         const newTask = new Task({
             name,
             description,
@@ -84,7 +100,8 @@ router.post('/:projectId/tasks', async (req, res) => {
             état: état || 'To Do',
             image: image || null,
             project: projectId,
-            group: project.group || null, // Assign the group from the project (if available)
+            group: student.group || null, // Assign the group from the project (if available)
+            student: student ? student._id : null, // Assign student ID if provided
         });
 
         // Save the task to the database
@@ -97,7 +114,6 @@ router.post('/:projectId/tasks', async (req, res) => {
         res.status(500).json({ message: "Server error while creating task" });
     }
 });
-
 // Update task status
 router.put('/tasks/:taskId/status', async (req, res) => {
     const { taskId } = req.params;
@@ -133,5 +149,15 @@ router.put('/tasks/:taskId/status', async (req, res) => {
     }
 });
 
-
+router.get("/user/:id", async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id).populate("group"); // Populate group details if available
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+});
 module.exports = router;

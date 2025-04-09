@@ -11,6 +11,11 @@ interface Task {
     date: string;
     état: string;
     image: string;
+    estimatedTime: string;
+    student: {
+        name: string;
+        lastname: string;
+    };
 }
 
 interface TaskCardProps {
@@ -29,11 +34,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, handleImageChange, openModal 
                     </div>
                 </div>
                 <div className="mb-2">
+                <p>Student: {task.student.name} {task.student.lastname}</p>
                     <h6 className="d-flex align-items-center">{task.name}</h6>
                     <p className="d-flex align-items-center">{task.description}</p>
+
                 </div>
                 <p className="fw-medium mb-0">
                     Due on : <span className="text-gray-9">{new Date(task.date).toLocaleDateString()}</span>
+                </p>
+                <p className="fw-medium mb-0">
+                    Estimated Time : <span className="text-gray-9">{task.estimatedTime}</span>
                 </p>
                 <div className="d-flex align-items-center justify-content-between border-top pt-2 mt-2">
                     <div className="avatar-list-stacked avatar-group-sm me-3">
@@ -58,5 +68,4 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, handleImageChange, openModal 
         </div>
     );
 };
-
 export default TaskCard;

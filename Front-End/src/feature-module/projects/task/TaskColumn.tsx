@@ -10,6 +10,11 @@ interface Task {
     date: string;
     état: string;
     image: string;
+    estimatedTime: string;
+    student: {
+        name: string;
+        lastname: string;
+    };
 }
 
 interface TaskColumnProps {

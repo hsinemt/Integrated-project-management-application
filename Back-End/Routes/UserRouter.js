@@ -4,7 +4,7 @@ const { login, getProfile,getStudentProfile } = require("../Controllers/userCont
 const User = require("../Models/user");
 const multer = require("multer");
 const path = require("path");
-
+const StudentModel= require("../Models/student");
 const router = express.Router();
 
 // Set up multer storage
@@ -58,32 +58,37 @@ router.get("/dashboard/:role", authMiddleware, (req, res) => {
   }
   res.json({ message: `Welcome ${req.params.role}` });
 });
-
 router.post('/update-skills', async (req, res) => {
   try {
+    console.log('POST /user/update-skills HIT');
+    console.log('Body:', req.body);
+
     const { userId, skills } = req.body;
 
-    // Find the user and update their skills
-    const updatedUser = await User.findByIdAndUpdate(
+    const updatedStudent = await StudentModel.findByIdAndUpdate(
       userId,
       { skills },
-      { new: true } // Return the updated user
+      { new: true }
     );
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: 'User not found' });
+    console.log('Updated student:', updatedStudent); // 👈 Add this
+
+    if (!updatedStudent) {
+      return res.status(404).json({ message: 'Student not found' });
     }
 
     res.json({
       success: true,
       message: 'Skills updated successfully',
-      updatedSkills: updatedUser.skills, // Send the updated skills back
+      updatedSkills: updatedStudent.skills,
     });
   } catch (error) {
     console.error('Error updating skills:', error);
     res.status(500).json({ message: 'Error updating skills', error });
   }
 });
+
+
 
 const bcrypt = require('bcrypt');
 

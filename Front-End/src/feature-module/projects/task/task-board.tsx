@@ -18,12 +18,59 @@ interface Task {
     date: string;
     état: string;
     image: string;
+    estimatedTime: string;
+    student: {
+        name: string;
+        lastname: string;
+    };
 }
 
 interface Project {
     name: string;
     tasks: Task[];
 }
+
+
+
+
+const getEstimatedTimeFromGemini = async (task: { description: string; priority: string }): Promise<string> => {
+    try {
+        const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyA6INUs4kDr4xGtLPQlBt8aiPFsRQZLhFE`,
+            {
+                contents: [
+                    {
+                        parts: [{ text: `Estimate time for task: ${task.description} with priority ${task.priority}.` }],
+                    },
+                ],
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+
+        console.log('Gemini API response:', response.data);
+
+        // Extract the response content text
+        const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        // Define a regex pattern to match durations (e.g., "3 hours", "2 days", "45 minutes")
+        const durationPattern = /\b(\d+)\s*(hours?|minutes?|days?)\b/i;
+
+        // Find the duration match using regex
+        const match = responseText?.match(durationPattern);
+
+        // If a match is found, return the duration, otherwise return 'Unknown'
+        return match ? match[0] : 'Unknown';
+    } catch (error) {
+        console.error('Error calling Gemini API:', error);
+        return 'Unknown';
+    }
+};
+
+
 
 const TaskBoard = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -39,16 +86,32 @@ const TaskBoard = () => {
     const inProgressTasksRef = useRef<HTMLDivElement>(null);
     const inReviewTasksRef = useRef<HTMLDivElement>(null);
     const completedTasksRef = useRef<HTMLDivElement>(null);
-
     useEffect(() => {
         const fetchTasks = async () => {
             try {
+                const token = localStorage.getItem('token');
+
+                if (!token) {
+                    console.error('No token found in localStorage');
+                    setLoading(false);
+                    return;
+                }
+    
+                // Make the API request using the token from localStorage
                 const response = await axios.get('http://localhost:5000/user/profilegroupe', {
                     headers: {
-                        Authorization: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjRkMTU1YmI1YWM5NTAzNDNmZDc3OCIsInJvbGUiOiJzdHVkZW50IiwiaWF0IjoxNzQxMTM5MjY1LCJleHAiOjE3NDExNTAwNjV9.FBf29K-_6a2FfXuE0nCCWyw3zZKFfw4auid9hAXKdS8`,
+                        Authorization: `${token}`, // Use the token from localStorage
                     },
                 });
-                setTasks(response.data.tasks);
+                const tasksWithEstimatedTime = await Promise.all(response.data.tasks.map(async (task: Task) => {
+                    const estimatedTime = await getEstimatedTimeFromGemini(task);
+                    return {
+                        ...task,
+                        estimatedTime,
+                    };
+                }));
+    
+                setTasks(tasksWithEstimatedTime);
                 if (response.data.projects && response.data.projects.length > 0) {
                     setProjectName(response.data.projects[0].title);
                 }
@@ -58,7 +121,7 @@ const TaskBoard = () => {
                 setLoading(false);
             }
         };
-
+    
         fetchTasks();
     }, []);
 

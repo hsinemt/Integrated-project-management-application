@@ -35,8 +35,9 @@ const taskSchema = new mongoose.Schema({
     group: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Groupes', // Reference to the Groupe model
-        required: true,
+        required: false,
     },
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true } 
 });
 
 module.exports = mongoose.model('Task', taskSchema);
