@@ -27,15 +27,15 @@ router.post("/logout", logout);
 router.post("/send-2fa-otp1", sendVerifyOtp1);
 const bcrypt = require('bcrypt');
 const multer = require("multer");
-const path = require("path"); // Ensure 'path' is imported
-const mongoose = require('mongoose'); // For CommonJS
+const path = require("path");
+const mongoose = require('mongoose');
 // OR
 router.get('/profilegroupe', authMiddleware, getStudentProfile);
 // OR// For ES Modules
 const storage = multer.diskStorage({
     destination: "uploads/",
     filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // Unique file name
+        cb(null, Date.now() + path.extname(file.originalname));
     },
 });
 

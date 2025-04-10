@@ -13,7 +13,7 @@ import usePreviousRoute from "./usePreviousRoute";
 import { SidebarDataTest } from "../../data/json/sidebarMenu";
 import { all_routes } from "../../../feature-module/router/all_routes";
 
-// Define interfaces for TypeScript
+
 interface SubmenuItem {
   label?: string;
   link?: string;
@@ -31,7 +31,7 @@ interface SubmenuItem {
 }
 
 const Sidebar = () => {
-  const userRole = localStorage.getItem('role'); // Get the role from localStorage
+  const userRole = localStorage.getItem('role');
   const Location = useLocation();
   const [subOpen, setSubopen] = useState<any>("Dashboard");
   const [subsidebar, setSubsidebar] = useState("");
@@ -82,20 +82,20 @@ const Sidebar = () => {
     }
   };
 
-  // Function to determine which menu items should be shown based on user role
+
   const shouldShowMenuItem = (userRole: string | null, menuLabel: string) => {
     switch(userRole) {
       case 'admin':
-        // Admin sees all sections
+
         return true;
       case 'manager':
-        // Manager sees all except Admin section
+
         return menuLabel !== 'Admin';
       case 'tutor':
-        // Tutor sees Tutor and Student sections
+
         return ['Tutor', 'Student'].includes(menuLabel);
       case 'student':
-        // Student only sees Student section
+
         return menuLabel === 'Student';
       default:
         return false;
@@ -109,7 +109,7 @@ const Sidebar = () => {
   useEffect(() => {
     const currentMenu = localStorage.getItem("role") || 'Dashboard'
     setSubopen(currentMenu);
-    // Select all 'submenu' elements
+
     const submenus = document.querySelectorAll(".submenu");
     submenus.forEach((submenu) => {
       const listItems = submenu.querySelectorAll("li");
@@ -130,7 +130,7 @@ const Sidebar = () => {
     dispatch(setExpandMenu(false));
   };
 
-  // Define the standalone Projects section
+
   const projectsSection: SubmenuItem = {
     label: 'Projects',
     link: routes.project,
@@ -139,7 +139,7 @@ const Sidebar = () => {
     icon: 'box',
     base: 'projects',
     materialicons: 'topic',
-    themeSetting: false, // Add themeSetting property
+    themeSetting: false,
     submenuItems: [
       {
         label: 'Projects',
@@ -151,7 +151,7 @@ const Sidebar = () => {
     ],
   };
 
-  // Function to filter out the Projects section from Student submenu
+
   const filterOutProjects = (submenuItems: SubmenuItem[] | undefined): SubmenuItem[] => {
     if (!submenuItems) return [];
 
@@ -203,9 +203,9 @@ const Sidebar = () => {
                           </li>
                           <li>
                             <ul>
-                              {/* Render regular menu items with role-based filtering */}
+
                               {mainLabel?.submenuItems?.map((title: any, i) => {
-                                // Skip rendering if not visible for this role
+
                                 if (!shouldShowMenuItem(userRole, title.label)) {
                                   return null;
                                 }
@@ -255,7 +255,7 @@ const Sidebar = () => {
                                                 display: subOpen === title?.label ? "block" : "none",
                                               }}
                                           >
-                                            {/* Filter out the Projects section from Student menu */}
+
                                             {filterOutProjects(title?.submenuItems)?.map((item: any, j: any) => (
                                                 <li
                                                     className={
@@ -307,7 +307,7 @@ const Sidebar = () => {
                                 );
                               })}
 
-                              {/* Render the standalone Projects section (visible to all roles) */}
+
                               <li className="submenu">
                                 <Link
                                     to={projectsSection?.submenu ? "#" : (projectsSection?.link || "#")}

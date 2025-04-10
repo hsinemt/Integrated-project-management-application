@@ -13,7 +13,7 @@ exports.generateProjectFromPrompt = async (prompt) => {
             throw new Error('Prompt is required');
         }
 
-        // Construct the system message for the AI
+
         const systemMessage = `You are an expert at creating project specifications.
     Based on the user's prompt, generate a detailed project specification with the following structure:
     

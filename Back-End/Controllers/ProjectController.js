@@ -107,7 +107,7 @@ exports.createProject = async (req, res) => {
     try {
         const projects = await Project.find().sort({ createdAt: -1 });
 
-        // Log the projects to see if they have creator info
+
         // console.log('Projects being returned:', projects.map(p => ({
         //     id: p._id,
         //     title: p.title,

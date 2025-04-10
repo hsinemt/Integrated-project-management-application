@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 9777;
 
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-// Body parsers
+
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
