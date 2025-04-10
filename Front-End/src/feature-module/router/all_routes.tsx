@@ -5,6 +5,7 @@ export const all_routes = {
   // leadsDashboard: "/leads-dashboard",
   usersDashboard: "/super-admin/users",
   dealsDashboard: "/deals-dashboard",
+  AddGroupForm: "/add-group",
 
   //Application routes
   chat: "/application/chat",
@@ -326,7 +327,7 @@ export const all_routes = {
   clientdetils: "/clients-details",
   project: "/projects-grid",
   projectlist: "/projects",
-  projectdetails: "/projects-details",
+  projectdetails: "/projects-details/:id",
   tasks: "/tasks",
   tasksdetails: "/task-details",
   taskboard: "/task-board",
@@ -390,6 +391,8 @@ export const all_routes = {
   //ADMINISTRATION
   knowledgebase: "/knowledgebase",
   activity: "/activity",
+  motivation: "/motivation",
+  projects : "/projectlist",
   users: "/users",
   rolePermission: "/roles-permissions",
   permissionpage: "/permission",

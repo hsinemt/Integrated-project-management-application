@@ -6,7 +6,8 @@ const StudentSchema = new mongoose.Schema({
         type: String
     },
     skills:{
-        type: String
+        type: [String],
+        default: []
     },
     level:{
         type: String

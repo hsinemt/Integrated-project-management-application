@@ -3,12 +3,41 @@ const UserModel = require('../Models/User');
 
 exports.createProject = async (req, res) => {
     try {
-        console.log('Full request body:', req.body);
-        const { title, description, keyFeatures, userId } = req.body;
+        //console.log('Full request body:', req.body);
+       // console.log('Request headers content-type:', req.headers['content-type']);
 
-        console.log('User ID extracted from request:', userId);
+        let keywords = req.body.keywords;
+        //console.log('Keywords received:', keywords, 'Type:', typeof keywords);
+
+        if (typeof keywords === 'string') {
+            try {
+                keywords = JSON.parse(keywords);
+                //console.log('Successfully parsed keywords string to array:', keywords);
+            } catch (error) {
+                console.error('Error parsing keywords string:', error);
+                keywords = keywords.split(',').map(k => k.trim()).filter(k => k);
+                //console.log('Fallback keywords parsing:', keywords);
+            }
+        } else if (!Array.isArray(keywords)) {
+            console.warn('Keywords is neither string nor array, setting to empty array');
+            keywords = [];
+        }
+
+        const { title, description, userId, difficulty, status, speciality } = req.body;
+
+        //console.log('Extracted userId:', userId);
+        //console.log('Project fields:', { title, description, difficulty, status, speciality });
+
+        let projectLogo;
+        if (req.file) {
+            projectLogo = `/uploads/project-logos/${req.file.filename}`;
+            console.log('Project logo uploaded:', projectLogo);
+        } else {
+            console.log('No logo file uploaded');
+        }
 
         if (!userId) {
+            console.error('Missing userId in request');
             return res.status(401).json({
                 success: false,
                 message: 'User authentication required'
@@ -18,8 +47,6 @@ exports.createProject = async (req, res) => {
         let creatorInfo = null;
         try {
             const user = await UserModel.findById(userId);
-            console.log('User found:', user ? 'Yes' : 'No');
-
             if (user) {
                 creatorInfo = {
                     userId: user._id,
@@ -29,26 +56,39 @@ exports.createProject = async (req, res) => {
                     role: user.role,
                     avatar: user.avatar || ''
                 };
-                console.log('Creator info created:', creatorInfo);
+                //console.log('Creator info found:', creatorInfo);
             } else {
-                console.log('User not found with ID:', userId);
+                console.error('User not found with ID:', userId);
+                return res.status(404).json({
+                    success: false,
+                    message: 'User not found'
+                });
             }
         } catch (userError) {
             console.error('Error finding user:', userError);
+            return res.status(500).json({
+                success: false,
+                message: 'Error retrieving user information',
+                error: userError.message
+            });
         }
 
         const newProject = new Project({
             title,
             description,
-            keyFeatures,
+            keywords,
+            difficulty: difficulty || 'Medium',
+            status: status || 'Not Started',
+            speciality,
+            projectLogo,
             creator: creatorInfo,
             createdAt: new Date(),
             updatedAt: new Date()
         });
 
-        console.log('Project being saved with creator:', newProject.creator);
+        console.log('Project object created, saving to database...');
         const savedProject = await newProject.save();
-        console.log('Saved project:', savedProject);
+        console.log('Project saved successfully with ID:', savedProject._id);
 
         res.status(201).json({
             success: true,
@@ -63,8 +103,7 @@ exports.createProject = async (req, res) => {
             error: error.message
         });
     }
-};
-exports.getAllProjects = async (req, res) => {
+};exports.getAllProjects = async (req, res) => {
     try {
         const projects = await Project.find().sort({ createdAt: -1 });
 
@@ -116,16 +155,25 @@ exports.getProjectById = async (req, res) => {
 
 exports.updateProject = async (req, res) => {
     try {
-        const { title, description, keyFeatures } = req.body;
+        const { title, description, keywords, difficulty, status, speciality } = req.body;
+
+        let updateData = {
+            title,
+            description,
+            keywords,
+            difficulty,
+            status,
+            speciality,
+            updatedAt: new Date()
+        };
+
+        if (req.file) {
+            updateData.projectLogo = `/uploads/project-logos/${req.file.filename}`;
+        }
 
         const updatedProject = await Project.findByIdAndUpdate(
             req.params.id,
-            {
-                title,
-                description,
-                keyFeatures,
-                updatedAt: new Date()
-            },
+            updateData,
             { new: true, runValidators: true }
         );
 

@@ -67,6 +67,10 @@ import Domain from "../super-admin/domin";
 import PurchaseTransaction from "../super-admin/purchase-transaction";
 import React from "react";
 import UsersManagement from "../super-admin/users/UsersManagement";
+import ProjectsPage from "../administration/user-management/projects";
+import MotivationsTable from "../administration/user-management/motivations";
+import AddGroupForm from "../mainMenu/student/addgroupe";
+
 
 const routes = all_routes;
 
@@ -116,7 +120,10 @@ export const publicRoutes = [
     element: <ConnectedApps />,
   },
 
-
+  {
+    path: routes.projects,
+    element: <ProjectsPage />,
+  },
 
   {
     path: routes.permissionpage,
@@ -162,6 +169,11 @@ export const publicRoutes = [
     element: <RolesPermission />,
   },
 
+  {
+    path: "/motivations/:projectId",
+    element: <MotivationsTable />,
+    route: Route,
+  },
 
   {
     path: routes.project,
@@ -169,7 +181,7 @@ export const publicRoutes = [
     route: Route,
   },
   {
-    path: routes.projectdetails,
+    path: "/project-details/:id",
     element: <ProjectDetails />,
     route: Route,
   },
@@ -366,4 +378,17 @@ export const authRoutes = [
     path: routes.resetPasswordSuccess3,
     element: <ResetPasswordSuccess3 />,
   },
+  {
+    path: routes.AddGroupForm,
+    element: (
+      <AddGroupForm
+        availableProjects={[]}  // Passez un tableau vide ici, mais vous pouvez le remplir par la suite avec l'appel API
+        onSubmit={(data: { emails: string[]; selectedProjects: string[]; motivations: { [key: string]: string; }; }) => {
+          // Implémentez ici ce que vous voulez faire avec les données soumises
+          console.log(data);
+        }}
+      />
+    ),
+    route: Route,
+  }
 ];

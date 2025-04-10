@@ -9,6 +9,7 @@ export const initialTutorFormData = {
     password: "",
     classe: "",
     userId: "",
+    role: "Tutor",
 };
 
 export const initialManagerFormData = {
@@ -26,7 +27,7 @@ export const initialStudentFormData = {
     email: "",
     password: "",
     speciality: "",
-    skills: "",
+    skills: [],
     level: "",
     userId: "",
 };
@@ -45,6 +46,7 @@ export const addTutor = async (tutorData: any) => {
             password: tutorData.password,
             classe: tutorData.classe,
             userId: tutorData.userId,
+            role: "tutor",
         }, {
             headers: {
                 'Content-Type': 'application/json',
@@ -68,7 +70,6 @@ export const addTutor = async (tutorData: any) => {
     }
 };
 
-
 export const addManager = async (managerData: any) => {
     try {
         const token = localStorage.getItem("token");
@@ -83,6 +84,7 @@ export const addManager = async (managerData: any) => {
             password: managerData.password,
             speciality: managerData.speciality,
             userId: managerData.userId,
+            role:"Manager",
         }, {
             headers: {
                 'Content-Type': 'application/json',
@@ -113,13 +115,15 @@ export const addStudent = async (studentData: any) => {
             throw new Error("No token found. Please log in again.");
         }
 
+        const skills = Array.isArray(studentData.skills) ? studentData.skills : [];
+
         const response = await axios.post(`${API_URL}/user/addStudent`, {
             name: studentData.name,
             lastname: studentData.lastname,
             email: studentData.email,
             password: studentData.password,
             speciality: studentData.speciality,
-            skills: studentData.skills,
+            skills: skills,
             level: studentData.level,
             userId: studentData.userId,
         }, {

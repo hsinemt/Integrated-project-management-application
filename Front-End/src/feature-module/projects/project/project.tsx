@@ -9,7 +9,17 @@ import CommonTagsInput from '../../../core/common/Taginput'
 import CommonTextEditor from '../../../core/common/textEditor'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
 
-import {  initialProjectData,project,getAllProjects,deleteProject,ProjectType,ApiResponse,getProjectsCount} from '../../../api/projectsApi/addProject/project'
+import {
+  initialProjectData,
+  addProject,
+  getAllProjects,
+  deleteProject,
+  ProjectType,
+  ApiResponse,
+  getProjectsCount,
+  generateProjectFromPrompt, // Import the new function
+  createProjectFromPrompt // Import direct project creation function
+} from '../../../api/projectsApi/addProject/project'
 
 
 declare global {
@@ -28,14 +38,58 @@ const Project = () => {
   const [projects, setProjects] = useState<ProjectType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [formData, setFormData] = useState<ProjectType>(initialProjectData);
-  const [projectFeatures, setProjectFeatures] = useState<string[]>([]);
+  const [projectKeywords, setProjectKeywords] = useState<string[]>([]);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [visibleProjects, setVisibleProjects] = useState<number>(8);
   const [projectCount, setProjectCount] = useState<number>(0);
 
+  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // New state for AI generation
+  const [prompt, setPrompt] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generatedProject, setGeneratedProject] = useState<ProjectType | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('basic-info');
+  const [generationError, setGenerationError] = useState<string>('');
+
+  const difficultyOptions = [
+    { value: 'Easy', label: 'Easy' },
+    { value: 'Medium', label: 'Medium' },
+    { value: 'Hard', label: 'Hard' },
+    { value: 'Very Hard', label: 'Very Hard' }
+  ];
+
+  const statusOptions = [
+    { value: 'Not Started', label: 'Not Started' },
+    { value: 'In Progress', label: 'In Progress' },
+    { value: 'On Hold', label: 'On Hold' },
+    { value: 'Completed', label: 'Completed' },
+    { value: 'Cancelled', label: 'Cancelled' }
+  ];
+
+  const specialityOptions = [
+    { value: 'Twin', label: 'Twin' },
+    { value: 'ERP/BI', label: 'ERP/BI' },
+    { value: 'AI', label: 'AI' },
+    { value: 'SAE', label: 'SAE' },
+    { value: 'SE', label: 'SE' },
+    { value: 'SIM', label: 'SIM' },
+    { value: 'NIDS', label: 'NIDS' },
+    { value: 'SLEAM', label: 'SLEAM' },
+    { value: 'GAMIX', label: 'GAMIX' },
+    { value: 'WIN', label: 'WIN' },
+    { value: 'IoSyS', label: 'IoSyS' },
+    { value: 'ArcTic', label: 'ArcTic' }
+  ];
+
+  const [deleteModalState, setDeleteModalState] = useState<'confirm' | 'success' | 'error'>('confirm');
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string>('');
+
   const getProjectsPerRow = () => {
     return 3;
   };
+
   const fetchProjectCount = async () => {
     try {
       const count = await getProjectsCount();
@@ -57,6 +111,15 @@ const Project = () => {
             setProjectToDelete(projectId);
           }
         }
+
+        setDeleteModalState('confirm');
+      });
+
+      deleteModal.addEventListener('hidden.bs.modal', () => {
+        setTimeout(() => {
+          setDeleteModalState('confirm');
+          setDeleteErrorMessage('');
+        }, 300);
       });
     }
 
@@ -66,6 +129,7 @@ const Project = () => {
     return () => {
       if (deleteModal) {
         deleteModal.removeEventListener('show.bs.modal', () => {});
+        deleteModal.removeEventListener('hidden.bs.modal', () => {});
       }
     };
   }, []);
@@ -94,13 +158,12 @@ const Project = () => {
   };
 
   const getCreatorName = (project: ProjectType) => {
-
-
     if (project.creator && project.creator.name && project.creator.lastname) {
       return `${project.creator.name} ${project.creator.lastname}`;
     }
     return "Unknown creator";
   }
+
   const handleLoadMore = () => {
     setVisibleProjects(prev => prev + getProjectsPerRow() * 2);
   };
@@ -110,6 +173,7 @@ const Project = () => {
     const project = projects.find(p => p._id === projectId);
     return project ? project.title : '';
   };
+
   const handleModalDelete = () => {
     if (projectToDelete) {
       handleDeleteConfirmWithId(projectToDelete);
@@ -128,42 +192,30 @@ const Project = () => {
     try {
       const response = await deleteProject(projectId);
 
-      const deleteModal = document.getElementById('delete_modal');
-      if (deleteModal && window.bootstrap?.Modal) {
-        const modalInstance = window.bootstrap.Modal.getInstance(deleteModal);
-        if (modalInstance) {
-          modalInstance.hide();
-        }
-      }
-
-
       if (response && response.success) {
         fetchProjects();
         fetchProjectCount();
-        setTimeout(() => {
-          //('Project deleted successfully');
-        }, 300);
+        setDeleteModalState('success');
       } else {
-        setTimeout(() => {
-          alert(response?.message || 'Failed to delete project');
-        }, 300);
+        setDeleteErrorMessage(response?.message || 'Failed to delete project');
+        setDeleteModalState('error');
       }
     } catch (error: unknown) {
       console.error('Error deleting project:', error);
-      setTimeout(() => {
-        if (error instanceof Error) {
-          alert(`Error: ${error.message}`);
-        } else {
-          alert('An unknown error occurred while deleting the project');
-        }
-      }, 300);
+      if (error instanceof Error) {
+        setDeleteErrorMessage(error.message);
+      } else {
+        setDeleteErrorMessage('An unknown error occurred while deleting the project');
+      }
+      setDeleteModalState('error');
     } finally {
       setLoading(false);
       setProjectToDelete(null);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -171,28 +223,152 @@ const Project = () => {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
 
-    if (!formData.title || !formData.description || formData.keyFeatures.length === 0) {
-      alert('Please fill all required fields');
+  const getProjectInitials = (title: string): string => {
+    if (!title) return '';
+
+
+    const words = title.trim().split(/\s+/);
+
+    if (words.length === 0) return '';
+
+    if (words.length === 1) {
+
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+
+      return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+    }
+  };
+
+
+  const getAvatarBgColor = (title: string): string => {
+    let hash = 0;
+    for (let i = 0; i < title.length; i++) {
+      hash = title.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const bgColors = [
+      'bg-primary',
+      'bg-success',
+      'bg-info',
+      'bg-warning',
+      'bg-danger',
+      'bg-purple',
+      'bg-secondary'
+    ];
+
+    const index = Math.abs(hash) % bgColors.length;
+    return bgColors[index];
+  };
+
+
+  const getSpecialityBadgeClass = (speciality: string | undefined): string => {
+    switch(speciality) {
+      case 'Twin':
+        return 'bg-light-primary text-primary';
+      case 'ERP/BI':
+        return 'bg-light-info text-info';
+      case 'AI':
+        return 'bg-light-purple text-purple';
+      case 'SAE':
+        return 'bg-light-success text-success';
+      case 'SE':
+        return 'bg-light-danger text-danger';
+      case 'SIM':
+        return 'bg-light-warning text-warning';
+      case 'NIDS':
+        return 'bg-light-secondary text-secondary';
+      case 'SLEAM':
+        return 'bg-light-info text-info';
+      case 'GAMIX':
+        return 'bg-light-purple text-purple';
+      case 'WIN':
+        return 'bg-light-success text-success';
+      case 'IoSyS':
+        return 'bg-light-warning text-warning';
+      case 'ArcTic':
+        return 'bg-light-danger text-danger';
+      default:
+        return 'bg-light-primary text-primary';
+    }
+  };
+
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedLogo(file);
+
+
+      const previewUrl = URL.createObjectURL(file);
+      setLogoPreview(previewUrl);
+    }
+  };
+
+
+  const clearSelectedLogo = () => {
+    setSelectedLogo(null);
+    if (logoPreview) {
+      URL.revokeObjectURL(logoPreview);
+      setLogoPreview(null);
+    }
+  };
+
+  // Function to handle generating project from prompt
+  const handleGenerateProject = async () => {
+    if (!prompt.trim()) {
+      setGenerationError('Please enter a prompt');
       return;
     }
 
-    setLoading(true);
+    setGenerationError('');
+    setIsGenerating(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('You need to be logged in to create a project');
-        setLoading(false);
-        return;
+      const project = await generateProjectFromPrompt(prompt);
+      setGeneratedProject(project);
+
+      // Update form data with generated project details
+      setFormData({
+        ...formData,
+        title: project.title,
+        description: project.description,
+      });
+
+      // Update keywords
+      if (project.keywords && Array.isArray(project.keywords)) {
+        setProjectKeywords(project.keywords);
       }
 
-      const response = await project(formData);
+      // Automatically switch to the generated project view
+      setActiveTab('generated-project');
+    } catch (error: any) {
+      setGenerationError(error.message || 'Failed to generate project. Please try again.');
+      console.error('Error generating project:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Function to save generated project directly
+  const handleSaveGeneratedProject = async () => {
+    if (!generatedProject) return;
+
+    setLoading(true);
+    try {
+      const submissionData = {
+        ...formData,
+        keywords: projectKeywords,
+      };
+
+      const response = await addProject(submissionData, selectedLogo || undefined);
 
       if (response.success) {
         setFormData(initialProjectData);
-        setProjectFeatures([]);
+        setProjectKeywords([]);
+        setGeneratedProject(null);
+        setPrompt('');
+        clearSelectedLogo();
 
         const modal = document.getElementById('add_project');
         if (modal && window.bootstrap?.Modal) {
@@ -220,6 +396,115 @@ const Project = () => {
     }
   };
 
+  // Function to directly create project from prompt (server-side generation)
+  const handleDirectProjectCreation = async () => {
+    if (!prompt.trim()) {
+      setGenerationError('Please enter a prompt');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const response = await createProjectFromPrompt(
+          prompt,
+          formData.speciality,
+          formData.difficulty
+      );
+
+      if (response.success) {
+        setPrompt('');
+        setGeneratedProject(null);
+
+        const modal = document.getElementById('add_project');
+        if (modal && window.bootstrap?.Modal) {
+          const modalInstance = window.bootstrap.Modal.getInstance(modal);
+          if (modalInstance) {
+            modalInstance.hide();
+          }
+        }
+        fetchProjects();
+        fetchProjectCount();
+
+        const successModal = document.getElementById('success_modal');
+        if (successModal && window.bootstrap?.Modal) {
+          const bsModal = new window.bootstrap.Modal(successModal);
+          bsModal.show();
+        }
+      } else {
+        setGenerationError(response.message || 'Failed to create project from prompt');
+      }
+    } catch (error: any) {
+      setGenerationError(error.message || 'Failed to create project. Please try again.');
+      console.error('Error creating project from prompt:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Function to reset the AI generation process
+  const handleResetGeneration = () => {
+    setGeneratedProject(null);
+    setPrompt('');
+    setGenerationError('');
+    setActiveTab('ai-generate');
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!formData.title || !formData.description || formData.keywords.length === 0) {
+      alert('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('You need to be logged in to create a project');
+        setLoading(false);
+        return;
+      }
+
+
+      const submissionData = {
+        ...formData,
+        keywords: projectKeywords
+      };
+
+
+      const response = await addProject(submissionData, selectedLogo || undefined);
+
+      if (response.success) {
+        setFormData(initialProjectData);
+        setProjectKeywords([]);
+        clearSelectedLogo();
+
+        const modal = document.getElementById('add_project');
+        if (modal && window.bootstrap?.Modal) {
+          const modalInstance = window.bootstrap.Modal.getInstance(modal);
+          if (modalInstance) {
+            modalInstance.hide();
+          }
+        }
+        fetchProjects();
+        fetchProjectCount();
+
+        const successModal = document.getElementById('success_modal');
+        if (successModal && window.bootstrap?.Modal) {
+          const bsModal = new window.bootstrap.Modal(successModal);
+          bsModal.show();
+        }
+      } else {
+        alert(response.message || 'Failed to add project');
+      }
+    } catch (error: unknown) {
+      console.error('Error adding project:', error);
+      alert(error instanceof Error ? error.message : 'An error occurred while adding the project');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
       <>
@@ -420,15 +705,36 @@ const Project = () => {
                       </div>
                     </div>
                 ) : (
-                    // Only display the number of projects specified by visibleProjects state
                     projects.slice(0, visibleProjects).map((project) => (
                         <div className="col-xxl-3 col-lg-4 col-md-6" key={project._id}>
                           <div className="card">
                             <div className="card-body">
                               <div className="d-flex align-items-center justify-content-between mb-2">
-                                <h6>
-                                  <Link to={`/project-details/${project._id}`}>{project.title}</Link>
-                                </h6>
+                                <div className="d-flex align-items-center">
+                                  <div className="avatar avatar-md avatar-rounded me-2">
+                                    {project.projectLogo ? (
+                                        <img
+                                            src={project.projectLogo}
+                                            alt={project.title}
+                                            className="img-fluid"
+                                            onError={(e) => {
+                                              const target = e.target as HTMLImageElement;
+                                              target.onerror = null;
+                                              target.src = `/assets/img/specialities/${project.speciality || 'default'}.png`;
+                                            }}
+                                        />
+                                    ) : (
+                                        <img
+                                            src={`/assets/img/specialities/${project.speciality || 'default'}.png`}
+                                            alt={project.title}
+                                            className="img-fluid"
+                                        />
+                                    )}
+                                  </div>
+                                  <h6 className="mb-0">
+                                    <Link to={`/project-details/${project._id}`}>{project.title}</Link>
+                                  </h6>
+                                </div>
                                 <div className="dropdown">
                                   <Link
                                       to="#"
@@ -465,6 +771,14 @@ const Project = () => {
                                     </li>
                                   </ul>
                                 </div>
+                              </div>
+                              <div className="mb-2">
+                                <span className={`badge ${getSpecialityBadgeClass(project.speciality)} me-1`}>
+                                  {project.speciality}
+                                </span>
+                                {/*<span className="badge bg-light-secondary text-secondary">*/}
+                                {/*  {project.difficulty}*/}
+                                {/*</span>*/}
                               </div>
                               <div className="mb-3 pb-3 border-bottom">
                                 <p className="text-truncate line-clamb-3 mb-0">
@@ -543,7 +857,6 @@ const Project = () => {
                     ))
                 )}
 
-                {/* Show "Load More" button only if there are more projects to load */}
                 {!loading && projects.length > 0 && visibleProjects < projects.length && (
                     <div className="col-md-12">
                       <div className="text-center mb-4">
@@ -560,47 +873,92 @@ const Project = () => {
               </div>
               {/* / Project Grid */}
 
-              {/* Delete Modal */}
-              <div className="modal fade" id="delete_modal">
+              {/* Delete Modal*/}
+              <div className="modal fade" id="delete_modal" data-bs-backdrop="static">
                 <div className="modal-dialog modal-dialog-centered">
                   <div className="modal-content">
                     <div className="modal-body text-center">
-        <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
-          <i className="ti ti-trash-x fs-36" />
-        </span>
-                      <h4 className="mb-1">Confirm Delete</h4>
-                      <p className="mb-3">
-                        You want to delete this project, this can't be undone once
-                        you delete.
-                      </p>
-                      <div className="d-flex justify-content-center">
-                        <Link
-                            to="#"
-                            className="btn btn-light me-3"
-                            data-bs-dismiss="modal"
-                        >
-                          Cancel
-                        </Link>
-                        <button
-                            className="btn btn-danger"
-                            onClick={() => handleModalDelete()}
-                            disabled={loading}
-                        >
-                          {loading ? (
-                              <>
-                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                Deleting...
-                              </>
-                          ) : 'Yes, Delete'}
-                        </button>
-                      </div>
+                      {deleteModalState === 'confirm' && (
+                          <>
+                          <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                            <i className="ti ti-trash-x fs-36" />
+                          </span>
+                            <h4 className="mb-1">Confirm Delete</h4>
+                            <p className="mb-3">
+                              You want to delete this project, this can't be undone once
+                              you delete.
+                            </p>
+                            <div className="d-flex justify-content-center">
+                              <Link
+                                  to="#"
+                                  className="btn btn-light me-3"
+                                  data-bs-dismiss="modal"
+                              >
+                                Cancel
+                              </Link>
+                              <button
+                                  className="btn btn-danger"
+                                  onClick={() => handleModalDelete()}
+                                  disabled={loading}
+                              >
+                                {loading ? (
+                                    <>
+                                      <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                      Deleting...
+                                    </>
+                                ) : 'Yes, Delete'}
+                              </button>
+                            </div>
+                          </>
+                      )}
+
+                      {deleteModalState === 'success' && (
+                          <>
+                          <span className="avatar avatar-xl bg-transparent-success text-success mb-3">
+                            <i className="ti ti-check fs-36" />
+                          </span>
+                            <h4 className="mb-1">Project Deleted Successfully</h4>
+                            <p className="mb-3">
+                              The project has been removed from the system.
+                            </p>
+                            <div className="d-flex justify-content-center">
+                              <button
+                                  className="btn btn-dark"
+                                  data-bs-dismiss="modal"
+                              >
+                                OK
+                              </button>
+                            </div>
+                          </>
+                      )}
+
+                      {deleteModalState === 'error' && (
+                          <>
+                          <span className="avatar avatar-xl bg-transparent-danger text-danger mb-3">
+                            <i className="ti ti-alert-circle fs-36" />
+                          </span>
+                            <h4 className="mb-1">Error Deleting Project</h4>
+                            <p className="mb-3">
+                              {deleteErrorMessage}
+                            </p>
+                            <div className="d-flex justify-content-center">
+                              <button
+                                  className="btn btn-dark"
+                                  data-bs-dismiss="modal"
+                              >
+                                OK
+                              </button>
+                            </div>
+                          </>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
               {/* /Delete Modal */}
-              {/* Delete Success Modal */}
-              <div className="modal fade" id="delete_success_modal" role="dialog">
+
+              {/* Success Modal */}
+              <div className="modal fade" id="success_modal" role="dialog">
                 <div className="modal-dialog modal-dialog-centered modal-sm">
                   <div className="modal-content">
                     <div className="modal-body">
@@ -608,13 +966,34 @@ const Project = () => {
           <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
             <i className="ti ti-check fs-24" />
           </span>
-                        <h5 className="mb-2">Project Deleted Successfully</h5>
-                        <p className="mb-3">The project has been removed from the system.</p>
-                        <div className="row g-2">
-                          <div className="col-12">
-                            <button className="btn btn-dark w-100" data-bs-dismiss="modal">
-                              OK
-                            </button>
+                        <h5 className="mb-2">Project Added Successfully</h5>
+                        <p className="mb-3">
+                          Project has been added with ID:{" "}
+                          <span className="text-primary">#pro-0004</span>
+                        </p>
+                        <div>
+                          <div className="row g-2">
+                            <div className="col-6">
+                              <Link to="#" className="btn btn-dark w-100" onClick={() => {
+                                const modal = document.getElementById('success_modal');
+                                if (modal && window.bootstrap?.Modal) {
+                                  const modalInstance = window.bootstrap.Modal.getInstance(modal);
+                                  if (modalInstance) {
+                                    modalInstance.hide();
+                                  }
+                                }
+                              }}>
+                                Back to List
+                              </Link>
+                            </div>
+                            <div className="col-6">
+                              <Link
+                                  to="#"
+                                  className="btn btn-primary w-100"
+                              >
+                                View Details
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -622,35 +1001,7 @@ const Project = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Delete Error Modal */}
-              <div className="modal fade" id="delete_error_modal" role="dialog">
-                <div className="modal-dialog modal-dialog-centered modal-sm">
-                  <div className="modal-content">
-                    <div className="modal-body">
-                      <div className="text-center p-3">
-          <span className="avatar avatar-lg avatar-rounded bg-danger mb-3">
-            <i className="ti ti-alert-circle fs-24" />
-          </span>
-                        <h5 className="mb-2">Error Deleting Project</h5>
-                        {/*
-            If you want to show a dynamic message from the API,
-            you can store it in a state and display it here
-          */}
-                        <p className="mb-3">Something went wrong while deleting this project.</p>
-                        <div className="row g-2">
-                          <div className="col-12">
-                            <button className="btn btn-dark w-100" data-bs-dismiss="modal">
-                              OK
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+              {/* /Success Modal */}
 
             </div>
             <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
@@ -665,7 +1016,6 @@ const Project = () => {
           </div>
           {/* /Page Wrapper */}
         </>
-
         {/* Add Project */}
         <div className="modal fade" id="add_project" role="dialog">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -689,37 +1039,71 @@ const Project = () => {
                   <ul className="nav nav-underline" id="myTab" role="tablist">
                     <li className="nav-item" role="presentation">
                       <button
-                          className="nav-link active"
+                          className={`nav-link ${activeTab === 'basic-info' ? 'active' : ''}`}
                           id="basic-tab"
                           data-bs-toggle="tab"
                           data-bs-target="#basic-info"
                           type="button"
                           role="tab"
-                          aria-selected="true"
+                          aria-selected={activeTab === 'basic-info'}
+                          onClick={() => setActiveTab('basic-info')}
                       >
                         Basic Information
                       </button>
                     </li>
                     <li className="nav-item" role="presentation">
                       <button
-                          className="nav-link"
+                          className={`nav-link ${activeTab === 'features' ? 'active' : ''}`}
                           id="features-tab"
                           data-bs-toggle="tab"
                           data-bs-target="#features"
                           type="button"
                           role="tab"
-                          aria-selected="false"
+                          aria-selected={activeTab === 'features'}
+                          onClick={() => setActiveTab('features')}
                       >
-                        Key Features
+                        Keywords
                       </button>
                     </li>
+                    {/* New AI Generation Tab */}
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${activeTab === 'ai-generate' ? 'active' : ''}`}
+                          id="ai-generate-tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#ai-generate"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === 'ai-generate'}
+                          onClick={() => setActiveTab('ai-generate')}
+                      >
+                        Generate with AI
+                      </button>
+                    </li>
+                    {/* Tab for Generated Project Preview */}
+                    {generatedProject && (
+                        <li className="nav-item" role="presentation">
+                          <button
+                              className={`nav-link ${activeTab === 'generated-project' ? 'active' : ''}`}
+                              id="generated-project-tab"
+                              data-bs-toggle="tab"
+                              data-bs-target="#generated-project"
+                              type="button"
+                              role="tab"
+                              aria-selected={activeTab === 'generated-project'}
+                              onClick={() => setActiveTab('generated-project')}
+                          >
+                            Generated Project
+                          </button>
+                        </li>
+                    )}
                   </ul>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                   <div className="tab-content" id="myTabContent">
                     <div
-                        className="tab-pane fade show active"
+                        className={`tab-pane fade ${activeTab === 'basic-info' ? 'show active' : ''}`}
                         id="basic-info"
                         role="tabpanel"
                         aria-labelledby="basic-tab"
@@ -743,16 +1127,29 @@ const Project = () => {
                                     <input
                                         type="file"
                                         className="form-control image-sign"
-                                        multiple
+                                        accept="image/*"
+                                        onChange={handleLogoChange}
                                     />
                                   </div>
                                   <button
                                       type="button"
                                       className="btn btn-light btn-sm"
+                                      onClick={clearSelectedLogo}
                                   >
                                     Cancel
                                   </button>
                                 </div>
+                                {logoPreview && (
+                                    <div className="mt-3">
+                                      <p className="mb-1">Preview:</p>
+                                      <img
+                                          src={logoPreview}
+                                          alt="Logo Preview"
+                                          className="img-thumbnail"
+                                          style={{ maxWidth: '100px', maxHeight: '100px' }}
+                                      />
+                                    </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -823,14 +1220,66 @@ const Project = () => {
                                   placeholder="Enter project description"
                                   name="description"
                                   value={formData.description}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    description: e.target.value
-                                  })}
+                                  onChange={handleInputChange}
                                   required
                               ></textarea>
                             </div>
                           </div>
+
+                          {/* New fields added here */}
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Difficulty</label>
+                              <select
+                                  className="form-select"
+                                  name="difficulty"
+                                  value={formData.difficulty || 'Medium'}
+                                  onChange={handleInputChange}
+                              >
+                                {difficultyOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Status</label>
+                              <select
+                                  className="form-select"
+                                  name="status"
+                                  value={formData.status || 'Not Started'}
+                                  onChange={handleInputChange}
+                              >
+                                {statusOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Speciality</label>
+                              <select
+                                  className="form-select"
+                                  name="speciality"
+                                  value={formData.speciality || 'Twin'}
+                                  onChange={handleInputChange}
+                              >
+                                {specialityOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          {/* End of new fields */}
+
                           <div className="col-md-12">
                             <div className="input-block mb-0">
                               <label className="form-label">Upload Files</label>
@@ -862,7 +1311,7 @@ const Project = () => {
                     </div>
 
                     <div
-                        className="tab-pane fade"
+                        className={`tab-pane fade ${activeTab === 'features' ? 'show active' : ''}`}
                         id="features"
                         role="tabpanel"
                         aria-labelledby="features-tab"
@@ -872,20 +1321,21 @@ const Project = () => {
                         <div className="row">
                           <div className="col-md-12">
                             <div className="mb-3">
-                              <label className="form-label me-2">Key Features *</label>
+                              <label className="form-label me-2">Keywords *</label>
                               <CommonTagsInput
-                                  value={projectFeatures}
-                                  onChange={(features: string[]) => {
-                                    setProjectFeatures(features);
+                                  value={projectKeywords}
+                                  onChange={(keywords: string[]) => {
+                                    const validKeywords = keywords.map(keyword => keyword.length > 500 ? keyword.substring(0, 500) : keyword)
+                                    setProjectKeywords(keywords);
                                     setFormData({
                                       ...formData,
-                                      keyFeatures: features
+                                      keywords: validKeywords
                                     });
                                   }}
-                                  placeholder="Add feature and press enter"
+                                  placeholder="Add keyword and press enter"
                                   className="custom-input-class"
                               />
-                              <small className="text-muted">Enter at least one key feature</small>
+                              <small className="text-muted">Enter at least one keyword</small>
                             </div>
                           </div>
                         </div>
@@ -927,6 +1377,288 @@ const Project = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* AI Generate Tab */}
+                    <div
+                        className={`tab-pane fade ${activeTab === 'ai-generate' ? 'show active' : ''}`}
+                        id="ai-generate"
+                        role="tabpanel"
+                        aria-labelledby="ai-generate-tab"
+                        tabIndex={0}
+                    >
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12 mb-4">
+                            <div className="alert alert-info">
+                              <i className="ti ti-bulb me-2"></i>
+                              Describe your project idea and our AI will generate the project details for you.
+                            </div>
+                          </div>
+
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Project Prompt *</label>
+                              <textarea
+                                  className="form-control"
+                                  rows={5}
+                                  placeholder="Describe your project idea (e.g., 'A mobile app for tracking water consumption with reminders and statistics')"
+                                  value={prompt}
+                                  onChange={(e) => setPrompt(e.target.value)}
+                                  required
+                              ></textarea>
+                              <small className="text-muted">Be as specific as possible for better results</small>
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Difficulty</label>
+                              <select
+                                  className="form-select"
+                                  name="difficulty"
+                                  value={formData.difficulty || 'Medium'}
+                                  onChange={handleInputChange}
+                              >
+                                {difficultyOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Speciality</label>
+                              <select
+                                  className="form-select"
+                                  name="speciality"
+                                  value={formData.speciality || 'Twin'}
+                                  onChange={handleInputChange}
+                              >
+                                {specialityOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {generationError && (
+                              <div className="col-md-12">
+                                <div className="alert alert-danger">
+                                  <i className="ti ti-alert-circle me-2"></i>
+                                  {generationError}
+                                </div>
+                              </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-between w-100">
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-primary me-2"
+                                onClick={() => {
+                                  document.getElementById('basic-tab')?.click();
+                                }}
+                            >
+                              Back to Manual Entry
+                            </button>
+                          </div>
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light border me-2"
+                                data-bs-dismiss="modal"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-success me-2"
+                                onClick={handleDirectProjectCreation}
+                                disabled={isGenerating || !prompt.trim()}
+                            >
+                              {isGenerating ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Creating...
+                                  </>
+                              ) : (
+                                  <>
+                                    <i className="ti ti-wand me-1"></i>
+                                    Generate & Save Directly
+                                  </>
+                              )}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleGenerateProject}
+                                disabled={isGenerating || !prompt.trim()}
+                            >
+                              {isGenerating ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Generating...
+                                  </>
+                              ) : (
+                                  <>
+                                    <i className="ti ti-pencil me-1"></i>
+                                    Generate & Edit
+                                  </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Generated Project Preview Tab */}
+                    {generatedProject && (
+                        <div
+                            className={`tab-pane fade ${activeTab === 'generated-project' ? 'show active' : ''}`}
+                            id="generated-project"
+                            role="tabpanel"
+                            aria-labelledby="generated-project-tab"
+                            tabIndex={0}
+                        >
+                          <div className="modal-body">
+                            <div className="row">
+                              <div className="col-md-12 mb-4">
+                                <div className="alert alert-success">
+                                  <i className="ti ti-check-circle me-2"></i>
+                                  Project details have been generated successfully! Review before saving.
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Project Title</label>
+                                  <input
+                                      type="text"
+                                      className="form-control"
+                                      value={formData.title}
+                                      onChange={handleInputChange}
+                                      name="title"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Project Description</label>
+                                  <textarea
+                                      className="form-control"
+                                      rows={5}
+                                      value={formData.description}
+                                      onChange={handleInputChange}
+                                      name="description"
+                                  ></textarea>
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Keywords</label>
+                                  <CommonTagsInput
+                                      value={projectKeywords}
+                                      onChange={(keywords: string[]) => {
+                                        setProjectKeywords(keywords);
+                                        setFormData({
+                                          ...formData,
+                                          keywords: keywords
+                                        });
+                                      }}
+                                      className="custom-input-class"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Key Features section removed as requested */}
+
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Difficulty</label>
+                                  <select
+                                      className="form-select"
+                                      name="difficulty"
+                                      value={formData.difficulty || 'Medium'}
+                                      onChange={handleInputChange}
+                                  >
+                                    {difficultyOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Speciality</label>
+                                  <select
+                                      className="form-select"
+                                      name="speciality"
+                                      value={formData.speciality || 'Twin'}
+                                      onChange={handleInputChange}
+                                  >
+                                    {specialityOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="modal-footer">
+                            <div className="d-flex align-items-center justify-content-between w-100">
+                              <div>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-primary"
+                                    onClick={handleResetGeneration}
+                                >
+                                  <i className="ti ti-refresh me-1"></i> Generate Another
+                                </button>
+                              </div>
+                              <div>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-light border me-2"
+                                    data-bs-dismiss="modal"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleSaveGeneratedProject}
+                                    disabled={loading}
+                                >
+                                  {loading ? (
+                                      <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        Saving...
+                                      </>
+                                  ) : (
+                                      <>
+                                        <i className="ti ti-device-floppy me-1"></i> Save Project
+                                      </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                    )}
                   </div>
                 </form>
               </div>

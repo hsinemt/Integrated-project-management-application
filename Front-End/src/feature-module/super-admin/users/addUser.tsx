@@ -17,12 +17,34 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
     });
 
     const [userType, setUserType] = useState<'manager' | 'tutor' | 'student'>('manager');
+    const [skills, setSkills] = useState<string[]>([]);
+    const [skillInput, setSkillInput] = useState('');
 
     const togglePasswordVisibility = (field: PasswordField) => {
         setPasswordVisibility((prevState) => ({
             ...prevState,
             [field]: !prevState[field],
         }));
+    };
+
+    const handleAddSkill = () => {
+        if (skillInput.trim()) {
+            setSkills([...skills, skillInput.trim()]);
+            setSkillInput('');
+        }
+    };
+
+    const handleRemoveSkill = (index: number) => {
+        const newSkills = [...skills];
+        newSkills.splice(index, 1);
+        setSkills(newSkills);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddSkill();
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -34,7 +56,6 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
             lastname: formData.get('lastname') as string,
             email: formData.get('email') as string,
             password: formData.get('password') as string,
-            
         };
 
         try {
@@ -56,7 +77,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                     result = await addStudent({
                         ...commonData,
                         speciality: formData.get('speciality') as string,
-                        skills: formData.get('skills') as string,
+                        skills: skills,
                         level: formData.get('level') as string,
                     });
                     break;
@@ -73,7 +94,6 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
             console.error(`Error adding ${userType}:`, error);
             console.error('Error details:', error.response?.data || error.message);
             alert(`Error adding ${userType}: ${error.response?.data?.message || error.message}`);
-
         }
     };
 
@@ -235,14 +255,45 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                                         </div>
                                         <div className="col-md-6">
                                             <div className="mb-3">
-                                                <label className="form-label">Skills</label>
-                                                <input type="text" name="skills" className="form-control" required />
-                                            </div>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <div className="mb-3">
                                                 <label className="form-label">Level</label>
                                                 <input type="text" name="level" className="form-control" required />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-12">
+                                            <div className="mb-3">
+                                                <label className="form-label">Skills</label>
+                                                <div className="input-group">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        value={skillInput}
+                                                        onChange={(e) => setSkillInput(e.target.value)}
+                                                        onKeyDown={handleKeyDown}
+                                                        placeholder="Add a skill and press Enter"
+                                                    />
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        type="button"
+                                                        onClick={handleAddSkill}
+                                                    >
+                                                        Add
+                                                    </button>
+                                                </div>
+                                                <div className="mt-2">
+                                                    {skills.map((skill, index) => (
+                                                        <span
+                                                            key={index}
+                                                            className="badge bg-light text-dark me-2 mb-2 p-2"
+                                                        >
+                                                            {skill}
+                                                            <i
+                                                                className="ti ti-x ms-1 cursor-pointer"
+                                                                onClick={() => handleRemoveSkill(index)}
+                                                                style={{ cursor: 'pointer' }}
+                                                            />
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     </>

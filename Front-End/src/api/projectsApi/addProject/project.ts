@@ -14,7 +14,11 @@ export interface ProjectType {
     _id?: string;
     title: string;
     description: string;
-    keyFeatures: string[];
+    keywords: string[];
+    difficulty?: 'Easy' | 'Medium' | 'Hard' | 'Very Hard';
+    status?: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed' | 'Cancelled';
+    speciality?: 'Twin' | 'ERP/BI' | 'AI' | 'SAE' | 'SE' | 'SIM' | 'NIDS' | 'SLEAM' | 'GAMIX' | 'WIN' | 'IoSyS' | 'ArcTic';
+    projectLogo?: string;
     creator?: CreatorType;
     createdAt?: string;
     updatedAt?: string;
@@ -39,30 +43,166 @@ export interface ProjectResponse {
 export const initialProjectData: ProjectType = {
     title: "",
     description: "",
-    keyFeatures: [] as string[],
+    keywords: [] as string[],
+    difficulty: "Medium",
+    status: "Not Started",
+    speciality: "Twin"
 };
 
-export const project = async (projectData: ProjectType): Promise<ApiResponse<ProjectType>> => {
+// New function to generate project from prompt
+export const generateProjectFromPrompt = async (prompt: string): Promise<ProjectType> => {
     try {
         const token = localStorage.getItem("token");
-        const response = await axios.post<ApiResponse<ProjectType>>(`${API_URL}/project/create`, {
-            title: projectData.title,
-            description: projectData.description,
-            keyFeatures: projectData.keyFeatures
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            withCredentials: true
-        });
-        return response.data;
+
+        const response = await axios.post<{
+            success: boolean;
+            message: string;
+            projectDetails: ProjectType;
+        }>(
+            `${API_URL}/nlp/generate-from-prompt`,
+            { prompt },
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                withCredentials: true
+            }
+        );
+
+        if (response.data.success) {
+            return response.data.projectDetails;
+        } else {
+            throw new Error(response.data.message || 'Failed to generate project');
+        }
     } catch (error: any) {
-        console.error('Failed to add project', error);
+        console.error('Error generating project from prompt:', error);
         if (error.response) {
             throw error.response.data;
         } else {
-            throw error.response ? error.response.data : {message: 'Failed to add project, please try again later.'};
+            throw { message: 'Failed to generate project from prompt, please try again later.' };
+        }
+    }
+};
+
+export const addProject = async (projectData: ProjectType, logoFile?: File): Promise<ApiResponse<ProjectType>> => {
+    try {
+        const token = localStorage.getItem("token");
+        const userId = localStorage.getItem("userId");
+
+        if (!userId) {
+            throw new Error("User authentication required. Please log in again.");
+        }
+
+        if (logoFile) {
+            const formData = new FormData();
+            formData.append('title', projectData.title);
+            formData.append('description', projectData.description);
+
+            if (Array.isArray(projectData.keywords)) {
+                formData.append('keywords', JSON.stringify(projectData.keywords));
+            } else {
+                formData.append('keywords', JSON.stringify([]));
+            }
+
+            formData.append('difficulty', projectData.difficulty || 'Medium');
+            formData.append('status', projectData.status || 'Not Started');
+            formData.append('speciality', projectData.speciality || 'Twin');
+            formData.append('projectLogo', logoFile);
+            formData.append('userId', userId);
+
+            const response = await axios.post<ApiResponse<ProjectType>>(
+                `${API_URL}/project/create`,
+                formData,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    withCredentials: true
+                }
+            );
+            return response.data;
+        } else {
+            const requestBody = {
+                title: projectData.title,
+                description: projectData.description,
+                keywords: projectData.keywords,
+                difficulty: projectData.difficulty || 'Medium',
+                status: projectData.status || 'Not Started',
+                speciality: projectData.speciality || 'Twin',
+                userId: userId
+            };
+
+            const response = await axios.post<ApiResponse<ProjectType>>(
+                `${API_URL}/project/create`,
+                requestBody,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    withCredentials: true
+                }
+            );
+            return response.data;
+        }
+    } catch (error: any) {
+        console.error('Failed to add project', error);
+
+        if (error.response) {
+            console.error('Server response:', error.response.data);
+            console.error('Status code:', error.response.status);
+            throw error.response.data;
+        } else if (error.request) {
+            console.error('No response received:', error.request);
+            throw { message: 'No response from server. Please check your connection.' };
+        } else {
+            console.error('Error details:', error.message);
+            throw { message: 'Failed to add project, please try again later.' };
+        }
+    }
+};
+
+// Create project from AI-generated details
+export const createProjectFromPrompt = async (prompt: string, speciality?: string, difficulty?: string): Promise<ApiResponse<ProjectType>> => {
+    try {
+        const token = localStorage.getItem("token");
+
+        const response = await axios.post<{
+            success: boolean;
+            message: string;
+            project: ProjectType;
+        }>(
+            `${API_URL}/nlp/create-project-from-prompt`,
+            {
+                prompt,
+                speciality,
+                difficulty
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                withCredentials: true
+            }
+        );
+
+        if (response.data.success) {
+            return {
+                success: true,
+                message: response.data.message,
+                data: response.data.project
+            };
+        } else {
+            throw new Error(response.data.message || 'Failed to create project from prompt');
+        }
+    } catch (error: any) {
+        console.error('Error creating project from prompt:', error);
+        if (error.response) {
+            throw error.response.data;
+        } else {
+            throw { message: 'Failed to create project from prompt, please try again later.' };
         }
     }
 };
@@ -85,7 +225,7 @@ export const getAllProjects = async (): Promise<ProjectType[]> => {
 
 export const getProjectById = async (id: string): Promise<ProjectType> => {
     try {
-        const response = await axios.get<ProjectResponse>(`${API_URL}/project/${id}`, {
+        const response = await axios.get<{ success: boolean, project: ProjectType }>(`${API_URL}/project/getProjectById/${id}`, {
             withCredentials: true
         });
         return response.data.project;
@@ -95,18 +235,57 @@ export const getProjectById = async (id: string): Promise<ProjectType> => {
     }
 };
 
-export const updateProject = async (id: string, projectData: ProjectType): Promise<ApiResponse<ProjectType>> => {
+export const updateProject = async (id: string, projectData: ProjectType, logoFile?: File): Promise<ApiResponse<ProjectType>> => {
     try {
-        const response = await axios.put<ApiResponse<ProjectType>>(`${API_URL}/project/update/${id}`, {
-            title: projectData.title,
-            description: projectData.description,
-            keyFeatures: projectData.keyFeatures
-        }, {
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            withCredentials: true
-        });
+        const token = localStorage.getItem('token');
+
+        const userId = localStorage.getItem("userId");
+
+        if (!userId) {
+            throw new Error("User authentication required. Please log in again.");
+        }
+
+        let requestData: any;
+        let headers: any = {
+            'Authorization': `Bearer ${token}`
+        };
+
+        if (logoFile) {
+            const formData = new FormData();
+            formData.append('title', projectData.title);
+            formData.append('description', projectData.description);
+            formData.append('keywords', JSON.stringify(projectData.keywords));
+            formData.append('difficulty', projectData.difficulty || 'Medium');
+            formData.append('status', projectData.status || 'Not Started');
+            formData.append('speciality', projectData.speciality || 'Twin');
+            formData.append('projectLogo', logoFile);
+
+            formData.append('userId', userId);
+
+            requestData = formData;
+
+        } else {
+            requestData = {
+                title: projectData.title,
+                description: projectData.description,
+                keywords: JSON.stringify(projectData.keywords),
+                difficulty: projectData.difficulty,
+                status: projectData.status,
+                speciality: projectData.speciality,
+
+                userId: userId
+            };
+            headers['Content-Type'] = 'application/json';
+        }
+
+        const response = await axios.put<ApiResponse<ProjectType>>(
+            `${API_URL}/project/update/${id}`,
+            requestData,
+            {
+                headers: headers,
+                withCredentials: true
+            }
+        );
         return response.data;
     } catch (error: any) {
         console.error('Failed to update project', error);
@@ -139,6 +318,7 @@ export const deleteProject = async (id: string): Promise<ApiResponse<void>> => {
         }
     }
 };
+
 export const getProjectsCount = async (): Promise<number> => {
     try {
         const response = await axios.get<{success: boolean, count: number}>(`${API_URL}/project/count`, {

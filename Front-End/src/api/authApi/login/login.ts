@@ -12,6 +12,7 @@ export const loginUser = async (loginData: { email: string; password: string }) 
         if (response.data.success) {
             localStorage.setItem("token", response.data.token);
             localStorage.setItem("userEmail", loginData.email);
+            localStorage.setItem("userId", response.data.user.id);
         }
 
         return response.data;

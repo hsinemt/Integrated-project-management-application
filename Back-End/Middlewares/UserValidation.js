@@ -23,9 +23,12 @@ const signupValidation = (req, res, next) => {
 
 }
 const userToken = async (req, res, next) => {
-    let token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+    let token = req.cookies.token || req.headers.authorization?.split(" ")[1] || req.header("Authorization") || 
+    req.headers['x-access-token'];
 
     if (!token) {
+        console.log("No token provided");
+
         return res.status(401).json({ success: false, message: "Not authorized, login again" });
     }
 
@@ -33,13 +36,46 @@ const userToken = async (req, res, next) => {
         const tokenDecode = jwt.verify(token, process.env.JWT_SECRET);
         //console.log("token decode", tokenDecode);
         req.body.userId = tokenDecode.id;
+        req.tokenDecode = tokenDecode;
+        req.user = tokenDecode;
         next();
     } catch (err) {
         console.error("Token verification error:", err);
         res.status(401).json({ success: false, message: "Invalid token" });
     }
 };
+const authMiddleware = (req, res, next) => {
+    const verifyToken = (req, res, next) => {
+      const token = req.header("Authorization");
+      console.log("Extracted Token:", token);
+    
+      if (!token) {
+        return res.status(401).json({ message: "No token, authorization denied" });
+      }
+    
+      jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+          console.log("JWT Error:", err.message);
+          return res.status(401).json({ message: "Token is not valid" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
+    verifyToken(req, res, next);  
+  };
+  const roleMiddleware = (roles) => {
+    return (req, res, next) => {
+      if (!roles.includes(req.user.role)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      next();
+    };
+  };  
+  
 module.exports = {
     signupValidation,
-    userToken
+    userToken,
+    authMiddleware,
+    roleMiddleware
 }

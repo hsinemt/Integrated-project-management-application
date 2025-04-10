@@ -11,12 +11,31 @@ import {
 } from "../../data/redux/themeSettingSlice";
 import usePreviousRoute from "./usePreviousRoute";
 import { SidebarDataTest } from "../../data/json/sidebarMenu";
+import { all_routes } from "../../../feature-module/router/all_routes";
+
+// Define interfaces for TypeScript
+interface SubmenuItem {
+  label?: string;
+  link?: string;
+  submenu?: boolean;
+  showSubRoute?: boolean;
+  icon?: string;
+  base?: string;
+  base2?: string;
+  base3?: string;
+  materialicons?: string;
+  submenuItems?: SubmenuItem[];
+  tittle?: string;
+  dot?: boolean;
+  themeSetting?: boolean;
+}
 
 const Sidebar = () => {
+  const userRole = localStorage.getItem('role'); // Get the role from localStorage
   const Location = useLocation();
-
   const [subOpen, setSubopen] = useState<any>("Dashboard");
   const [subsidebar, setSubsidebar] = useState("");
+  const routes = all_routes;
 
   const toggleSidebar = (title: any) => {
     localStorage.setItem("menuOpened", title);
@@ -62,43 +81,41 @@ const Sidebar = () => {
         return "";
     }
   };
+
+  // Function to determine which menu items should be shown based on user role
+  const shouldShowMenuItem = (userRole: string | null, menuLabel: string) => {
+    switch(userRole) {
+      case 'admin':
+        // Admin sees all sections
+        return true;
+      case 'manager':
+        // Manager sees all except Admin section
+        return menuLabel !== 'Admin';
+      case 'tutor':
+        // Tutor sees Tutor and Student sections
+        return ['Tutor', 'Student'].includes(menuLabel);
+      case 'student':
+        // Student only sees Student section
+        return menuLabel === 'Student';
+      default:
+        return false;
+    }
+  };
+
   const location = useLocation();
   const dispatch = useDispatch();
   const previousLocation = usePreviousRoute();
 
   useEffect(() => {
-    const layoutPages = [
-      "/layout-dark",
-      "/layout-rtl",
-      "/layout-mini",
-      "/layout-box",
-      "/layout-default",
-    ];
-
-    const isCurrentLayoutPage = layoutPages.some((path) =>
-      location.pathname.includes(path)
-    );
-    const isPreviousLayoutPage =
-      previousLocation &&
-      layoutPages.some((path) => previousLocation.pathname.includes(path));
-
-
-  }, [location, previousLocation, dispatch]);
-
-  useEffect(() => {
-    const currentMenu = localStorage.getItem("menuOpened") || 'Dashboard'
+    const currentMenu = localStorage.getItem("role") || 'Dashboard'
     setSubopen(currentMenu);
     // Select all 'submenu' elements
     const submenus = document.querySelectorAll(".submenu");
-    // Loop through each 'submenu'
     submenus.forEach((submenu) => {
-      // Find all 'li' elements within the 'submenu'
       const listItems = submenu.querySelectorAll("li");
       submenu.classList.remove("active");
-      // Check if any 'li' has the 'active' class
       listItems.forEach((item) => {
         if (item.classList.contains("active")) {
-          // Add 'active' class to the 'submenu'
           submenu.classList.add("active");
           return;
         }
@@ -112,255 +129,268 @@ const Sidebar = () => {
   const onMouseLeave = () => {
     dispatch(setExpandMenu(false));
   };
+
+  // Define the standalone Projects section
+  const projectsSection: SubmenuItem = {
+    label: 'Projects',
+    link: routes.project,
+    submenu: true,
+    showSubRoute: false,
+    icon: 'box',
+    base: 'projects',
+    materialicons: 'topic',
+    themeSetting: false, // Add themeSetting property
+    submenuItems: [
+      {
+        label: 'Projects',
+        link: routes.project,
+        base: 'project-grid',
+        base2: 'project-list',
+        base3: 'project-details',
+      },
+    ],
+  };
+
+  // Function to filter out the Projects section from Student submenu
+  const filterOutProjects = (submenuItems: SubmenuItem[] | undefined): SubmenuItem[] => {
+    if (!submenuItems) return [];
+
+    return submenuItems.filter((item: SubmenuItem) => !item.tittle || item.tittle !== 'PROJECTS');
+  };
+
   return (
-    <>
-      <div
-        className="sidebar"
-        id="sidebar"
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-  <div className="sidebar-logo">
-    <Link to="routes.index" className="logo logo-normal">
-      <ImageWithBasePath src="assets/img/projexus-logo.svg" alt="Logo" />
-    </Link>
-    <Link to="routes.index" className="logo-small">
-      <ImageWithBasePath src="assets/img/small-projexus-logo.svg" alt="Logo" />
-    </Link>
-    <Link to="routes.index" className="dark-logo">
-      <ImageWithBasePath src="assets/img/white-projexus-logo.svg" alt="Logo" />
-    </Link>
-  </div>
-  <div className="modern-profile p-3 pb-0">
-    <div className="text-center rounded bg-light p-3 mb-4 user-profile">
-      <div className="avatar avatar-lg online mb-3">
-        <ImageWithBasePath
-          src="assets/img/profiles/avatar-02.jpg"
-          alt="Img"
-          className="img-fluid rounded-circle"
-        />
-      </div>
-      <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
-      <p className="fs-10">System Admin</p>
-    </div>
-    <div className="sidebar-nav mb-3">
-      <ul
-        className="nav nav-tabs nav-tabs-solid nav-tabs-rounded nav-justified bg-transparent"
-        role="tablist"
-      >
-        <li className="nav-item">
-          <Link className="nav-link active border-0" to="#">Menu</Link>
-        </li>
-        <li className="nav-item">
-          <Link className="nav-link border-0" to="#">Chats</Link>
-        </li>
-        <li className="nav-item">
-          <Link className="nav-link border-0" to="#">Inbox</Link>
-        </li>
-      </ul>
-    </div>
-  </div>
-  <div className="sidebar-header p-3 pb-0 pt-2">
-    <div
-      className="text-center rounded bg-light p-2 mb-4 sidebar-profile d-flex align-items-center"
-    >
-      <div className="avatar avatar-md onlin">
-        <ImageWithBasePath
-          src="assets/img/profiles/avatar-02.jpg"
-          alt="Img"
-          className="img-fluid rounded-circle"
-        />
-      </div>
-      <div className="text-start sidebar-profile-info ms-2">
-        <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
-        <p className="fs-10">System Admin</p>
-      </div>
-    </div>
-    <div className="input-group input-group-flat d-inline-flex mb-4">
-      <span className="input-icon-addon">
-        <i className="ti ti-search"></i>
-      </span>
-      <input type="text" className="form-control" placeholder="Search in HRMS" />
-      <span className="input-group-text">
-        <kbd>CTRL + / </kbd>
-      </span>
-    </div>
-    <div
-      className="d-flex align-items-center justify-content-between menu-item mb-3"
-    >
-      <div className="me-3">
-        <Link to="#" className="btn btn-menubar position-relative">
-          <i className="ti ti-shopping-bag"></i>
-          <span className="badge bg-success rounded-pill d-flex align-items-center justify-content-center header-badge"
-            >5</span>
-        </Link>
-      </div>
-      <div className="me-3">
-        <Link to="#" className="btn btn-menubar">
-          <i className="ti ti-layout-grid-remove"></i>
-        </Link>
-      </div>
-      <div className="me-3">
-        <Link to="#" className="btn btn-menubar position-relative">
-          <i className="ti ti-brand-hipchat"></i>
-          <span
-            className="badge bg-info rounded-pill d-flex align-items-center justify-content-center header-badge"
-            >5</span>
-        </Link>
-      </div>
-      <div className="me-3 notification-item">
-        <Link to="#" className="btn btn-menubar position-relative me-1">
-          <i className="ti ti-bell"></i>
-          <span className="notification-status-dot"></span>
-        </Link>
-      </div>
-      <div className="me-0">
-        <Link to="#" className="btn btn-menubar">
-          <i className="ti ti-message"></i>
-        </Link>
-      </div>
-    </div>
-  </div>
-        <Scrollbars>
-          <div className="sidebar-inner slimscroll">
-            <div id="sidebar-menu" className="sidebar-menu">
-              <ul>
-              {SidebarDataTest?.map((mainLabel, index) => (
-                <React.Fragment key={`main-${index}`}>
-                    <li className="menu-title">
-                        <span>{mainLabel?.tittle}</span>
-                    </li>
-                    <li>
-                    <ul>
-                        {mainLabel?.submenuItems?.map((title: any, i) => {
-                        let link_array: any = [];
-                        if ("submenuItems" in title) {
-                            title.submenuItems?.forEach((link: any) => {
-                            link_array.push(link?.link);
-                            if (link?.submenu && "submenuItems" in link) {
-                                link.submenuItems?.forEach((item: any) => {
-                                link_array.push(item?.link);
-                                });
-                            }
-                            });
-                        }
-                        title.links = link_array;
-
-                        return (
-                            <li className="submenu" key={`title-${i}`}>
-                            <Link
-                                to={title?.submenu ? "#" : title?.link}
-                                onClick={() =>
-                                handleClick(
-                                    title?.label,
-                                    title?.themeSetting,
-                                    getLayoutClass(title?.label)
-                                )
-                                }
-                                className={`${
-                                subOpen === title?.label ? "subdrop" : ""
-                                } ${
-                                title?.links?.includes(Location.pathname) ? "active" : ""
-                                } ${
-                                title?.submenuItems
-                                    ?.map((link: any) => link?.link)
-                                    .includes(Location.pathname) ||
-                                title?.link === Location.pathname
-                                    ? "active"
-                                    : ""
-                                }`}
-                            >
-                                <i className={`ti ti-${title.icon}`}></i>
-                                <span>{title?.label}</span>
-                                {title?.dot && (
-                                <span className="badge badge-danger fs-10 fw-medium text-white p-1">
-                                    Hot
-                                </span>
-                                )}
-                                <span className={title?.submenu ? "menu-arrow" : ""} />
-                            </Link>
-                            {title?.submenu !== false && subOpen === title?.label && (
-                                <ul
-                                style={{
-                                    display: subOpen === title?.label ? "block" : "none",
-                                }}
-                                >
-                                {title?.submenuItems?.map((item: any, j: any) => (
-                                    <li
-                                    className={
-                                        item?.submenuItems ? "submenu submenu-two" : ""
-                                    }
-                                    key={`item-${j}`}
-                                    >
-                                    <Link
-                                        to={ item?.submenu ? "#" :item?.link}
-                                        className={`${
-                                        item?.submenuItems
-                                            ?.map((link: any) => link?.link)
-                                            .includes(Location.pathname) ||
-                                        item?.link === Location.pathname
-                                            ? "active"
-                                            : ""
-                                        } ${
-                                        subsidebar === item?.label ? "subdrop" : ""
-                                        }`}
-                                        onClick={() => {
-                                        toggleSubsidebar(item?.label);
-                                        }}
-                                    >
-                                        {item?.label}
-                                        <span
-                                        className={item?.submenu ? "menu-arrow" : ""}
-                                        />
-                                    </Link>
-                                    {item?.submenuItems ? (
-                                        <ul
-                                        style={{
-                                            display:
-                                            subsidebar === item?.label ? "block" : "none",
-                                        }}
-                                        >
-                                        {item?.submenuItems?.map((items: any, k: any) => (
-                                            <li key={`submenu-item-${k}`}>
-                                            <Link
-                                                to={items?.submenu ? "#" :items?.link}
-                                                className={`${
-                                                subsidebar === items?.label
-                                                    ? "submenu-two subdrop"
-                                                    : "submenu-two"
-                                                } ${
-                                                items?.submenuItems
-                                                    ?.map((link: any) => link.link)
-                                                    .includes(Location.pathname) ||
-                                                items?.link === Location.pathname
-                                                    ? "active"
-                                                    : ""
-                                                }`}
-                                            >
-                                                {items?.label}
-                                            </Link>
-                                            </li>
-                                        ))}
-                                        </ul>
-                                    ) : null}
-                                    </li>
-                                ))}
-                                </ul>
-                            )}
-                            </li>
-                        );
-                        })}
-                    </ul>
-                    </li>
-                </React.Fragment>
-                ))}
-
-              </ul>
+      <>
+        <div
+            className="sidebar"
+            id="sidebar"
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+          <div className="sidebar-logo">
+            <Link to="/" className="logo logo-normal">
+              <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
+            </Link>
+            <Link to="/" className="logo-small">
+              <ImageWithBasePath src="assets/img/logo-small.svg" alt="Logo" />
+            </Link>
+            <Link to="/" className="dark-logo">
+              <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo" />
+            </Link>
+          </div>
+          <div className="modern-profile p-3 pb-0">
+            <div className="text-center rounded bg-light p-3 mb-4 user-profile">
+              <div className="avatar avatar-lg online mb-3">
+                <ImageWithBasePath
+                    src="assets/img/profiles/avatar-02.jpg"
+                    alt="Img"
+                    className="img-fluid rounded-circle"
+                />
+              </div>
+              <h6 className="fs-12 fw-normal mb-1">Adrian Herman</h6>
+              <p className="fs-10">System Admin</p>
             </div>
           </div>
-        </Scrollbars>
-      </div>
-    </>
+
+          <Scrollbars>
+            <div className="sidebar-inner slimscroll">
+              <div id="sidebar-menu" className="sidebar-menu">
+                <ul>
+                  {SidebarDataTest?.map((mainLabel, index) => (
+                      <React.Fragment key={`main-${index}`}>
+                        <>
+                          <li className="menu-title">
+                            <span>{mainLabel?.tittle}</span>
+                          </li>
+                          <li>
+                            <ul>
+                              {/* Render regular menu items with role-based filtering */}
+                              {mainLabel?.submenuItems?.map((title: any, i) => {
+                                // Skip rendering if not visible for this role
+                                if (!shouldShowMenuItem(userRole, title.label)) {
+                                  return null;
+                                }
+
+                                let link_array: any = [];
+                                if ("submenuItems" in title) {
+                                  title.submenuItems?.forEach((link: any) => {
+                                    link_array.push(link?.link);
+                                    if (link?.submenu && "submenuItems" in link) {
+                                      link.submenuItems?.forEach((item: any) => {
+                                        link_array.push(item?.link);
+                                      });
+                                    }
+                                  });
+                                }
+                                title.links = link_array;
+
+                                return (
+                                    <li className="submenu" key={`title-${i}`}>
+                                      <Link
+                                          to={title?.submenu ? "#" : (title?.link || "#")}
+                                          onClick={() =>
+                                              handleClick(
+                                                  title?.label,
+                                                  title?.themeSetting,
+                                                  getLayoutClass(title?.label)
+                                              )
+                                          }
+                                          className={`${
+                                              subOpen === title?.label ? "subdrop" : ""
+                                          } ${
+                                              title?.links?.includes(Location.pathname) ? "active" : ""
+                                          }`}
+                                      >
+                                        <i className={`ti ti-${title.icon}`}></i>
+                                        <span>{title?.label}</span>
+                                        {title?.dot && (
+                                            <span className="badge badge-danger fs-10 fw-medium text-white p-1">
+                                      Hot
+                                    </span>
+                                        )}
+                                        <span className={title?.submenu ? "menu-arrow" : ""} />
+                                      </Link>
+                                      {title?.submenu !== false && subOpen === title?.label && (
+                                          <ul
+                                              style={{
+                                                display: subOpen === title?.label ? "block" : "none",
+                                              }}
+                                          >
+                                            {/* Filter out the Projects section from Student menu */}
+                                            {filterOutProjects(title?.submenuItems)?.map((item: any, j: any) => (
+                                                <li
+                                                    className={
+                                                      item?.submenuItems ? "submenu submenu-two" : ""
+                                                    }
+                                                    key={`item-${j}`}
+                                                >
+                                                  <Link
+                                                      to={item?.submenu ? "#" : (item?.link || "#")}
+                                                      className={`${
+                                                          subsidebar === item?.label ? "subdrop" : ""
+                                                      }`}
+                                                      onClick={() => {
+                                                        toggleSubsidebar(item?.label);
+                                                      }}
+                                                  >
+                                                    {item?.label}
+                                                    <span
+                                                        className={item?.submenu ? "menu-arrow" : ""}
+                                                    />
+                                                  </Link>
+                                                  {item?.submenuItems && !item.tittle && (
+                                                      <ul
+                                                          style={{
+                                                            display: subsidebar === item?.label ? "block" : "none",
+                                                          }}
+                                                      >
+                                                        {item?.submenuItems?.map((items: any, k: any) => (
+                                                            <li key={`submenu-item-${k}`}>
+                                                              <Link
+                                                                  to={items?.submenu ? "#" : (items?.link || "#")}
+                                                                  className={`${
+                                                                      subsidebar === items?.label
+                                                                          ? "submenu-two subdrop"
+                                                                          : "submenu-two"
+                                                                  }`}
+                                                              >
+                                                                {items?.label}
+                                                              </Link>
+                                                            </li>
+                                                        ))}
+                                                      </ul>
+                                                  )}
+                                                </li>
+                                            ))}
+                                          </ul>
+                                      )}
+                                    </li>
+                                );
+                              })}
+
+                              {/* Render the standalone Projects section (visible to all roles) */}
+                              <li className="submenu">
+                                <Link
+                                    to={projectsSection?.submenu ? "#" : (projectsSection?.link || "#")}
+                                    onClick={() =>
+                                        handleClick(
+                                            projectsSection?.label,
+                                            projectsSection?.themeSetting,
+                                            getLayoutClass(projectsSection?.label)
+                                        )
+                                    }
+                                    className={`${
+                                        subOpen === projectsSection?.label ? "subdrop" : ""
+                                    }`}
+                                >
+                                  <i className={`ti ti-${projectsSection.icon || ''}`}></i>
+                                  <span>{projectsSection?.label}</span>
+                                  <span className={projectsSection?.submenu ? "menu-arrow" : ""} />
+                                </Link>
+                                {projectsSection?.submenu !== false && subOpen === projectsSection?.label && (
+                                    <ul
+                                        style={{
+                                          display: subOpen === projectsSection?.label ? "block" : "none",
+                                        }}
+                                    >
+                                      {projectsSection?.submenuItems?.map((item: any, j: any) => (
+                                          <li
+                                              className={
+                                                item?.submenuItems ? "submenu submenu-two" : ""
+                                              }
+                                              key={`project-item-${j}`}
+                                          >
+                                            <Link
+                                                to={item?.submenu ? "#" : (item?.link || "#")}
+                                                className={`${
+                                                    subsidebar === item?.label ? "subdrop" : ""
+                                                }`}
+                                                onClick={() => {
+                                                  toggleSubsidebar(item?.label);
+                                                }}
+                                            >
+                                              {item?.label}
+                                              <span
+                                                  className={item?.submenu ? "menu-arrow" : ""}
+                                              />
+                                            </Link>
+                                            {item?.submenuItems && (
+                                                <ul
+                                                    style={{
+                                                      display: subsidebar === item?.label ? "block" : "none",
+                                                    }}
+                                                >
+                                                  {item?.submenuItems?.map((items: any, k: any) => (
+                                                      <li key={`project-subitem-${k}`}>
+                                                        <Link
+                                                            to={items?.submenu ? "#" : (items?.link || "#")}
+                                                            className={`${
+                                                                subsidebar === items?.label
+                                                                    ? "submenu-two subdrop"
+                                                                    : "submenu-two"
+                                                            }`}
+                                                        >
+                                                          {items?.label}
+                                                        </Link>
+                                                      </li>
+                                                  ))}
+                                                </ul>
+                                            )}
+                                          </li>
+                                      ))}
+                                    </ul>
+                                )}
+                              </li>
+                            </ul>
+                          </li>
+                        </>
+                      </React.Fragment>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Scrollbars>
+        </div>
+      </>
   );
 };
 
