@@ -1,357 +1,318 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import axios from "axios";
 import { all_routes } from "../../router/all_routes";
-import CommonSelect from "../../../core/common/commonSelect";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-type PasswordField =
-  | "oldPassword"
-  | "newPassword"
-  | "confirmPassword"
-  | "currentPassword";
+import SkillTags from "./SkillTags"; // Import the new SkillTags component
+import Swal from "sweetalert2";
 
 const Profile = () => {
   const route = all_routes;
-  const [passwordVisibility, setPasswordVisibility] = useState({
-    oldPassword: false,
-    newPassword: false,
-    confirmPassword: false,
-    currentPassword: false,
+  const [user, setUser] = useState({
+    _id: "", // Add _id to the user state
+    name: "",
+    lastname: "",
+    email: "",
+    birthday: "",
+    password: "",
+    images: "",
+    skills: [], 
+    role: ""// Add skills to the user state
   });
 
-  const togglePasswordVisibility = (field: PasswordField) => {
-    setPasswordVisibility((prevState) => ({
-      ...prevState,
-      [field]: !prevState[field],
-    }));
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.error("No token found in localStorage");
+          return;
+        }
+
+        const response = await axios.get("http://localhost:9777/user/profile", {
+          headers: { Authorization: `${token}` },
+        });
+
+        if (response.data) {
+          const formattedBirthday = response.data.birthday
+            ? response.data.birthday.split("T")[0]
+            : "";
+          setUser({
+            _id: response.data._id, // Set the _id property
+            name: response.data.name,
+            lastname: response.data.lastname,
+            email: response.data.email,
+            birthday: formattedBirthday,
+            password: "",
+            images: response.data.images,
+            skills: response.data.skills || [], 
+            role: response.data.role
+            // Add skills from the backend
+          });
+
+          // Set the selected skills with the user's current skills
+          setSelectedSkills(response.data.skills || []);
+        } else {
+          console.error("User data is empty");
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUser({ ...user, [e.target.name]: e.target.value });
   };
 
-  const countryChoose = [
-    { value: "Select", label: "Select" },
-    { value: "USA", label: "USA" },
-    { value: "Canada", label: "Canada" },
-    { value: "Germany", label: "Germany" },
-    { value: "France", label: "France" },
-  ];
-  const stateChoose = [
-    { value: "Select", label: "Select" },
-    { value: "california", label: "california" },
-    { value: "Texas", label: "Texas" },
-    { value: "New York", label: "New York" },
-    { value: "Florida", label: "Florida" },
-  ];
-  const cityChoose = [
-    { value: "Select", label: "Select" },
-    { value: "Los Angeles", label: "Los Angeles" },
-    { value: "San Francisco", label: "San Francisco" },
-    { value: "San Diego", label: "San Diego" },
-    { value: "Fresno", label: "Fresno" },
-  ];
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      const filePreviewUrl = URL.createObjectURL(file);
+      setPreviewImage(filePreviewUrl);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return alert("Please select a file first!");
+
+    const formData = new FormData();
+    formData.append("image", selectedFile);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post("http://localhost:9777/user/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `${token}`,
+        },
+      });
+
+      if (response.data.imageUrl) {
+        setUser({ ...user, images: response.data.imageUrl });
+        setPreviewImage(null);
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    }
+  };
+
+  const handleSaveSkills = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+  
+      const response = await axios.put(
+        "http://localhost:9777/user/update-skills",
+        { skills: selectedSkills }, // ✅ Only send skills (no userId)
+        { headers: { Authorization: `${token}` } }
+      );
+  
+      if (response.data.success) {
+        setUser((prevUser) => ({
+          ...prevUser,
+          skills: response.data.updatedSkills,
+        }));
+        Swal.fire("Success!", "Skills updated!", "success");
+      }
+    } catch (error) {
+      console.error("Error saving skills:", error);
+      Swal.fire("Error!", "Failed to update skills.", "error");
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token || !user._id) {
+        console.error("User is not authenticated");
+        return;
+      }
+
+      // Prepare the payload with updated user data
+      const payload = {
+        name: user.name,
+        lastname: user.lastname,
+        birthday: user.birthday,
+        password: user.password, // Only send the password if it's not empty
+      };
+
+      // Log the payload being sent
+      console.log("Sending payload:", payload);
+
+      const response = await axios.put(
+        `http://localhost:9777/user/update-profile/${user._id}`,
+        payload,
+        { headers: { Authorization: `${token}` } }
+      );
+
+      // Log the response from the backend
+      console.log("Backend response:", response.data);
+
+      if (response.data.success) {
+        Swal.fire({
+          title: "Success!",
+          text: "Profile updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+        
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      Swal.fire({
+        title: "Error!",
+        text: "Failed to update profile. Please try again.",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+      
+    }
+  };
+
   return (
-    <>
-      {/* Page Wrapper */}
-      <div className="page-wrapper">
-        <div className="content">
-          {/* Breadcrumb */}
-          <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
-            <div className="my-auto mb-2">
-              <h2 className="mb-1">Profile </h2>
-              <nav>
-                <ol className="breadcrumb mb-0">
-                  <li className="breadcrumb-item">
-                    <Link to="index.html">
-                      <i className="ti ti-smart-home" />
-                    </Link>
-                  </li>
-                  <li className="breadcrumb-item">Pages</li>
-                  <li className="breadcrumb-item active" aria-current="page">
-                    Profile{" "}
-                  </li>
-                </ol>
-              </nav>
-            </div>
-            <div className="head-icons ms-2">
-              <CollapseHeader />
-            </div>
-          </div>
-          {/* /Breadcrumb */}
-          <div className="card">
-            <div className="card-body">
-              <div className="border-bottom mb-3 pb-3">
-                <h4>Profile </h4>
-              </div>
-              <form action="profile.html">
-                <div className="border-bottom mb-3">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div>
-                        <h6 className="mb-3">Basic Information</h6>
-                        <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
-                          <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                            <i className="ti ti-photo text-gray-3 fs-16" />
-                          </div>
-                          <div className="profile-upload">
-                            <div className="mb-2">
-                              <h6 className="mb-1">Profile Photo</h6>
-                              <p className="fs-12">
-                                Recommended image size is 40px x 40px
-                              </p>
-                            </div>
-                            <div className="profile-uploader d-flex align-items-center">
-                              <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                                Upload
-                                <input
-                                  type="file"
-                                  className="form-control image-sign"
-                                  multiple
-                                />
-                              </div>
-                              <Link
-                                to="#"
-                                className="btn btn-light btn-sm"
-                              >
-                                Cancel
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">First Name</label>
-                        </div>
-                        <div className="col-md-8">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">Last Name</label>
-                        </div>
-                        <div className="col-md-8">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">Email</label>
-                        </div>
-                        <div className="col-md-8">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">Phone</label>
-                        </div>
-                        <div className="col-md-8">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-bottom mb-3">
-                  <h6 className="mb-3">Address Information</h6>
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-2">
-                          <label className="form-label mb-md-0">Address</label>
-                        </div>
-                        <div className="col-md-10">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">Country</label>
-                        </div>
-                        <div className="col-md-8">
-                          <CommonSelect
-                            className="select"
-                            options={countryChoose}
-                            defaultValue={countryChoose[0]}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">State</label>
-                        </div>
-                        <div className="col-md-8">
-                          <div>
-                            <CommonSelect
-                              className="select"
-                              options={stateChoose}
-                              defaultValue={stateChoose[0]}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">City</label>
-                        </div>
-                        <div className="col-md-8">
-                          <div>
-                            <CommonSelect
-                              className="select"
-                              options={cityChoose}
-                              defaultValue={cityChoose[0]}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-4">
-                          <label className="form-label mb-md-0">Postal Code</label>
-                        </div>
-                        <div className="col-md-8">
-                          <input type="text" className="form-control" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-bottom mb-3">
-                  <h6 className="mb-3">Change Password</h6>
-                  <div className="row">
-                    <div className="col-md-4">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-5">
-                          <label className="form-label mb-md-0">
-                            Current Password
-                          </label>
-                        </div>
-                        <div className="col-md-7">
-                          <div className="pass-group">
-                            <input
-                              type={
-                                passwordVisibility.currentPassword
-                                  ? "text"
-                                  : "password"
-                              }
-                              className="pass-input form-control"
-                            />
-                            <span
-                              className={`ti toggle-passwords ${passwordVisibility.currentPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                                }`}
-                              onClick={() =>
-                                togglePasswordVisibility("currentPassword")
-                              }
-                            ></span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-5">
-                          <label className="form-label mb-md-0">New Password</label>
-                        </div>
-                        <div className="col-md-7">
-                          <div className="pass-group">
-                            <input
-                              type={
-                                passwordVisibility.newPassword
-                                  ? "text"
-                                  : "password"
-                              }
-                              className="pass-input form-control"
-                            />
-                            <span
-                              className={`ti toggle-passwords ${passwordVisibility.newPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                                }`}
-                              onClick={() =>
-                                togglePasswordVisibility("newPassword")
-                              }
-                            ></span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="row align-items-center mb-3">
-                        <div className="col-md-5">
-                          <label className="form-label mb-md-0">
-                            Confirm Password
-                          </label>
-                        </div>
-                        <div className="col-md-7">
-                          <div className="pass-group">
-                            <input
-                              type={
-                                passwordVisibility.confirmPassword
-                                  ? "text"
-                                  : "password"
-                              }
-                              className="pass-input form-control"
-                            />
-                            <span
-                              className={`ti toggle-passwords ${passwordVisibility.confirmPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                                }`}
-                              onClick={() =>
-                                togglePasswordVisibility("confirmPassword")
-                              }
-                            ></span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="d-flex align-items-center justify-content-end">
-                  <button
-                    type="button"
-                    className="btn btn-outline-light border me-3"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    Save
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+    <div className="page-wrapper">
+      <div className="content">
+        <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
+          <h2 className="mb-1">Profile</h2>
+          <CollapseHeader />
         </div>
-        <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-          <p className="mb-0">2014 - 2025 © SmartHR.</p>
-          <p>
-            Designed &amp; Developed By{" "}
-            <Link to="#" className="text-primary">
-              Dreams
-            </Link>
-          </p>
+
+        <div className="card">
+          <div className="card-body">
+            <h4>Profile</h4>
+
+            <div className="d-flex align-items-center flex-wrap bg-light w-100 rounded p-3 mb-4">
+              <div className="avatar avatar-xxl rounded-circle border border-dashed me-2">
+                {previewImage ? (
+                  <img
+                    src={previewImage}
+                    className="img-fluid rounded-circle"
+                    width="100"
+                    height="100"
+                    alt="Preview"
+                  />
+                ) : user.images ? (
+                  <img
+                    src={`http://localhost:9777${user.images}`}
+                    className="img-fluid rounded-circle"
+                    width="100"
+                    height="100"
+                    alt="Profile"
+                  />
+                ) : (
+                  <i className="ti ti-photo text-gray-3 fs-16" />
+                )}
+              </div>
+              <div className="profile-upload">
+                <h6>Profile Photo</h6>
+                <p className="fs-12">Recommended size: 40x40px</p>
+                <div className="d-flex align-items-center">
+                  <input type="file" className="form-control" onChange={handleFileChange} />
+                  <button onClick={handleUpload} className="btn btn-primary btn-sm ms-2">
+                    Upload
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault(); // Prevent the default form submission
+                handleSaveProfile(); // Call the handleSaveProfile function
+              }}
+            >
+              <div className="border-bottom mb-3">
+                <div className="row">
+                  <div className="col-md-6">
+                    <label className="form-label">First Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="name"
+                      value={user.name}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Last Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="lastname"
+                      value={user.lastname}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Email</label>
+                    <input
+                      type="email"
+                      className="form-control"
+                      value={user.email}
+                      disabled
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Birthday</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      name="birthday"
+                      value={user.birthday}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">New Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      name="password"
+                      value={user.password}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="col-md-12">
+                  {user.role === 'student' && (
+          <>
+            <label className="form-label">Skills</label>
+            <SkillTags
+              selectedSkills={selectedSkills}
+              onChange={(skills) => setSelectedSkills(skills)}
+            />
+            <button
+              type="button"
+              onClick={handleSaveSkills}
+              className="btn btn-primary mt-3"
+            >
+              Save Skills
+            </button>
+          </>
+        )}
+                  </div>
+                </div>
+              </div>
+              <div className="d-flex justify-content-end">
+                <button type="submit" className="btn btn-primary">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-      {/* /Page Wrapper */}
-    </>
-
+    </div>
   );
 };
 

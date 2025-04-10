@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = 'http://localhost:9001';
+const API_URL = 'http://localhost:9777';
 
 export const initialRegisterFormData = {
     name: "",
@@ -20,9 +20,20 @@ export const registerUser = async (userData: any) => {
             password: userData.password,
             role: 'student'
         });
+        if (response.data.success) {
+            localStorage.setItem("token", response.data.token);
+            localStorage.setItem("userEmail", userData.email);
+            if (response.data.user?.avatar) {
+                localStorage.setItem("userAvatar", response.data.user.avatar);
+            }
+        }
         return response.data;
     } catch (error: any) {
         console.error('Registration failed', error);
-        throw error.response ? error.response.data : { message: 'Registration failed, please try again later.' };
+        if (error.response) {
+            throw error.response.data;
+        } else {
+            throw error.response ? error.response.data : {message: 'Registration failed, please try again later.'};
+        }
     }
 };

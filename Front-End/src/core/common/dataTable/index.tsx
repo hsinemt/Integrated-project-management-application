@@ -1,10 +1,9 @@
-// index.tsx
 import React, { useEffect, useState } from "react";
 import { Table } from "antd";
 import { DatatableProps } from "../../data/interface";
 
 
-const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }) => {
+const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection, loading }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<any[]>([]);
   const [searchText, setSearchText] = useState<string>("");
   const [Selections, setSelections] = useState<any>(true);
@@ -29,10 +28,10 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
     onChange: onSelectChange,
   };
   useEffect(() => {
-    return setSelections(Selection);
-  }, [Selection])
-  
-  
+    return setFilteredDataSource(dataSource);
+  }, [dataSource]);
+
+
   return (
     <>
 
@@ -62,7 +61,7 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
      {!Selections ?
       <Table
       className="table datanew dataTable no-footer"
-     
+
       columns={columns}
       rowHoverable={false}
       dataSource={filteredDataSource}
@@ -74,14 +73,14 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
         showSizeChanger: true,
         pageSizeOptions: ["10", "20", "30"],
       }}
-    /> : 
+    /> :
     <Table
         className="table datanew dataTable no-footer"
         rowSelection={rowSelection}
         columns={columns}
         rowHoverable={false}
         dataSource={filteredDataSource}
-        
+        loading={loading}
         pagination={{
           locale: { items_per_page: "" },
           nextIcon: <i className="ti ti-chevron-right"/>,
@@ -92,7 +91,7 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
           showTotal: (total, range) => `Showing ${range[0]} - ${range[1]} of ${total} entries`,
         }}
       />}
-      
+
     </>
   );
 };

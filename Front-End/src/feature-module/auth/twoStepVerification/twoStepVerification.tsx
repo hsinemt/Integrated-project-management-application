@@ -1,20 +1,52 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { all_routes } from "../../router/all_routes";
 import { useNavigate } from "react-router";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { Link } from "react-router-dom";
 import { InputOtp } from 'primereact/inputotp';
+import { verifyOTP } from "../../../api/authApi/register/verifyOTP";
+import { jwtDecode } from 'jwt-decode';
 
 const TwoStepVerification = () => {
   const routes = all_routes;
   const navigation = useNavigate();
 
-  const navigationPath = () => {
+  const navigateToLogin = () => {
     navigation(routes.login);
   };
 
   const [token, setTokens] = useState<any>();
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      const decoded: any = jwtDecode(token);
+      setUserId(decoded.id);
+    }
+  }, []);
+
+  const handleVerifyOtp = async () => {
+    if (!userId) {
+      setError("User ID is missing");
+      return;
+    }
+
+    try {
+      const response = await verifyOTP(userId, token);
+      console.log("API Response:", response);
+
+      if (response.success) {
+        navigateToLogin();
+      } else {
+        setError(response.message || "OTP verification failed");
+      }
+    } catch (err) {
+      setError("An error occurred while verifying the OTP");
+      console.error("Error verifying OTP:", err);
+    }
+  };
   return (
     <div className="container-fuild">
       <div className="w-100 overflow-hidden position-relative flex-wrap d-block vh-100">
@@ -101,7 +133,7 @@ const TwoStepVerification = () => {
                             data-previous="digit-3"
                             maxLength={1}
                           /> */}
-                          <InputOtp value={token} onChange={(e) => setTokens(e.value)} integerOnly />
+                          <InputOtp value={token} onChange={(e) => setTokens(e.value)} integerOnly length={6}/>
                         </div>
                         <div>
                           <div className="badge bg-danger-transparent mb-3">
@@ -124,7 +156,7 @@ const TwoStepVerification = () => {
                         </div>
                       </div>
                       <div className="mb-3">
-                        <button type="submit" onClick={navigationPath} className="btn btn-primary w-100">
+                        <button type="button" onClick={handleVerifyOtp} className="btn btn-primary w-100">
                           Verify &amp; Proceed
                         </button>
                       </div>

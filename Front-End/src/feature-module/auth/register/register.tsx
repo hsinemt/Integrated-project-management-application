@@ -2,30 +2,27 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import axios from "axios"; // Import axios for HTTP requests
+import {registerUser, initialRegisterFormData} from "../../../api/authApi/register/register";
+// import {yupResolver} from "@hookform/resolvers/yup";
+// import {useForm} from "react-hook-form";
+// import * as Yup from "yup";
+import login from "../login/login";
 
 type PasswordField = "password" | "confirmPassword";
 
 const Register = () => {
   const routes = all_routes;
-  const navigation = useNavigate();
+  const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    name: "",
-    lastname: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    role: "student", // Default role for signup
-  });
+  const [formData, setFormData] = useState(initialRegisterFormData);
+
+  const [message, setMessage] = useState<string | null>(null);
+
 
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
     confirmPassword: false,
   });
-
-  const [message, setMessage] = useState<string>("");
-  const [success, setSuccess] = useState<boolean>(false);
 
   const togglePasswordVisibility = (field: PasswordField) => {
     setPasswordVisibility((prevState) => ({
@@ -33,46 +30,46 @@ const Register = () => {
       [field]: !prevState[field],
     }));
   };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    const { name, value, type, checked} = e.target;
+    setFormData((prevData)=>({
+      ...prevData,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e:React.FormEvent) => {
     e.preventDefault();
+    setMessage(null);
 
-    // Check if passwords match
     if (formData.password !== formData.confirmPassword) {
-      setMessage("Passwords do not match.");
-      setSuccess(false);
+      setMessage("Passwords don't match");
       return;
     }
+    if (!formData.agreeToTerms){
+      setMessage("You must agree to terms and conditions");
+      return;
+    }
+    console.log("Form data:", formData);
 
-    try {
-      const response = await axios.post("http://localhost:9001/user/signup", {
-        name: formData.name,
-        lastname: formData.lastname,
-        email: formData.email,
-        password: formData.password,
-        role: formData.role,
-      });
-
-      setMessage(response.data.message);
-      setSuccess(response.data.success);
-
-      // Redirect to login page on successful signup
-      if (response.data.success) {
-        setTimeout(() => {
-          navigation(routes.login);
-        }, 2000); // Redirect after 2 seconds
+    try
+    {
+      const response = await registerUser(formData);
+      setMessage(response.message);
+      localStorage.setItem("userEmail", response.email);
+      // i use it for testing token
+      // if (response.token) {
+      //   localStorage.setItem('token', response.token);
+      //   console.log("Token stored:", response.token);
+      // }
+      navigate(routes.emailVerification);
+    }catch(error: any){
+      console.error("Error:", error);
+      if(error.response){
+        setMessage(error.response.message);
+      }else{
+        setMessage("registraion failed, please try again later");
       }
-    } catch (error: any) {
-      setMessage(error.response?.data?.message || "An error occurred during signup.");
-      setSuccess(false);
     }
   };
 
@@ -110,14 +107,14 @@ const Register = () => {
                 <div className="col-md-7 mx-auto vh-100">
                   <form className="vh-100" onSubmit={handleSubmit}>
                     <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
-                      <div className="mx-auto mb-5 text-center">
+                      <div className=" mx-auto mb-5 text-center">
                         <ImageWithBasePath
                             src="assets/img/logo.svg"
                             className="img-fluid"
                             alt="Logo"
                         />
                       </div>
-                      <div>
+                      <div className="">
                         <div className="text-center mb-3">
                           <h2 className="mb-2">Sign Up</h2>
                           <p className="mb-0">Please enter your details to sign up</p>
@@ -131,42 +128,40 @@ const Register = () => {
                                 value={formData.name}
                                 onChange={handleChange}
                                 className="form-control border-end-0"
-                                required
                             />
                             <span className="input-group-text border-start-0">
-                            <i className="ti ti-user" />
+                            <i className="ti ti-user"/>
                           </span>
                           </div>
                         </div>
                         <div className="mb-3">
-                          <label className="form-label">Lastname</label>
+                          <label className="form-label">Last Name</label>
                           <div className="input-group">
                             <input
                                 type="text"
-                                name="lastname"
-                                value={formData.lastname}
+                                name="lastName"
+                                value={formData.lastName}
                                 onChange={handleChange}
                                 className="form-control border-end-0"
-                                required
                             />
                             <span className="input-group-text border-start-0">
-                            <i className="ti ti-user" />
+                            <i className="ti ti-user"/>
                           </span>
                           </div>
                         </div>
+
                         <div className="mb-3">
                           <label className="form-label">Email Address</label>
                           <div className="input-group">
                             <input
-                                type="email"
+                                type="text"
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
                                 className="form-control border-end-0"
-                                required
                             />
                             <span className="input-group-text border-start-0">
-                            <i className="ti ti-mail" />
+                            <i className="ti ti-mail"/>
                           </span>
                           </div>
                         </div>
@@ -183,7 +178,6 @@ const Register = () => {
                                 value={formData.password}
                                 onChange={handleChange}
                                 className="pass-input form-control"
-                                required
                             />
                             <span
                                 className={`ti toggle-passwords ${passwordVisibility.password
@@ -209,7 +203,6 @@ const Register = () => {
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
                                 className="pass-input form-control"
-                                required
                             />
                             <span
                                 className={`ti toggle-passwords ${passwordVisibility.confirmPassword
@@ -227,12 +220,14 @@ const Register = () => {
                             <div className="form-check form-check-md mb-0">
                               <input
                                   className="form-check-input"
-                                  id="remember_me"
+                                  id="agreeToTerms"
                                   type="checkbox"
-                                  required
+                                  name="agreeToTerms"
+                                  checked={formData.agreeToTerms}
+                                  onChange={handleChange}
                               />
                               <label
-                                  htmlFor="remember_me"
+                                  htmlFor="agreeToTerms"
                                   className="form-check-label text-dark mt-0"
                               >
                                 Agree to{" "}
@@ -248,9 +243,7 @@ const Register = () => {
                             Sign Up
                           </button>
                         </div>
-                        {message && (
-                            <p style={{ color: success ? "green" : "red" }}>{message}</p>
-                        )}
+                        {message && <div className="alert alert-danger">{message}</div>}
                         <div className="text-center">
                           <h6 className="fw-normal text-dark mb-0">
                             Already have an account?
@@ -263,48 +256,59 @@ const Register = () => {
                           <span className="span-or">Or</span>
                         </div>
                         <div className="mt-2">
-                        <div className="d-flex align-items-center justify-content-center flex-wrap">
-                        <div className="text-center me-2 flex-fill">
-  <a
-    href="http://localhost:3000/auth/github" 
-    className="br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
-  >
-    <ImageWithBasePath
-      className="img-fluid m-1"
-      src="assets/img/icons/github-logo.svg"
-      alt="GitHub"
-    />
-  </a>
-</div>
-
-<div className="text-center me-2 flex-fill">
-  <a
-    href="http://localhost:3000/auth/google" 
-    className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
-  >
-    <ImageWithBasePath
-      className="img-fluid m-1"
-      src="assets/img/icons/google-logo.svg"
-      alt="Google"
-    />
-  </a>
-</div>
-
+                          <div className="d-flex align-items-center justify-content-center flex-wrap">
+                            <div className="text-center me-2 flex-fill">
+                              <Link
+                                  to="#"
+                                  className="br-10 p-2 btn btn-info d-flex align-items-center justify-content-center"
+                              >
+                                <ImageWithBasePath
+                                    className="img-fluid m-1"
+                                    src="assets/img/icons/facebook-logo.svg"
+                                    alt="Facebook"
+                                />
+                              </Link>
+                            </div>
+                            <div className="text-center me-2 flex-fill">
+                              <Link
+                                  to="#"
+                                  className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
+                              >
+                                <ImageWithBasePath
+                                    className="img-fluid m-1"
+                                    src="assets/img/icons/google-logo.svg"
+                                    alt="Facebook"
+                                />
+                              </Link>
+                            </div>
+                            <div className="text-center flex-fill">
+                              <Link
+                                  to="#"
+                                  className="bg-dark br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
+                              >
+                                <ImageWithBasePath
+                                    className="img-fluid m-1"
+                                    src="assets/img/icons/apple-logo.svg"
+                                    alt="Apple"
+                                />
+                              </Link>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                      <div className="mt-5 pb-4 text-center">
+                        <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
+                      </div>
                     </div>
-                    <div className="mt-5 pb-4 text-center">
-                      <p className="mb-0 text-gray-9">Copyright © 2024 - Smarthr</p>
-                    </div>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
   );
 };
+
 export default Register;

@@ -2,30 +2,30 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { transporter } = require('../Config/nodemailer');
-const User = require('../Models/user');
+const User = require('../Models/User');
 require('dotenv').config();
 const router = express.Router();
 
-// Route to request a password reset
+
 router.post('/reset-password', async (req, res) => {
     const { email } = req.body;
 
     try {
-        // Check if the user exists
+
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).send('User with this email does not exist.');
         }
 
-        // Generate a random token
+
         const token = crypto.randomInt(1000, 9999); // Generates a number between 1000 and 9999
         user.resetOtp = token;
         user.resetOtpExpirationAt = Date.now() + 3600000; // 1 hour
 
-        // Save the user with the new token
+
         await user.save();
 
-        // Send the email with the OTP
+
         const mailOptions = {
             to: user.email,
             from: 'hsinesignin@gmail.com', // Replace with your email
@@ -52,7 +52,7 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
-// Route to reset the password using the OTP
+
 router.post('/reset/:token', async (req, res) => {
     const { password, otp } = req.body;
 

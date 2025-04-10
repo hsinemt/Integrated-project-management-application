@@ -7,7 +7,7 @@ exports.githubCallback = (req, res) => {
       res.redirect('/');
     });
   };
-  const User = require('../Models/user');
+  const User = require('../Models/User');
 
 exports.getUsers = async (req, res) => {
   try {

@@ -1,11 +1,11 @@
 const passport = require('passport');
 const GitHubStrategy = require('passport-github2').Strategy;
-const User = require('../Models/user');
+const User = require('../Models/User');
 
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/github/callback",
+    callbackURL: "http://localhost:9777/auth/github/callback",
     scope: ['user:email']
   },
   async (accessToken, refreshToken, profile, done) => {
@@ -22,7 +22,7 @@ passport.use(new GitHubStrategy({
           username: profile.username,
           displayName: profile.displayName,
           profileUrl: profile.profileUrl,
-          role : 'etudiant',
+          role: 'student',
           email: primaryEmail,
           avatarUrl: profile.photos?.[0]?.value
         });
