@@ -22,7 +22,7 @@ passport.use(new GitHubStrategy({
           username: profile.username,
           displayName: profile.displayName,
           profileUrl: profile.profileUrl,
-          role : 'etudiant',
+          role: 'etudiant',
           email: primaryEmail,
           avatarUrl: profile.photos?.[0]?.value
         });

@@ -15,7 +15,6 @@ import axios, { AxiosError } from "axios";
 
 // Interfaces pour typer les données
 interface Task {
-  _id: string;
   name: string;
   description: string;
   priority: string;
@@ -24,7 +23,6 @@ interface Task {
   project: string;
   group: string;
   assignedTo: string;
-  __v: number;
 }
 
 interface Project {
@@ -46,11 +44,11 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string>(""); // Nouvel état pour l'ID du projet
-  const [groupId, setGroupId] = useState<string>(""); // Nouvel état pour l'ID du groupe
+  const [projectId, setProjectId] = useState<string>("");
+  const [groupId, setGroupId] = useState<string>("");
 
-  // Fonction pour générer les tâches
-  const generateTasks = async () => {
+  // Fonction pour générer les tâches (preview)
+  const previewTasks = async () => {
     if (!projectId || !groupId) {
       setError("Veuillez entrer un ID de projet et un ID de groupe.");
       return;
@@ -61,7 +59,7 @@ const AdminDashboard = () => {
     setSuccess(null);
 
     try {
-      const response = await axios.post("http://localhost:3000/api/tasks/generate", {
+      const response = await axios.post("http://localhost:3000/api/tasks/preview", {
         projectId: projectId,
         groupId: groupId,
       });
@@ -81,7 +79,45 @@ const AdminDashboard = () => {
     }
   };
 
-  // Configurations des graphiques (inchangées)
+  // Fonction pour gérer les modifications des champs des tâches
+  const handleTaskChange = (index: number, field: keyof Task, value: string) => {
+    const updatedTasks = [...tasks];
+    updatedTasks[index][field] = value;
+    setTasks(updatedTasks);
+  };
+
+  // Fonction pour enregistrer les tâches modifiées
+  const saveTasks = async () => {
+    if (tasks.length === 0) {
+      setError("Aucune tâche à enregistrer.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await axios.post("http://localhost:3000/api/tasks/save", {
+        tasks: tasks,
+      });
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setTasks([]); // Réinitialiser les tâches après l'enregistrement
+      } else {
+        setError(response.data.message || "Erreur inattendue lors de l'enregistrement des tâches.");
+      }
+    } catch (err) {
+      const error = err as AxiosError<{ message?: string }>;
+      setError(error.response?.data?.message || "Erreur serveur lors de l'enregistrement des tâches.");
+      console.error("Erreur enregistrement tâches :", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Configurations des graphiques
   const [empDepartment] = useState<any>({
     chart: { height: 235, type: "bar", padding: { top: 0, left: 0, right: 0, bottom: 0 }, toolbar: { show: false } },
     fill: { colors: ["#F26522"], opacity: 1 },
@@ -239,14 +275,14 @@ const AdminDashboard = () => {
                 </Link>
               </div>
             </div>
-          </div>
+          </div>  
 
-          {/* Section : Génération de tâches avec inputs */}
+          {/* Section : Génération et modification des tâches */}
           <div className="row">
             <div className="col-xxl-4 col-xl-6 d-flex">
               <div className="card flex-fill">
                 <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
-                  <h5 className="mb-2">Générer des Tâches</h5>
+                  <h5 className="mb-2">Générer et Modifier des Tâches</h5>
                 </div>
                 <div className="card-body">
                   <div className="mb-3">
@@ -273,7 +309,7 @@ const AdminDashboard = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={generateTasks}
+                    onClick={previewTasks}
                     disabled={loading || !projectId || !groupId}
                     className="btn btn-primary mb-3"
                   >
@@ -296,25 +332,67 @@ const AdminDashboard = () => {
                     <div className="mt-3">
                       <h6>Tâches générées ({tasks.length})</h6>
                       <div className="list-group" style={{ maxHeight: "300px", overflowY: "auto" }}>
-                        {tasks.map((task) => (
-                          <div key={task._id} className="list-group-item">
-                            <strong>{task.name}</strong>
-                            <p className="mb-1">{task.description}</p>
+                        {tasks.map((task, index) => (
+                          <div key={index} className="list-group-item mb-3 border rounded">
+                            <div className="mb-2">
+                              <label className="form-label">Nom:</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={task.name}
+                                onChange={(e) => handleTaskChange(index, 'name', e.target.value)}
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="form-label">Description:</label>
+                              <textarea
+                                className="form-control"
+                                value={task.description}
+                                onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="form-label">Priorité:</label>
+                              <select
+                                className="form-select"
+                                value={task.priority}
+                                onChange={(e) => handleTaskChange(index, 'priority', e.target.value)}
+                              >
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                              </select>
+                            </div>
+                            <div className="mb-2">
+                              <label className="form-label">État:</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={task.état}
+                                onChange={(e) => handleTaskChange(index, 'état', e.target.value)}
+                              />
+                            </div>
                             <small>
-                              Priorité : {task.priority} | Date : {new Date(task.date).toLocaleDateString()} | État : {task.état} | Assigné à : {task.assignedTo}
+                              Assigné à : {task.assignedTo} | Date : {new Date(task.date).toLocaleDateString()}
                             </small>
                           </div>
                         ))}
                       </div>
+                      <button
+                        type="button"
+                        onClick={saveTasks}
+                        disabled={loading}
+                        className="btn btn-success mt-3"
+                      >
+                        {loading ? "Enregistrement en cours..." : "Enregistrer toutes les tâches"}
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Le reste du code reste inchangé */}
-          <div className="row">
+            {/* Autres widgets */}
             <div className="col-xxl-8 d-flex">
               <div className="row flex-fill">
                 <div className="col-md-3 d-flex">
@@ -327,7 +405,65 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 </div>
-                {/* ... Autres widgets ... */}
+                <div className="col-md-3 d-flex">
+                  <div className="card flex-fill">
+                    <div className="card-body">
+                      <span className="avatar rounded-circle bg-success mb-2"><i className="ti ti-users fs-16" /></span>
+                      <h6 className="fs-13 fw-medium text-default mb-1">Total Employees</h6>
+                      <h3 className="mb-3">99 <span className="fs-12 fw-medium text-success"><i className="fa-solid fa-caret-up me-1" />+1.2%</span></h3>
+                      <Link to="employee.html" className="link-default">View Details</Link>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-3 d-flex">
+                  <div className="card flex-fill">
+                    <div className="card-body">
+                      <span className="avatar rounded-circle bg-warning mb-2"><i className="ti ti-briefcase fs-16" /></span>
+                      <h6 className="fs-13 fw-medium text-default mb-1">Total Projects</h6>
+                      <h3 className="mb-3">45 <span className="fs-12 fw-medium text-success"><i className="fa-solid fa-caret-up me-1" />+0.5%</span></h3>
+                      <Link to="projects.html" className="link-default">View Details</Link>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-3 d-flex">
+                  <div className="card flex-fill">
+                    <div className="card-body">
+                      <span className="avatar rounded-circle bg-danger mb-2"><i className="ti ti-clock-hour-5 fs-16" /></span>
+                      <h6 className="fs-13 fw-medium text-default mb-1">Total Hours</h6>
+                      <h3 className="mb-3">2,450 <span className="fs-12 fw-medium text-success"><i className="fa-solid fa-caret-up me-1" />+1.5%</span></h3>
+                      <Link to="timesheet.html" className="link-default">View Details</Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row">
+            <div className="col-xxl-8 d-flex">
+              <div className="card flex-fill">
+                <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
+                  <h5 className="mb-2">Sales & Income</h5>
+                  <div className="d-flex align-items-center">
+                    <div className="me-3">
+                      <span className="fs-12 me-1"><i className="ti ti-circle-filled me-1 text-orange" />Income</span>
+                      <span className="fs-12"><i className="ti ti-circle-filled me-1 text-gray-2" />Expenses</span>
+                    </div>
+                    <div className="dropdown mb-2">
+                      <Link to="#" className="btn btn-white border btn-sm d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                        <i className="ti ti-calendar me-1" /> This Year
+                      </Link>
+                      <ul className="dropdown-menu dropdown-menu-end p-3">
+                        <li><Link to="#" className="dropdown-item rounded-1">This Month</Link></li>
+                        <li><Link to="#" className="dropdown-item rounded-1">This Week</Link></li>
+                        <li><Link to="#" className="dropdown-item rounded-1">Last Week</Link></li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <ReactApexChart id="sales-income" options={salesIncome} series={salesIncome.series} type="bar" height={290} />
+                </div>
               </div>
             </div>
             <div className="col-xxl-4 d-flex">
@@ -348,6 +484,190 @@ const AdminDashboard = () => {
                 <div className="card-body">
                   <ReactApexChart id="emp-department" options={empDepartment} series={empDepartment.series} type="bar" height={220} />
                   <p className="fs-13"><i className="ti ti-circle-filled me-2 fs-8 text-primary" />No of Employees increased by <span className="text-success fw-bold">+20%</span> from last Week</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row">
+            <div className="col-md-6 col-xxl-3 d-flex">
+              <div className="card flex-fill">
+                <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
+                  <h5 className="mb-2">Attendance</h5>
+                  <div className="dropdown mb-2">
+                    <Link to="#" className="btn btn-white border btn-sm d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                      <i className="ti ti-calendar me-1" /> This Week
+                    </Link>
+                    <ul className="dropdown-menu dropdown-menu-end p-3">
+                      <li><Link to="#" className="dropdown-item rounded-1">This Month</Link></li>
+                      <li><Link to="#" className="dropdown-item rounded-1">This Week</Link></li>
+                      <li><Link to="#" className="dropdown-item rounded-1">Last Week</Link></li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="position-relative">
+                    <Chart type="doughnut" data={chartData} options={chartOptions} className="w-100 h-100" style={{ maxHeight: "150px" }} />
+                    <div className="position-absolute top-50 start-50 translate-middle text-center">
+                      <h3 className="mb-0">92%</h3>
+                      <p className="fs-12 mb-0">Present</p>
+                    </div>
+                  </div>
+                  <ul className="list-unstyled d-flex align-items-center justify-content-center flex-wrap mt-3 mb-0">
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-primary" />Late</span></li>
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-success" />Present</span></li>
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-warning" />Permission</span></li>
+                    <li><span className="fs-12"><i className="ti ti-circle-filled me-1 text-danger" />Absent</span></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-xxl-3 d-flex">
+              <div className="card flex-fill">
+                <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
+                  <h5 className="mb-2">Project Status</h5>
+                  <div className="dropdown mb-2">
+                    <Link to="#" className="btn btn-white border btn-sm d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                      <i className="ti ti-calendar me-1" /> This Week
+                    </Link>
+                    <ul className="dropdown-menu dropdown-menu-end p-3">
+                      <li><Link to="#" className="dropdown-item rounded-1">This Month</Link></li>
+                      <li><Link to="#" className="dropdown-item rounded-1">This Week</Link></li>
+                      <li><Link to="#" className="dropdown-item rounded-1">Last Week</Link></li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="position-relative">
+                    <Chart type="doughnut" data={semidonutData} options={semidonutOptions} className="w-100 h-100" style={{ maxHeight: "150px" }} />
+                    <div className="position-absolute top-50 start-50 translate-middle text-center">
+                      <h3 className="mb-0">45</h3>
+                      <p className="fs-12 mb-0">Projects</p>
+                    </div>
+                  </div>
+                  <ul className="list-unstyled d-flex align-items-center justify-content-center flex-wrap mt-3 mb-0">
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-warning" />Ongoing</span></li>
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-primary" />Onhold</span></li>
+                    <li className="me-3"><span className="fs-12"><i className="ti ti-circle-filled me-1 text-success" />Completed</span></li>
+                    <li><span className="fs-12"><i className="ti ti-circle-filled me-1 text-danger" />Overdue</span></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-xxl-3 d-flex">
+              <div className="card flex-fill">
+                <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
+                  <h5 className="mb-2">To Do List</h5>
+                  <Link to="#" className="link-primary mb-2" data-bs-toggle="modal" data-inert={true} data-bs-target="#add_todo"><i className="ti ti-square-rounded-plus me-1" />Add Task</Link>
+                </div>
+                <div className="card-body">
+                  <ul className="list-unstyled todo-list mb-0">
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="todo-check me-2">
+                          <input type="checkbox" id="task1" />
+                          <label htmlFor="task1" />
+                        </span>
+                        <div>
+                          <h6 className="fs-14 mb-1">Meeting with client</h6>
+                          <p className="fs-12 mb-0">10:00 AM Today</p>
+                        </div>
+                      </div>
+                      <div className="dropdown">
+                        <Link to="#" className="text-gray-5 d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                          <i className="ti ti-dots-vertical" />
+                        </Link>
+                        <ul className="dropdown-menu dropdown-menu-end p-3">
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-edit me-1" />Edit</Link></li>
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-trash me-1" />Delete</Link></li>
+                        </ul>
+                      </div>
+                    </li>
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="todo-check me-2">
+                          <input type="checkbox" id="task2" />
+                          <label htmlFor="task2" />
+                        </span>
+                        <div>
+                          <h6 className="fs-14 mb-1">Project discussion</h6>
+                          <p className="fs-12 mb-0">11:00 AM Today</p>
+                        </div>
+                      </div>
+                      <div className="dropdown">
+                        <Link to="#" className="text-gray-5 d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                          <i className="ti ti-dots-vertical" />
+                        </Link>
+                        <ul className="dropdown-menu dropdown-menu-end p-3">
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-edit me-1" />Edit</Link></li>
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-trash me-1" />Delete</Link></li>
+                        </ul>
+                      </div>
+                    </li>
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="todo-check me-2">
+                          <input type="checkbox" id="task3" checked={isTodo[2]} onChange={() => toggleTodo(2)} />
+                          <label htmlFor="task3" />
+                        </span>
+                        <div>
+                          <h6 className={isTodo[2] ? "fs-14 mb-1 text-decoration-line-through" : "fs-14 mb-1"}>Send project report</h6>
+                          <p className="fs-12 mb-0">02:00 PM Today</p>
+                        </div>
+                      </div>
+                      <div className="dropdown">
+                        <Link to="#" className="text-gray-5 d-inline-flex align-items-center" data-bs-toggle="dropdown">
+                          <i className="ti ti-dots-vertical" />
+                        </Link>
+                        <ul className="dropdown-menu dropdown-menu-end p-3">
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-edit me-1" />Edit</Link></li>
+                          <li><Link to="#" className="dropdown-item rounded-1"><i className="ti ti-trash me-1" />Delete</Link></li>
+                        </ul>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-xxl-3 d-flex">
+              <div className="card flex-fill">
+                <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
+                  <h5 className="mb-2">Upcoming Events</h5>
+                  <Link to="#" className="link-primary mb-2"><i className="ti ti-square-rounded-plus me-1" />Add Events</Link>
+                </div>
+                <div className="card-body">
+                  <ul className="list-unstyled events-list mb-0">
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="avatar rounded-circle bg-primary-light me-2"><i className="ti ti-party fs-14" /></span>
+                        <div>
+                          <h6 className="fs-14 mb-1">Annual Day Celebration</h6>
+                          <p className="fs-12 mb-0">10:00 AM Today</p>
+                        </div>
+                      </div>
+                      <Link to="#" className="text-gray-5"><i className="ti ti-chevron-right" /></Link>
+                    </li>
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="avatar rounded-circle bg-success-light me-2"><i className="ti ti-party fs-14" /></span>
+                        <div>
+                          <h6 className="fs-14 mb-1">Hackathon Event</h6>
+                          <p className="fs-12 mb-0">11:00 AM Today</p>
+                        </div>
+                      </div>
+                      <Link to="#" className="text-gray-5"><i className="ti ti-chevron-right" /></Link>
+                    </li>
+                    <li className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <span className="avatar rounded-circle bg-warning-light me-2"><i className="ti ti-party fs-14" /></span>
+                        <div>
+                          <h6 className="fs-14 mb-1">Alumni Meet</h6>
+                          <p className="fs-12 mb-0">02:00 PM Today</p>
+                        </div>
+                      </div>
+                      <Link to="#" className="text-gray-5"><i className="ti ti-chevron-right" /></Link>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>

@@ -148,30 +148,30 @@ const Login = () => {
                       <div className="mt-2">
                         <div className="d-flex align-items-center justify-content-center flex-wrap">
                         <div className="text-center me-2 flex-fill">
-  <a
-    href="http://localhost:3000/auth/github" 
-    className="br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
-  >
-    <ImageWithBasePath
-      className="img-fluid m-1"
-      src="assets/img/icons/github-logo.svg"
-      alt="GitHub"
-    />
-  </a>
-</div>
+                        <a
+              href="http://localhost:3000/auth/github"
+              className="br-10 p-2 btn btn-dark d-flex align-items-center justify-content-center"
+            >
+              <ImageWithBasePath
+                className="img-fluid m-1"
+                src="assets/img/icons/github-logo.svg"
+                alt="GitHub"
+              />
+            </a>
+          </div>
 
-<div className="text-center me-2 flex-fill">
-  <a
-    href="http://localhost:3000/auth/google" 
-    className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
-  >
-    <ImageWithBasePath
-      className="img-fluid m-1"
-      src="assets/img/icons/google-logo.svg"
-      alt="Google"
-    />
-  </a>
-</div>
+          <div className="text-center me-2 flex-fill">
+            <a
+              href="http://localhost:3000/auth/google"
+              className="br-10 p-2 btn btn-outline-light border d-flex align-items-center justify-content-center"
+            >
+              <ImageWithBasePath
+                className="img-fluid m-1"
+                src="assets/img/icons/google-logo.svg"
+                alt="Google"
+              />
+            </a>
+          </div>
 
                         </div>
                       </div>

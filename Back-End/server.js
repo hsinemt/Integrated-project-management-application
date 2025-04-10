@@ -5,8 +5,8 @@ const passport = require('passport');
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
-const authRoutes = require('./routes/authRoutes');
-const taskRoutes = require('./routes/taskRoutes');
+const authRoutes = require('./Routes/authRoutes');
+const taskRoutes = require('./Routes/taskRoutes');
 
 const app = express();
 
@@ -25,8 +25,8 @@ app.use(helmet({
 app.use(cors({ 
     origin: ['http://localhost:5173', 'http://localhost:3001'], // Ajout de localhost:3001
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Méthodes autorisées
-    allowedHeaders: ['Content-Type', 'Authorization'], // En-têtes autorisés
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Middleware JSON et URL-encoded
@@ -58,7 +58,10 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false } // À mettre à true en production avec HTTPS
+    cookie: { 
+        secure: false, // À mettre à true en production avec HTTPS
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 app.use(passport.initialize());
