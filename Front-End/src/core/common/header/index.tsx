@@ -149,10 +149,10 @@ const Header = () => {
       <div className="main-header">
         <div className="header-left">
           <Link to={routes.adminDashboard} className="logo">
-            <ImageWithBasePath src="assets/img/logo.svg" alt="Logo"/>
+            <ImageWithBasePath src="assets/img/projexus-logo.svg" alt="Logo"/>
           </Link>
           <Link to={routes.adminDashboard} className="dark-logo">
-            <ImageWithBasePath src="assets/img/logo-white.svg" alt="Logo"/>
+            <ImageWithBasePath src="assets/img/white-projexus-logo.svg" alt="Logo"/>
           </Link>
         </div>
 

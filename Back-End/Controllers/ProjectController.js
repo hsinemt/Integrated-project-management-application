@@ -1,22 +1,22 @@
 const Project = require('../Models/Project');
 const UserModel = require('../Models/User');
+const TutorModel = require('../Models/Tutor');
 
-exports.createProject = async (req, res) => {
+const natural = require('natural');
+const _ = require('lodash');
+const TfIdf = natural.TfIdf;
+
+
+const createProject = async (req, res) => {
     try {
-        //console.log('Full request body:', req.body);
-       // console.log('Request headers content-type:', req.headers['content-type']);
-
         let keywords = req.body.keywords;
-        //console.log('Keywords received:', keywords, 'Type:', typeof keywords);
 
         if (typeof keywords === 'string') {
             try {
                 keywords = JSON.parse(keywords);
-                //console.log('Successfully parsed keywords string to array:', keywords);
             } catch (error) {
                 console.error('Error parsing keywords string:', error);
                 keywords = keywords.split(',').map(k => k.trim()).filter(k => k);
-                //console.log('Fallback keywords parsing:', keywords);
             }
         } else if (!Array.isArray(keywords)) {
             console.warn('Keywords is neither string nor array, setting to empty array');
@@ -24,9 +24,6 @@ exports.createProject = async (req, res) => {
         }
 
         const { title, description, userId, difficulty, status, speciality } = req.body;
-
-        //console.log('Extracted userId:', userId);
-        //console.log('Project fields:', { title, description, difficulty, status, speciality });
 
         let projectLogo;
         if (req.file) {
@@ -56,7 +53,6 @@ exports.createProject = async (req, res) => {
                     role: user.role,
                     avatar: user.avatar || ''
                 };
-                //console.log('Creator info found:', creatorInfo);
             } else {
                 console.error('User not found with ID:', userId);
                 return res.status(404).json({
@@ -103,17 +99,11 @@ exports.createProject = async (req, res) => {
             error: error.message
         });
     }
-};exports.getAllProjects = async (req, res) => {
+};
+
+const getAllProjects = async (req, res) => {
     try {
         const projects = await Project.find().sort({ createdAt: -1 });
-
-
-        // console.log('Projects being returned:', projects.map(p => ({
-        //     id: p._id,
-        //     title: p.title,
-        //     hasCreator: !!p.creator,
-        //     creatorInfo: p.creator
-        // })));
 
         res.status(200).json({
             success: true,
@@ -129,7 +119,7 @@ exports.createProject = async (req, res) => {
     }
 };
 
-exports.getProjectById = async (req, res) => {
+const getProjectById = async (req, res) => {
     try {
         const project = await Project.findById(req.params.id);
 
@@ -153,7 +143,7 @@ exports.getProjectById = async (req, res) => {
     }
 };
 
-exports.updateProject = async (req, res) => {
+const updateProject = async (req, res) => {
     try {
         const { title, description, keywords, difficulty, status, speciality } = req.body;
 
@@ -198,7 +188,7 @@ exports.updateProject = async (req, res) => {
     }
 };
 
-exports.deleteProject = async (req, res) => {
+const deleteProject = async (req, res) => {
     try {
         const deletedProject = await Project.findByIdAndDelete(req.params.id);
 
@@ -222,7 +212,7 @@ exports.deleteProject = async (req, res) => {
     }
 };
 
-exports.getProjectsCount = async (req, res) => {
+const getProjectsCount = async (req, res) => {
     try {
         const count = await Project.countDocuments();
 
@@ -237,4 +227,190 @@ exports.getProjectsCount = async (req, res) => {
             error: error.message
         });
     }
+};
+
+const recommendProjects = async (studentSkills) => {
+    try {
+        const projects = await Project.find();
+
+        if (!projects.length) {
+            return [];
+        }
+
+        const tfidf = new TfIdf();
+
+        // Ajouter les mots-clés de chaque projet dans TF-IDF
+        projects.forEach((project, index) => {
+            if (project.keywords && project.keywords.length > 0) {
+                // Normaliser les mots-clés
+                const keywords = project.keywords
+                    .map(keyword => keyword ? keyword.toString().toLowerCase() : "") // Convertir en chaîne et en minuscules
+                    .filter(keyword => keyword.trim()); // Supprimer les chaînes vides
+
+                if (keywords.length > 0) {
+                    tfidf.addDocument(keywords.join(" "));
+                    console.log(`Document ${index} added with keywords:`, keywords); // Fixed template literal
+                }
+            }
+        });
+
+        // Calculer la similarité entre les compétences et les projets
+        const projectScores = projects.map((project, index) => {
+            // Normaliser les compétences des étudiants
+            const normalizedSkills = studentSkills
+                .map(skill => skill ? skill.toString().toLowerCase() : "") // Convertir en chaîne et en minuscules
+                .filter(skill => skill.trim()); // Supprimer les chaînes vides
+
+            console.log("Normalized Skills:", normalizedSkills); // Debugging log
+            console.log("Project Keywords:", project.keywords); // Debugging log
+
+            const score = normalizedSkills.reduce((acc, skill) => {
+                try {
+                    const tfidfScore = tfidf.tfidf(skill, index);
+                    console.log(`Skill: ${skill}, TF-IDF Score: ${tfidfScore}`); // Fixed template literal
+                    return acc + (isNaN(tfidfScore) ? 0 : tfidfScore); // Remplacer NaN par 0
+                } catch (error) {
+                    console.error(`Error calculating TF-IDF for skill: ${skill}`, error); // Fixed template literal
+                    return acc; // Ignorer cette compétence
+                }
+            }, 0);
+
+            console.log("Project Score:", score); // Debugging log
+
+            return { ...project.toObject(), score };
+        });
+
+        // Trier les projets par score et renvoyer les 3 meilleurs
+        const recommendedProjects = _.orderBy(projectScores, "score", "desc").slice(0, 3);
+        return recommendedProjects;
+    } catch (error) {
+        console.error("Erreur lors de la recommandation :", error);
+        return [];
+    }
+};
+
+const recommend = async (req, res) => {
+    const { skills } = req.body;
+
+    if (!skills || !Array.isArray(skills)) {
+        return res.status(400).json({ message: "Les compétences sont requises" });
+    }
+
+    try {
+        const recommendedProjects = await recommendProjects(skills);
+        return res.status(200).json(recommendedProjects);
+    } catch (error) {
+        console.error("Erreur serveur :", error);
+        return res.status(500).json({ message: "Erreur serveur" });
+    }
+};
+
+
+const getAllTutors = async (req, res) => {
+    try {
+
+        const user = await UserModel.findById(req.body.userId);
+        if (!user || user.role !== 'manager') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only managers can view tutors for assignment'
+            });
+        }
+
+
+        const tutors = await TutorModel.find({}, {
+            _id: 1,
+            name: 1,
+            lastname: 1,
+            email: 1,
+            classe: 1,
+            avatar: 1
+        });
+
+        res.status(200).json({
+            success: true,
+            count: tutors.length,
+            tutors
+        });
+    } catch (error) {
+        console.error("Error fetching tutors:", error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch tutors',
+            error: error.message
+        });
+    }
+};
+
+
+const assignTutor = async (req, res) => {
+    try {
+        const { projectId, tutorId } = req.body;
+        const { id } = req.params;
+
+
+        const user = await UserModel.findById(req.body.userId);
+        if (!user || user.role !== 'manager') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only managers can assign tutors to projects'
+            });
+        }
+
+
+        const project = await Project.findById(id || projectId);
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
+
+
+        const tutor = await TutorModel.findById(tutorId);
+        if (!tutor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Tutor not found'
+            });
+        }
+
+
+        project.assignedTutor = {
+            tutorId: tutor._id,
+            name: tutor.name,
+            lastname: tutor.lastname,
+            email: tutor.email,
+            classe: tutor.classe,
+            avatar: tutor.avatar
+        };
+        project.updatedAt = new Date();
+
+        await project.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Project successfully assigned to tutor',
+            project
+        });
+    } catch (error) {
+        console.error("Error assigning tutor:", error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to assign tutor to project',
+            error: error.message
+        });
+    }
+};
+
+module.exports = {
+    createProject,
+    getAllProjects,
+    getProjectById,
+    updateProject,
+    deleteProject,
+    getProjectsCount,
+    recommend,
+    getAllTutors,
+    assignTutor
 };

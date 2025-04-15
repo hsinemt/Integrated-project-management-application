@@ -77,18 +77,52 @@ router.post('/:projectId/assign', async (req, res) => {
         const { projectId } = req.params;
         const { groupId } = req.body;
 
+        // 1. Vérifier si le groupe existe
         const group = await GroupeModel.findById(groupId);
         if (!group) {
-            return res.status(404).json({ message: "Group not found" });
+            return res.status(404).json({ message: "Groupe non trouvé" });
         }
 
+        // 2. Vérifier si le projet existe et a un tuteur
+        const project = await ProjectModel.findById(projectId);
+        if (!project) {
+            return res.status(404).json({ message: "Projet non trouvé" });
+        }
+
+        // Check if the project has an assigned tutor
+        if (!project.assignedTutor || !project.assignedTutor.tutorId) {
+            return res.status(400).json({ message: "Ce projet n'a pas de tuteur assigné" });
+        }
+
+        const tutorId = project.assignedTutor.tutorId;
+
+        // 3. Vérifier si le tuteur existe (optionnel mais recommandé)
+        const UserModel = require('../Models/User');
+        const tutorExists = await UserModel.exists({ _id: tutorId });
+        if (!tutorExists) {
+            return res.status(404).json({ message: "Tuteur non trouvé" });
+        }
+
+        // 4. Mettre à jour le groupe
         group.id_project = projectId;
+        group.id_tutor = tutorId; // Assignation du tuteur
         await group.save();
 
-        res.json({ message: 'Project assigned successfully!' });
+        // 5. Réponse avec les données assignées
+        res.json({
+            success: true,
+            message: 'Projet et tuteur assignés avec succès !',
+            project: projectId,
+            tutor: tutorId
+        });
+
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: error.message });
+        console.error("Erreur lors de l'assignation :", error);
+        res.status(500).json({
+            success: false,
+            message: "Erreur serveur",
+            error: error.message
+        });
     }
 });
 

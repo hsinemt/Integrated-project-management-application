@@ -34,7 +34,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, handleImageChange, openModal 
                     </div>
                 </div>
                 <div className="mb-2">
-                <p>Student: {task.assignedTo.name} {task.assignedTo.lastname}</p>
+                    <p>Student: {task.assignedTo ? `${task.assignedTo.name} ${task.assignedTo.lastname}` : 'Unassigned'}</p>
                     <h6 className="d-flex align-items-center">{task.name}</h6>
                     <p className="d-flex align-items-center">{task.description}</p>
 

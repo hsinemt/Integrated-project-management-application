@@ -194,7 +194,7 @@ const verifyOtp = async (req, res) => {
             maxAge: 3 * 60 * 60 * 1000
         });
   
-      const redirectTo = "/index"; // Redirection vers la page après la connexion
+      const redirectTo = "/super-admin/users"; // Redirection vers la page après la connexion
   
       res.json({ 
         token, 

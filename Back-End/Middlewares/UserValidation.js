@@ -47,7 +47,7 @@ const userToken = async (req, res, next) => {
 const authMiddleware = (req, res, next) => {
     const verifyToken = (req, res, next) => {
       const token = req.header("Authorization");
-      console.log("Extracted Token:", token);
+      //console.log("Extracted Token:", token);
     
       if (!token) {
         return res.status(401).json({ message: "No token, authorization denied" });
@@ -55,7 +55,7 @@ const authMiddleware = (req, res, next) => {
     
       jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
         if (err) {
-          console.log("JWT Error:", err.message);
+          //console.log("JWT Error:", err.message);
           return res.status(401).json({ message: "Token is not valid" });
         }
         req.user = decoded;

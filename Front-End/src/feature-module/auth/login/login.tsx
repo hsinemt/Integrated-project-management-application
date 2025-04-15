@@ -118,15 +118,15 @@ const Login = () => {
         // Afficher l'alerte de succès et redirection
         Swal.fire({
           icon: "success",
-          title: `Bienvenue !`,
-          text: "Vous êtes maintenant connecté.",
+          title: `Welcome!`,
+          text: "You are successfully logged in.",
           showConfirmButton: false,
           timer: 2000,
         });
 
         // Rediriger après un court délai
         setTimeout(() => {
-          const redirectTo = response.data.redirectTo || "/index";
+          const redirectTo = response.data.redirectTo || "/super-admin/users";
           navigate(redirectTo);
         }, 2000);
       } else {
@@ -173,7 +173,7 @@ const Login = () => {
                   <form className="vh-100" onSubmit={handleLogin}>
                     <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                       <div className="mx-auto mb-5 text-center">
-                        <ImageWithBasePath src="assets/img/logo.svg" className="img-fluid" alt="Logo" />
+                        <ImageWithBasePath src="assets/img/projexus-logo.svg" className="img-fluid" alt="Logo" />
                       </div>
                       <div>
                         <div className="text-center mb-3">
@@ -188,6 +188,7 @@ const Login = () => {
                           <div className="input-group">
                             <input
                                 type="email"
+                                placeholder="Enter your email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="form-control border-end-0"
@@ -206,6 +207,7 @@ const Login = () => {
                             <input
                                 type={passwordVisibility.password ? "text" : "password"}
                                 value={password}
+                                placeholder="Enter your password"
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="pass-input form-control"
                                 required
@@ -307,7 +309,7 @@ const Login = () => {
                               >
                                 <ImageWithBasePath
                                     className="img-fluid m-1"
-                                    src="assets/img/icons/github-logo.svg"
+                                    src="assets/img/icons/github-logos.svg"
                                     alt="GitHub"
                                 />
                               </a>
@@ -325,12 +327,11 @@ const Login = () => {
                                 />
                               </a>
                             </div>
-
                           </div>
                         </div>
                       </div>
                       <div className="mt-5 pb-4 text-center">
-                        <p className="mb-0 text-gray-9">Copyright © 2021</p>
+                        <p className="mb-0 text-gray-9">Projexus Copyright © 2025</p>
                       </div>
                     </div>
                   </form>

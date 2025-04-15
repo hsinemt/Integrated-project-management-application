@@ -4,6 +4,37 @@ const ProjectModel = require('../Models/Project');
 const TaskModel = require('../Models/tasks');
 const { generateTasks } = require('../services/taskGenerator');
 
+
+exports.getTasksByProjectId = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+
+        if (!mongoose.Types.ObjectId.isValid(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project ID"
+            });
+        }
+
+
+        const tasks = await TaskModel.find({ project: projectId })
+            .sort({ date: -1 })
+            .populate('assignedTo', 'name lastname avatar');
+
+        return res.status(200).json({
+            success: true,
+            tasks
+        });
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching tasks"
+        });
+    }
+};
+
 exports.previewTasks = async (req, res) => {
     try {
         console.log('📥 Requête reçue pour previewTasks:', req.body);
@@ -11,9 +42,9 @@ exports.previewTasks = async (req, res) => {
 
         if (!projectId || !groupId) {
             console.error('❌ projectId ou groupId manquant:', { projectId, groupId });
-            return res.status(400).json({ 
-                success: false, 
-                message: 'projectId et groupId sont requis' 
+            return res.status(400).json({
+                success: false,
+                message: 'projectId et groupId sont requis'
             });
         }
 
@@ -32,17 +63,17 @@ exports.previewTasks = async (req, res) => {
 
         if (!group || !project) {
             console.error('❌ Groupe ou projet non trouvé:', { group: !!group, project: !!project });
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Groupe ou projet non trouvé' 
+            return res.status(404).json({
+                success: false,
+                message: 'Groupe ou projet non trouvé'
             });
         }
 
         if (!group.id_students || group.id_students.length === 0) {
             console.error('❌ Aucun étudiant dans le groupe:', group.nom_groupe);
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Aucun étudiant dans le groupe' 
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun étudiant dans le groupe'
             });
         }
 
@@ -81,9 +112,9 @@ exports.previewTasks = async (req, res) => {
 
     } catch (error) {
         console.error('❌ Erreur dans previewTasks:', error.stack);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Erreur serveur lors de la génération des tâches: ' + error.message 
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur serveur lors de la génération des tâches: ' + error.message
         });
     }
 };
@@ -94,9 +125,9 @@ exports.saveTasks = async (req, res) => {
         const { tasks } = req.body;
 
         if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'La liste des tâches est requise et doit être un tableau non vide' 
+            return res.status(400).json({
+                success: false,
+                message: 'La liste des tâches est requise et doit être un tableau non vide'
             });
         }
 
@@ -126,9 +157,9 @@ exports.saveTasks = async (req, res) => {
 
     } catch (error) {
         console.error('❌ Erreur dans saveTasks:', error.message);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Erreur serveur: ' + error.message 
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur serveur: ' + error.message
         });
     }
 };

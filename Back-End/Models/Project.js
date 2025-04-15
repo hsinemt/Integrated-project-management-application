@@ -51,6 +51,18 @@ const projectSchema = new mongoose.Schema({
         role: String,
         avatar: String
     },
+    assignedTutor: {
+        tutorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
+        name: String,
+        lastname: String,
+        email: String,
+        classe: String,
+        avatar: String
+    },
     createdAt: {
         type: Date,
         default: Date.now

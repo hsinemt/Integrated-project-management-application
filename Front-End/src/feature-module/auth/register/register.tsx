@@ -3,10 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import {registerUser, initialRegisterFormData} from "../../../api/authApi/register/register";
-// import {yupResolver} from "@hookform/resolvers/yup";
-// import {useForm} from "react-hook-form";
-// import * as Yup from "yup";
-import login from "../login/login";
+
 
 type PasswordField = "password" | "confirmPassword";
 
@@ -87,15 +84,14 @@ const Register = () => {
                 <div className="authentication-card w-100">
                   <div className="authen-overlay-item border w-100">
                     <h1 className="text-white display-1">
-                      Empowering people <br /> through seamless HR <br /> management.
+                      Welcome to our application <br /> Powered By <br /> Hunters Group.
                     </h1>
                     <div className="my-4 mx-auto authen-overlay-img">
                       <ImageWithBasePath src="assets/img/bg/authentication-bg-01.png" alt="Img" />
                     </div>
                     <div>
                       <p className="text-white fs-20 fw-semibold text-center">
-                        Efficiently manage your workforce, streamline <br />{" "}
-                        operations effortlessly.
+                        Efficiently manage your Integrated Project Evaluation.
                       </p>
                     </div>
                   </div>
@@ -109,7 +105,7 @@ const Register = () => {
                     <div className="vh-100 d-flex flex-column justify-content-between p-4 pb-0">
                       <div className=" mx-auto mb-5 text-center">
                         <ImageWithBasePath
-                            src="assets/img/logo.svg"
+                            src="assets/img/projexus-logo.svg"
                             className="img-fluid"
                             alt="Logo"
                         />
@@ -125,6 +121,7 @@ const Register = () => {
                             <input
                                 type="text"
                                 name="name"
+                                placeholder="Enter your name"
                                 value={formData.name}
                                 onChange={handleChange}
                                 className="form-control border-end-0"
@@ -140,6 +137,7 @@ const Register = () => {
                             <input
                                 type="text"
                                 name="lastName"
+                                placeholder="Enter your last name"
                                 value={formData.lastName}
                                 onChange={handleChange}
                                 className="form-control border-end-0"
@@ -156,6 +154,7 @@ const Register = () => {
                             <input
                                 type="text"
                                 name="email"
+                                placeholder="Ex: Name.lastname@esprit.tn"
                                 value={formData.email}
                                 onChange={handleChange}
                                 className="form-control border-end-0"

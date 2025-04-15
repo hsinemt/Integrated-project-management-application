@@ -10,6 +10,15 @@ export interface CreatorType {
     avatar?: string;
 }
 
+export interface TutorType {
+    _id: string;
+    name: string;
+    lastname: string;
+    email: string;
+    classe: string;
+    avatar?: string;
+}
+
 export interface ProjectType {
     _id?: string;
     title: string;
@@ -20,6 +29,7 @@ export interface ProjectType {
     speciality?: 'Twin' | 'ERP/BI' | 'AI' | 'SAE' | 'SE' | 'SIM' | 'NIDS' | 'SLEAM' | 'GAMIX' | 'WIN' | 'IoSyS' | 'ArcTic';
     projectLogo?: string;
     creator?: CreatorType;
+    assignedTutor?: TutorType;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -40,6 +50,12 @@ export interface ProjectResponse {
     project: ProjectType;
 }
 
+export interface TutorResponse {
+    success: boolean;
+    tutors: TutorType[];
+    count: number;
+}
+
 export const initialProjectData: ProjectType = {
     title: "",
     description: "",
@@ -49,7 +65,7 @@ export const initialProjectData: ProjectType = {
     speciality: "Twin"
 };
 
-// New function to generate project from prompt
+
 export const generateProjectFromPrompt = async (prompt: string): Promise<ProjectType> => {
     try {
         const token = localStorage.getItem("token");
@@ -163,7 +179,6 @@ export const addProject = async (projectData: ProjectType, logoFile?: File): Pro
     }
 };
 
-// Create project from AI-generated details
 export const createProjectFromPrompt = async (prompt: string, speciality?: string, difficulty?: string): Promise<ApiResponse<ProjectType>> => {
     try {
         const token = localStorage.getItem("token");
@@ -328,5 +343,48 @@ export const getProjectsCount = async (): Promise<number> => {
     } catch (error: any) {
         console.error('Error fetching projects count:', error);
         return 0;
+    }
+};
+
+
+export const getAllTutors = async (): Promise<TutorType[]> => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get<TutorResponse>(`${API_URL}/project/tutors`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            withCredentials: true
+        });
+        return response.data.tutors;
+    } catch (error: any) {
+        console.error('Error fetching tutors:', error);
+        throw error.response ? error.response.data : {message: 'Failed to fetch tutors, please try again later.'};
+    }
+};
+
+export const assignTutorToProject = async (projectId: string, tutorId: string): Promise<ApiResponse<ProjectType>> => {
+    try {
+        const token = localStorage.getItem('token');
+
+        const response = await axios.put<ApiResponse<ProjectType>>(
+            `${API_URL}/project/assign-tutor/${projectId}`,
+            { tutorId },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                withCredentials: true
+            }
+        );
+        return response.data;
+    } catch (error: any) {
+        console.error('Failed to assign tutor to project', error);
+        if (error.response) {
+            throw error.response.data;
+        } else {
+            throw {message: 'Failed to assign tutor to project, please try again later.'};
+        }
     }
 };

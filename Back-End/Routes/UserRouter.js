@@ -1,7 +1,8 @@
 const express = require('express');
-const { signup,sendVerifyOtp1,sendVerifyOtp ,verifyEmail, login, addManager, addTutor,addStudent, getAllUsers, updateStudentSkills,getProfile,logout,getStudentProfile} = require('../Controllers/UserController');
+const { signup,sendVerifyOtp1,sendVerifyOtp ,verifyEmail, login, addManager, addTutor,addStudent, getAllUsers, updateStudentSkills,getProfile,logout,getStudentProfile, isUserEmailAvailable} = require('../Controllers/UserController');
 // const ProjectController = require('../Controllers/ProjectController');
 // const { validateKeywords } = require('../Middlewares/ProjectValidation');
+const User = require("../Models/User");
 const { authMiddleware} = require('../Middlewares/UserValidation');
 const {signupValidation,userToken} = require('../Middlewares/UserValidation')
 const {
@@ -10,7 +11,6 @@ const {
 } = require('../Controllers/forgotPasswordController');
 
 const router = express.Router();
-const User = require("../Models/User");
 router.post('/signup', signupValidation, signup);
 router.post('/login',login);
 router.post('/sendVerifyOtp',userToken,sendVerifyOtp);
@@ -25,6 +25,7 @@ router.post('/reset-password', sendResetPasswordOTP);
 router.post('/reset/:token', resetPassword);
 router.post("/logout", logout);
 router.post("/send-2fa-otp1", sendVerifyOtp1);
+router.get('/check-email', isUserEmailAvailable);
 const bcrypt = require('bcrypt');
 const multer = require("multer");
 const path = require("path");

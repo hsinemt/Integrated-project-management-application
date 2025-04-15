@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 router.post('/preview', taskController.previewTasks);
 router.post('/save', taskController.saveTasks);
 
+router.get('/:projectId/tasks', taskController.getTasksByProjectId);
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -56,8 +57,6 @@ router.put('/tasks/:taskId/image', upload.single('image'), async (req, res) => {
         res.status(500).json({ message: "Server error while updating task image" });
     }
 });
-
-
 
 // POST a new task for a specific project
 router.post('/:projectId/tasks', async (req, res) => {
@@ -117,6 +116,7 @@ router.post('/:projectId/tasks', async (req, res) => {
         res.status(500).json({ message: "Server error while creating task" });
     }
 });
+
 // Update task status
 router.put('/tasks/:taskId/status', async (req, res) => {
     const { taskId } = req.params;
@@ -151,4 +151,5 @@ router.put('/tasks/:taskId/status', async (req, res) => {
         res.status(500).json({ message: "Server error while updating task status" });
     }
 });
+
 module.exports = router;

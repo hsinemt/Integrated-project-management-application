@@ -3,16 +3,35 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-import { getProjectById, ProjectType } from "../../../api/projectsApi/addProject/project";
+import {
+    getProjectById,
+    ProjectType,
+    TutorType,
+    getAllTutors,
+    assignTutorToProject
+} from "../../../api/projectsApi/project/projectApi";
+import { getTasksByProjectId, TaskType, updateTaskStatus } from "../../../api/projectsApi/task/taskApi";
 
 const ProjectDetails = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [project, setProject] = useState<ProjectType | null>(null);
+    const [tasks, setTasks] = useState<TaskType[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [tutors, setTutors] = useState<TutorType[]>([]);
+    const [selectedTutorId, setSelectedTutorId] = useState<string>("");
+    const [isManager, setIsManager] = useState<boolean>(false);
+    const [assignLoading, setAssignLoading] = useState<boolean>(false);
+    const [assignSuccess, setAssignSuccess] = useState<boolean>(false);
+    const [assignError, setAssignError] = useState<string | null>(null);
 
     useEffect(() => {
+
+        const userRole = localStorage.getItem("role");
+        // console.log("Current user role:", userRole);
+        setIsManager(userRole === "manager");
+
         const fetchProjectDetails = async () => {
             if (!id) {
                 setError("Project ID is missing");
@@ -24,6 +43,20 @@ const ProjectDetails = () => {
                 setLoading(true);
                 const projectData = await getProjectById(id);
                 setProject(projectData);
+
+                const tasksData = await getTasksByProjectId(id);
+                setTasks(tasksData);
+
+                if (userRole === "manager") {
+                    try {
+                        const tutorsData = await getAllTutors();
+                        setTutors(tutorsData);
+                    } catch (err: any) {
+                        console.error("Error fetching tutors:", err);
+
+                    }
+                }
+
                 setLoading(false);
             } catch (err: any) {
                 console.error("Error fetching project details:", err);
@@ -35,7 +68,63 @@ const ProjectDetails = () => {
         fetchProjectDetails();
     }, [id]);
 
-    // Function to handle redirection to motivations page
+
+    const handleTaskStatusChange = async (taskId: string, newStatus: 'To Do' | 'In Progress' | 'Completed' | 'In Review') => {
+        try {
+            const updatedTask = await updateTaskStatus(taskId, newStatus);
+
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task._id === taskId ? { ...task, état: newStatus } : task
+                )
+            );
+        } catch (err: any) {
+            console.error("Error updating task status:", err);
+
+        }
+    };
+
+
+    const handleAssignTutor = async () => {
+        if (!selectedTutorId || !id) {
+            setAssignError("Please select a tutor first");
+            return;
+        }
+
+        setAssignLoading(true);
+        setAssignError(null);
+        setAssignSuccess(false);
+
+        try {
+            const response = await assignTutorToProject(id, selectedTutorId);
+
+            if (response.success) {
+                setAssignSuccess(true);
+
+                if (response.data) {
+                    setProject(response.data);
+                } else {
+
+                    const updatedProject = await getProjectById(id);
+                    setProject(updatedProject);
+                }
+            } else {
+                setAssignError(response.message || "Failed to assign tutor");
+            }
+        } catch (err: any) {
+            console.error("Error assigning tutor:", err);
+            setAssignError(err.message || "An error occurred while assigning the tutor");
+        } finally {
+            setAssignLoading(false);
+        }
+    };
+
+
+    const completedTasks = tasks.filter(task => task.état === 'Completed').length;
+    const totalTasks = tasks.length;
+    const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+
     const handleGoToMotivations = () => {
         if (project && project._id) {
             navigate(`/motivations/${project._id}`);
@@ -82,7 +171,7 @@ const ProjectDetails = () => {
         );
     }
 
-    // Now we have the project data, let's display it
+
     return (
         <>
             {/* Page Wrapper */}
@@ -156,6 +245,33 @@ const ProjectDetails = () => {
                                                 </div>
                                             </div>
                                         </div>
+                                        {/* Display assigned tutor if exists */}
+                                        {project.assignedTutor && (
+                                            <div className="list-group-item">
+                                                <div className="d-flex align-items-center justify-content-between">
+                                                    <span>Assigned to</span>
+                                                    <div className="d-flex align-items-center">
+                                                        <span className="avatar avatar-sm avatar-rounded me-2">
+                                                            {project.assignedTutor.avatar ? (
+                                                                <ImageWithBasePath
+                                                                    src={project.assignedTutor.avatar}
+                                                                    alt="Tutor Avatar"
+                                                                />
+                                                            ) : (
+                                                                <ImageWithBasePath
+                                                                    src="assets/img/profiles/avatar-03.jpg"
+                                                                    alt="Default Tutor Avatar"
+                                                                />
+                                                            )}
+                                                        </span>
+                                                        <p className="text-gray-9 mb-0">
+                                                            {`${project.assignedTutor.name} ${project.assignedTutor.lastname}`}
+                                                            <span className="d-block text-muted small">Tutor - {project.assignedTutor.classe || 'N/A'}</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="list-group-item">
                                             <div className="d-flex align-items-center justify-content-between">
                                                 <span>Difficulty</span>
@@ -232,14 +348,99 @@ const ProjectDetails = () => {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Manager-only section for tutor assignment - Only shown if user is a manager */}
+                                    {localStorage.getItem("role") === "manager" && (
+                                        <div className="mb-4">
+                                            <h5 className="mb-3">Assign Tutor</h5>
+                                            <div className="bg-light p-3 rounded">
+                                                {project.assignedTutor ? (
+                                                    <div className="mb-3">
+                                                        <p className="mb-1">Currently assigned to:</p>
+                                                        <div className="d-flex align-items-center">
+                                                            <span className="avatar avatar-sm avatar-rounded me-2">
+                                                                {project.assignedTutor.avatar ? (
+                                                                    <ImageWithBasePath
+                                                                        src={project.assignedTutor.avatar}
+                                                                        alt="Tutor Avatar"
+                                                                    />
+                                                                ) : (
+                                                                    <ImageWithBasePath
+                                                                        src="assets/img/profiles/avatar-03.jpg"
+                                                                        alt="Default Tutor Avatar"
+                                                                    />
+                                                                )}
+                                                            </span>
+                                                            <span>
+                                                                {`${project.assignedTutor.name} ${project.assignedTutor.lastname}`}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-muted small mt-2">To change assignment, select another tutor below</p>
+                                                    </div>
+                                                ) : (
+                                                    <p className="mb-2">This project is not assigned to any tutor yet.</p>
+                                                )}
+
+                                                <select
+                                                    className="form-select mb-3"
+                                                    value={selectedTutorId}
+                                                    onChange={(e) => setSelectedTutorId(e.target.value)}
+                                                >
+                                                    <option value="">Select a tutor</option>
+                                                    {tutors.map((tutor) => (
+                                                        <option key={tutor._id} value={tutor._id}>
+                                                            {`${tutor.name} ${tutor.lastname} (${tutor.classe || 'No Class'})`}
+                                                        </option>
+                                                    ))}
+                                                </select>
+
+                                                <button
+                                                    className="btn btn-primary w-100"
+                                                    onClick={handleAssignTutor}
+                                                    disabled={assignLoading || !selectedTutorId}
+                                                >
+                                                    {assignLoading ? (
+                                                        <>
+                                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                            Assigning...
+                                                        </>
+                                                    ) : (
+                                                        project.assignedTutor ? 'Reassign Project' : 'Assign Project'
+                                                    )}
+                                                </button>
+
+                                                {assignSuccess && (
+                                                    <div className="alert alert-success mt-3 mb-0">
+                                                        <i className="ti ti-circle-check me-2"></i>
+                                                        Project successfully assigned!
+                                                    </div>
+                                                )}
+
+                                                {assignError && (
+                                                    <div className="alert alert-danger mt-3 mb-0">
+                                                        <i className="ti ti-alert-circle me-2"></i>
+                                                        {assignError}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <h5 className="mb-3">Tasks Details</h5>
                                     <div className="bg-light p-2 rounded">
                                         <span className="d-block mb-1">Tasks Done</span>
-                                        <h4 className="mb-2">0 / 0</h4>
+                                        <h4 className="mb-2">{completedTasks} / {totalTasks}</h4>
                                         <div className="progress progress-xs mb-2">
-                                            <div className="progress-bar" role="progressbar" />
+                                            <div
+                                                className="progress-bar"
+                                                role="progressbar"
+                                                style={{ width: `${completionPercentage}%` }}
+                                                aria-valuenow={completionPercentage}
+                                                aria-valuemin={0}
+                                                aria-valuemax={100}
+                                            />
                                         </div>
-                                        <p>0% Completed</p>
+                                        <p>{completionPercentage}% Completed</p>
                                     </div>
                                 </div>
                             </div>
@@ -269,7 +470,6 @@ const ProjectDetails = () => {
                                             </Link>
                                             <div>
                                                 <h6 className="mb-1">
-                                                    {/* Change the Link to a button with onClick handler */}
                                                     <button
                                                         onClick={handleGoToMotivations}
                                                         className="btn btn-link p-0 text-decoration-none"
@@ -278,10 +478,6 @@ const ProjectDetails = () => {
                                                         {project.title}
                                                     </button>
                                                 </h6>
-                                                {/*<p>*/}
-                                                {/*    Project ID :{" "}*/}
-                                                {/*    <span className="text-primary">{project._id}</span>*/}
-                                                {/*</p>*/}
                                             </div>
                                         </div>
                                     </div>
@@ -303,7 +499,7 @@ const ProjectDetails = () => {
                                                             : 'badge-soft-secondary'
                                             } d-inline-flex align-items-center mb-3`}>
                                                 <i className="ti ti-point-filled me-1" />
-                                                {project.status || "InProgress"}
+                                                {project.status || "Not Started"}
                                             </span>
                                         </div>
 
@@ -404,203 +600,110 @@ const ProjectDetails = () => {
                                         >
                                             <div className="accordion-body">
                                                 <div className="list-group list-group-flush">
-                                                    <div className="list-group-item border rounded mb-2 p-2">
-                                                        <div className="row align-items-center row-gap-3">
-                                                            <div className="col-md-7">
-                                                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                                                    <span>
-                                                                        <i className="ti ti-grid-dots me-2" />
-                                                                    </span>
-                                                                    <div className="form-check form-check-md me-2">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                    <span className="me-2 d-flex align-items-center rating-select">
-                                                                        <i className="ti ti-star-filled filled" />
-                                                                    </span>
-                                                                    <div className="strike-info">
-                                                                        <h4 className="fs-14">
-                                                                            Patient appointment booking
-                                                                        </h4>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="col-md-5">
-                                                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                                                    <span className="badge bg-soft-pink d-inline-flex align-items-center me-3">
-                                                                        <i className="fas fa-circle fs-6 me-1" />
-                                                                        Onhold
-                                                                    </span>
-                                                                    <div className="d-flex align-items-center">
-                                                                        <div className="avatar-list-stacked avatar-group-sm">
-                                                                            <span className="avatar avatar-rounded">
-                                                                                <ImageWithBasePath
-                                                                                    className="border border-white"
-                                                                                    src="assets/img/profiles/avatar-13.jpg"
-                                                                                    alt="img"
-                                                                                />
+                                                    {tasks.length > 0 ? (
+                                                        // Render dynamic tasks
+                                                        tasks.map((task) => (
+                                                            <div key={task._id} className="list-group-item border rounded mb-2 p-2">
+                                                                <div className="row align-items-center row-gap-3">
+                                                                    <div className="col-md-7">
+                                                                        <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
+                                                                            <span>
+                                                                                <i className="ti ti-grid-dots me-2" />
                                                                             </span>
-                                                                            <span className="avatar avatar-rounded">
-                                                                                <ImageWithBasePath
-                                                                                    className="border border-white"
-                                                                                    src="assets/img/profiles/avatar-14.jpg"
-                                                                                    alt="img"
+                                                                            <div className="form-check form-check-md me-2">
+                                                                                <input
+                                                                                    className="form-check-input"
+                                                                                    type="checkbox"
+                                                                                    checked={task.état === 'Completed'}
+                                                                                    onChange={(e) =>
+                                                                                        handleTaskStatusChange(
+                                                                                            task._id,
+                                                                                            e.target.checked ? 'Completed' : 'To Do'
+                                                                                        )
+                                                                                    }
                                                                                 />
+                                                                            </div>
+                                                                            <span className="me-2 d-flex align-items-center rating-select">
+                                                                                <i className={`ti ti-star${task.priority === 'High' ? '-filled filled' : ''}`} />
                                                                             </span>
-                                                                            <span className="avatar avatar-rounded">
-                                                                                <ImageWithBasePath
-                                                                                    className="border border-white"
-                                                                                    src="assets/img/profiles/avatar-15.jpg"
-                                                                                    alt="img"
-                                                                                />
-                                                                            </span>
+                                                                            <div className="strike-info">
+                                                                                <h4 className="fs-14">
+                                                                                    {task.name}
+                                                                                </h4>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="dropdown ms-2">
-                                                                            <Link
-                                                                                to="#"
-                                                                                className="d-inline-flex align-items-center"
-                                                                                data-bs-toggle="dropdown"
-                                                                            >
-                                                                                <i className="ti ti-dots-vertical" />
-                                                                            </Link>
-                                                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                                                <li>
+                                                                    </div>
+                                                                    <div className="col-md-5">
+                                                                        <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
+                                                                            <span className={`badge ${
+                                                                                task.état === 'In Progress'
+                                                                                    ? 'bg-soft-purple'
+                                                                                    : task.état === 'Completed'
+                                                                                        ? 'bg-soft-success'
+                                                                                        : task.état === 'In Review'
+                                                                                            ? 'bg-soft-info'
+                                                                                            : 'bg-soft-pink'
+                                                                            } d-inline-flex align-items-center me-3`}>
+                                                                                <i className="fas fa-circle fs-6 me-1" />
+                                                                                {task.état}
+                                                                            </span>
+                                                                            <div className="d-flex align-items-center">
+                                                                                <div className="dropdown ms-2">
                                                                                     <Link
                                                                                         to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#edit_todo"
+                                                                                        className="d-inline-flex align-items-center"
+                                                                                        data-bs-toggle="dropdown"
                                                                                     >
-                                                                                        <i className="ti ti-edit me-2" />
-                                                                                        Edit
+                                                                                        <i className="ti ti-dots-vertical" />
                                                                                     </Link>
-                                                                                </li>
-                                                                                <li>
-                                                                                    <Link
-                                                                                        to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#delete_modal"
-                                                                                    >
-                                                                                        <i className="ti ti-trash me-2" />
-                                                                                        Delete
-                                                                                    </Link>
-                                                                                </li>
-                                                                                <li>
-                                                                                    <Link
-                                                                                        to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#view_todo"
-                                                                                    >
-                                                                                        <i className="ti ti-eye me-2" />
-                                                                                        View
-                                                                                    </Link>
-                                                                                </li>
-                                                                            </ul>
+                                                                                    <ul className="dropdown-menu dropdown-menu-end p-3">
+                                                                                        <li>
+                                                                                            <Link
+                                                                                                to="#"
+                                                                                                className="dropdown-item rounded-1"
+                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-target="#edit_todo"
+                                                                                            >
+                                                                                                <i className="ti ti-edit me-2" />
+                                                                                                Edit
+                                                                                            </Link>
+                                                                                        </li>
+                                                                                        <li>
+                                                                                            <Link
+                                                                                                to="#"
+                                                                                                className="dropdown-item rounded-1"
+                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-target="#delete_modal"
+                                                                                            >
+                                                                                                <i className="ti ti-trash me-2" />
+                                                                                                Delete
+                                                                                            </Link>
+                                                                                        </li>
+                                                                                        <li>
+                                                                                            <Link
+                                                                                                to="#"
+                                                                                                className="dropdown-item rounded-1"
+                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-target="#view_todo"
+                                                                                            >
+                                                                                                <i className="ti ti-eye me-2" />
+                                                                                                View
+                                                                                            </Link>
+                                                                                        </li>
+                                                                                    </ul>
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
+                                                        ))
+                                                    ) : (
+                                                        // Show a message when no tasks exist
+                                                        <div className="text-center py-3">
+                                                            <p>No tasks found for this project.</p>
                                                         </div>
-                                                    </div>
-                                                    <div className="list-group-item border rounded mb-2 p-2">
-                                                        <div className="row align-items-center row-gap-3">
-                                                            <div className="col-md-7">
-                                                                <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
-                                                                    <span>
-                                                                        <i className="ti ti-grid-dots me-2" />
-                                                                    </span>
-                                                                    <div className="form-check form-check-md me-2">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                        />
-                                                                    </div>
-                                                                    <span className="me-2 rating-select d-flex align-items-center">
-                                                                        <i className="ti ti-star" />
-                                                                    </span>
-                                                                    <div className="strike-info">
-                                                                        <h4 className="fs-14">
-                                                                            Appointment booking with payment gateway
-                                                                        </h4>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="col-md-5">
-                                                                <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                                                    <span className="badge bg-transparent-purple d-flex align-items-center me-3">
-                                                                        <i className="fas fa-circle fs-6 me-1" />
-                                                                        Inprogress
-                                                                    </span>
-                                                                    <div className="d-flex align-items-center">
-                                                                        <div className="avatar-list-stacked avatar-group-sm">
-                                                                            <span className="avatar avatar-rounded">
-                                                                                <ImageWithBasePath
-                                                                                    className="border border-white"
-                                                                                    src="assets/img/profiles/avatar-20.jpg"
-                                                                                    alt="img"
-                                                                                />
-                                                                            </span>
-                                                                            <span className="avatar avatar-rounded">
-                                                                                <ImageWithBasePath
-                                                                                    className="border border-white"
-                                                                                    src="assets/img/profiles/avatar-21.jpg"
-                                                                                    alt="img"
-                                                                                />
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="dropdown ms-2">
-                                                                            <Link
-                                                                                to="#"
-                                                                                className="d-inline-flex align-items-center"
-                                                                                data-bs-toggle="dropdown"
-                                                                            >
-                                                                                <i className="ti ti-dots-vertical" />
-                                                                            </Link>
-                                                                            <ul className="dropdown-menu dropdown-menu-end p-3">
-                                                                                <li>
-                                                                                    <Link
-                                                                                        to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#edit_todo"
-                                                                                    >
-                                                                                        <i className="ti ti-edit me-2" />
-                                                                                        Edit
-                                                                                    </Link>
-                                                                                </li>
-                                                                                <li>
-                                                                                    <Link
-                                                                                        to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#delete_modal"
-                                                                                    >
-                                                                                        <i className="ti ti-trash me-2" />
-                                                                                        Delete
-                                                                                    </Link>
-                                                                                </li>
-                                                                                <li>
-                                                                                    <Link
-                                                                                        to="#"
-                                                                                        className="dropdown-item rounded-1"
-                                                                                        data-bs-toggle="modal" data-inert={true}
-                                                                                        data-bs-target="#view_todo"
-                                                                                    >
-                                                                                        <i className="ti ti-eye me-2" />
-                                                                                        View
-                                                                                    </Link>
-                                                                                </li>
-                                                                            </ul>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    )}
 
                                                     {/* Add 'New task' button */}
                                                     <button
@@ -616,8 +719,6 @@ const ProjectDetails = () => {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Images, Files, Notes, and Activity sections would go here */}
                                 </div>
                             </div>
                         </div>
@@ -633,9 +734,6 @@ const ProjectDetails = () => {
                     </p>
                 </div>
             </div>
-            {/* /Page Wrapper */}
-
-            {/* Add modals as needed */}
         </>
     );
 };

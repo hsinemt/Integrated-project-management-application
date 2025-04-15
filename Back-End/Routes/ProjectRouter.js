@@ -27,6 +27,8 @@ router.get('/getAllProjects', ProjectController.getAllProjects);
 router.get('/getProjectById/:id', ProjectController.getProjectById);
 router.delete('/delete/:id', userToken, ProjectController.deleteProject);
 router.get('/count', ProjectController.getProjectsCount);
-
+router.post("/recommend-projects", ProjectController.recommend);
+router.get('/tutors', userToken, ProjectController.getAllTutors);
+router.put('/assign-tutor/:id', userToken, ProjectController.assignTutor);
 
 module.exports = router;

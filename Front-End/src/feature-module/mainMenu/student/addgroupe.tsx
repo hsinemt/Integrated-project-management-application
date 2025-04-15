@@ -40,7 +40,7 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
 
   const isUserEmailAvailable = async (email: string) => {
     try {
-      const response = await axios.get(`http://localhost:9777/auth/check-email?email=${email}`);
+      const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
       return response.data.available;
     } catch (error) {
       console.error("Erreur lors de la vérification de l'email :", error);
@@ -60,7 +60,7 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
 
   const fetchStudentId = async (email: string) => {
     try {
-      const response = await axios.get(`http://localhost:9777/auth/check-email?email=${email}`);
+      const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
       return response.data.id;
     } catch (error) {
       console.error("Erreur lors de la récupération de l'ID de l'étudiant :", error);
@@ -69,7 +69,7 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
   };
   const fetchStudentSkills = async (email: string) => {
     try {
-      const response = await axios.get(`http://localhost:9777/auth/check-email?email=${email}`);
+      const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
       return response.data.skills || []; // Retourne un tableau vide si `skills` n'est pas défini
     } catch (error) {
       console.error("Erreur lors de la récupération des compétences de l'étudiant :", error);
@@ -141,7 +141,7 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       console.log("Skills being sent to backend:", normalizedSkills); // Debugging log
   
       // Appeler l'API de recommandation avec les compétences
-      const response = await axios.post("http://localhost:9777/projects/recommend-projects", {
+      const response = await axios.post("http://localhost:9777/project/recommend-projects", {
         skills: normalizedSkills,
       });
   
@@ -201,8 +201,8 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await axios.get("http://localhost:9777/Project/all");
-        setAvailableProjectsState(response.data);
+        const response = await axios.get("http://localhost:9777/project/getAllProjects");
+        setAvailableProjectsState(response.data.projects);
       } catch (error) {
         console.error("Erreur API projets :", error);
         setError("Erreur lors de la récupération des projets.");
