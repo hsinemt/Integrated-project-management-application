@@ -8,6 +8,7 @@ import { priority } from '../../../core/common/selectoption/selectoption'
 import CommonTagsInput from '../../../core/common/Taginput'
 import CommonTextEditor from '../../../core/common/textEditor'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
+
 import {
   initialProjectData,
   addProject,
@@ -16,9 +17,11 @@ import {
   ProjectType,
   ApiResponse,
   getProjectsCount,
-  generateProjectFromPrompt,
-  createProjectFromPrompt
+  generateProjectFromPrompt, // Import the new function
+  createProjectFromPrompt, updateProject // Import direct project creation function
 } from '../../../api/projectsApi/project/projectApi'
+
+// New imports for task counts and group members
 import { getTaskCountsByProjectId, TaskCountsType } from "../../../api/projectsApi/task/taskApi"
 import { getGroupsByProjectId, GroupType } from '../../../api/projectsApi/group/groupApi'
 
@@ -42,19 +45,23 @@ const Project = () => {
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [visibleProjects, setVisibleProjects] = useState<number>(8);
   const [projectCount, setProjectCount] = useState<number>(0);
+  const [projectToEdit, setProjectToEdit] = useState<ProjectType | null>(null);
+  const [editFormData, setEditFormData] = useState<ProjectType>(initialProjectData);
+  const [editKeywords, setEditKeywords] = useState<string[]>([]);
+  const [editActiveTab, setEditActiveTab] = useState<string>('basic-info');
+  const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
+  const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
 
-  // State for task counts
+  // New state for task counts and group members
   const [projectTaskCounts, setProjectTaskCounts] = useState<{[key: string]: TaskCountsType}>({});
   const [loadingTaskCounts, setLoadingTaskCounts] = useState<boolean>(false);
-
-  // State for group members
   const [projectGroupMembers, setProjectGroupMembers] = useState<{[key: string]: number}>({});
   const [loadingGroupMembers, setLoadingGroupMembers] = useState<boolean>(false);
 
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // State for AI generation
+  // New state for AI generation
   const [prompt, setPrompt] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generatedProject, setGeneratedProject] = useState<ProjectType | null>(null);
@@ -143,7 +150,7 @@ const Project = () => {
     }
   };
 
-  // Updated function to fetch group members without relying on backend populate
+  // Function to fetch group members
   const fetchGroupMembers = async (projectIds: string[]) => {
     setLoadingGroupMembers(true);
     try {
@@ -217,6 +224,21 @@ const Project = () => {
       });
     }
 
+    // Add event listener for edit modal
+    const editModal = document.getElementById('edit_project');
+    if (editModal) {
+      editModal.addEventListener('hidden.bs.modal', () => {
+        setTimeout(() => {
+          setProjectToEdit(null);
+          setEditFormData(initialProjectData);
+          setEditKeywords([]);
+          setEditLogoPreview(null);
+          setEditSelectedLogo(null);
+          setEditActiveTab('basic-info');
+        }, 300);
+      });
+    }
+
     fetchProjects();
     fetchProjectCount();
 
@@ -224,6 +246,10 @@ const Project = () => {
       if (deleteModal) {
         deleteModal.removeEventListener('show.bs.modal', () => {});
         deleteModal.removeEventListener('hidden.bs.modal', () => {});
+      }
+
+      if (editModal) {
+        editModal.removeEventListener('hidden.bs.modal', () => {});
       }
     };
   }, []);
@@ -246,11 +272,14 @@ const Project = () => {
     return modalElement ? modalElement : document.body;
   };
 
-
   const fetchProjects = async () => {
     setLoading(true);
     try {
       const projectsList = await getAllProjects();
+
+      if (projectsList.length > 0) {
+      }
+
       setProjects(projectsList);
     } catch (error: unknown) {
       console.error('Error fetching projects:', error);
@@ -275,6 +304,108 @@ const Project = () => {
     if (!projectId) return '';
     const project = projects.find(p => p._id === projectId);
     return project ? project.title : '';
+  };
+
+  const handleEditClick = (project: ProjectType) => {
+    setProjectToEdit(project);
+    setEditFormData({
+      ...project
+    });
+    setEditKeywords(project.keywords || []);
+    setEditActiveTab('basic-info');
+
+    if (project.projectLogo) {
+      setEditLogoPreview(project.projectLogo);
+    } else {
+      setEditLogoPreview(null);
+    }
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditFormData({
+      ...editFormData,
+      [name]: value
+    });
+  };
+
+  const handleEditLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setEditSelectedLogo(file);
+
+      const previewUrl = URL.createObjectURL(file);
+      setEditLogoPreview(previewUrl);
+    }
+  };
+
+  const clearEditLogo = () => {
+    setEditSelectedLogo(null);
+    if (editLogoPreview && !projectToEdit?.projectLogo) {
+      URL.revokeObjectURL(editLogoPreview);
+      setEditLogoPreview(null);
+    } else if (projectToEdit?.projectLogo) {
+      setEditLogoPreview(projectToEdit.projectLogo);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!projectToEdit?._id) {
+      alert('No project selected for editing');
+      return;
+    }
+
+    if (!editFormData.title || !editFormData.description || editKeywords.length === 0) {
+      alert('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const submissionData = {
+        ...editFormData,
+        keywords: editKeywords
+      };
+
+      const response = await updateProject(projectToEdit._id, submissionData, editSelectedLogo || undefined);
+
+      if (response.success) {
+        // Reset form and state
+        setProjectToEdit(null);
+        setEditFormData(initialProjectData);
+        setEditKeywords([]);
+        setEditLogoPreview(null);
+        setEditSelectedLogo(null);
+
+        // Close modal
+        const modal = document.getElementById('edit_project');
+        if (modal && window.bootstrap?.Modal) {
+          const modalInstance = window.bootstrap.Modal.getInstance(modal);
+          if (modalInstance) {
+            modalInstance.hide();
+          }
+        }
+
+        // Refresh projects list
+        fetchProjects();
+
+        // Show success modal
+        const successModal = document.getElementById('success_modal');
+        if (successModal && window.bootstrap?.Modal) {
+          const bsModal = new window.bootstrap.Modal(successModal);
+          bsModal.show();
+        }
+      } else {
+        alert(response.message || 'Failed to update project');
+      }
+    } catch (error: unknown) {
+      console.error('Error updating project:', error);
+      alert(error instanceof Error ? error.message : 'An error occurred while updating the project');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleModalDelete = () => {
@@ -317,7 +448,6 @@ const Project = () => {
     }
   };
 
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -326,24 +456,19 @@ const Project = () => {
     });
   };
 
-
   const getProjectInitials = (title: string): string => {
     if (!title) return '';
-
 
     const words = title.trim().split(/\s+/);
 
     if (words.length === 0) return '';
 
     if (words.length === 1) {
-
       return words[0].substring(0, 2).toUpperCase();
     } else {
-
       return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
     }
   };
-
 
   const getAvatarBgColor = (title: string): string => {
     let hash = 0;
@@ -364,7 +489,6 @@ const Project = () => {
     const index = Math.abs(hash) % bgColors.length;
     return bgColors[index];
   };
-
 
   const getSpecialityBadgeClass = (speciality: string | undefined): string => {
     switch(speciality) {
@@ -397,18 +521,15 @@ const Project = () => {
     }
   };
 
-
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setSelectedLogo(file);
 
-
       const previewUrl = URL.createObjectURL(file);
       setLogoPreview(previewUrl);
     }
   };
-
 
   const clearSelectedLogo = () => {
     setSelectedLogo(null);
@@ -569,12 +690,10 @@ const Project = () => {
         return;
       }
 
-
       const submissionData = {
         ...formData,
         keywords: projectKeywords
       };
-
 
       const response = await addProject(submissionData, selectedLogo || undefined);
 
@@ -688,15 +807,6 @@ const Project = () => {
                     >
                       <i className="ti ti-circle-plus me-2" />
                       Add Project
-                    </Link>
-                  </div>
-                  <div className="me-2 mb-2">
-                    <Link
-                        to="/add-group"
-                        className="btn btn-white d-inline-flex align-items-center"
-                    >
-                      <i className="ti ti-plus me-1" />
-                      Add Group
                     </Link>
                   </div>
                   <div className="ms-2 head-icons">
@@ -864,6 +974,7 @@ const Project = () => {
                                           data-bs-toggle="modal"
                                           data-inert={true}
                                           data-bs-target="#edit_project"
+                                          onClick={() => handleEditClick(project)}
                                       >
                                         <i className="ti ti-edit me-2" />
                                         Edit
@@ -888,6 +999,9 @@ const Project = () => {
                                 <span className={`badge ${getSpecialityBadgeClass(project.speciality)} me-1`}>
                                   {project.speciality}
                                 </span>
+                                {/*<span className="badge bg-light-secondary text-secondary">*/}
+                                {/*  {project.difficulty}*/}
+                                {/*</span>*/}
                               </div>
                               <div className="mb-3 pb-3 border-bottom">
                                 <p className="text-truncate line-clamb-3 mb-0">
@@ -953,12 +1067,12 @@ const Project = () => {
                                                 className="avatar avatar-rounded"
                                                 title="Group member"
                                             >
-          <ImageWithBasePath
-              className="border border-white"
-              src={`assets/img/profiles/avatar-0${index + 2}.jpg`}
-              alt="Group member"
-          />
-        </span>
+                                          <ImageWithBasePath
+                                              className="border border-white"
+                                              src={`assets/img/profiles/avatar-0${index + 2}.jpg`}
+                                              alt="Group member"
+                                          />
+                                        </span>
                                         ))}
                                         {/* Show a "+X" circle if there are more than 4 members */}
                                         {projectGroupMembers[project._id] > 4 && (
@@ -974,13 +1088,13 @@ const Project = () => {
                                   ) : loadingGroupMembers ? (
                                       // Show loading indicator
                                       <span className="avatar bg-light avatar-rounded fs-12 fw-medium">
-      <i className="ti ti-loader animate-spin"></i>
-    </span>
+                                      <i className="ti ti-loader animate-spin"></i>
+                                    </span>
                                   ) : (
                                       // Show "0" if no members
                                       <span className="avatar bg-light-secondary text-secondary avatar-rounded fs-12 fw-medium">
-      0
-    </span>
+                                      0
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1096,9 +1210,9 @@ const Project = () => {
                   <div className="modal-content">
                     <div className="modal-body">
                       <div className="text-center p-3">
-                        <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
-                          <i className="ti ti-check fs-24" />
-                        </span>
+          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+            <i className="ti ti-check fs-24" />
+          </span>
                         <h5 className="mb-2">Project Added Successfully</h5>
                         <p className="mb-3">
                           Project has been added with ID:{" "}
@@ -1135,6 +1249,7 @@ const Project = () => {
                 </div>
               </div>
               {/* /Success Modal */}
+
             </div>
             <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
               <p className="mb-0">2014 - 2025 © SmartHR.</p>
@@ -1148,11 +1263,986 @@ const Project = () => {
           </div>
           {/* /Page Wrapper */}
         </>
-
-        {/* Add Project Modal */}
+        {/* Add Project */}
         <div className="modal fade" id="add_project" role="dialog">
-          {/* Add Project Modal content here - omitted for brevity */}
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content">
+              <div className="modal-header header-border align-items-center justify-content-between">
+                <div className="d-flex align-items-center">
+                  <h5 className="modal-title me-2">Add Project </h5>
+                  <p className="text-dark">Project N° : PRO-{String(projectCount + 1).padStart(4, '0')}</p>
+                </div>
+                <button
+                    type="button"
+                    className="btn-close custom-btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Close"
+                >
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              <div className="add-info-fieldset">
+                <div className="contact-grids-tab p-3 pb-0">
+                  <ul className="nav nav-underline" id="myTab" role="tablist">
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${activeTab === 'basic-info' ? 'active' : ''}`}
+                          id="basic-tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#basic-info"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === 'basic-info'}
+                          onClick={() => setActiveTab('basic-info')}
+                      >
+                        Basic Information
+                      </button>
+                    </li>
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${activeTab === 'features' ? 'active' : ''}`}
+                          id="features-tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#features"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === 'features'}
+                          onClick={() => setActiveTab('features')}
+                      >
+                        Keywords
+                      </button>
+                    </li>
+                    {/* New AI Generation Tab */}
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${activeTab === 'ai-generate' ? 'active' : ''}`}
+                          id="ai-generate-tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#ai-generate"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === 'ai-generate'}
+                          onClick={() => setActiveTab('ai-generate')}
+                      >
+                        Generate with AI
+                      </button>
+                    </li>
+                    {/* Tab for Generated Project Preview */}
+                    {generatedProject && (
+                        <li className="nav-item" role="presentation">
+                          <button
+                              className={`nav-link ${activeTab === 'generated-project' ? 'active' : ''}`}
+                              id="generated-project-tab"
+                              data-bs-toggle="tab"
+                              data-bs-target="#generated-project"
+                              type="button"
+                              role="tab"
+                              aria-selected={activeTab === 'generated-project'}
+                              onClick={() => setActiveTab('generated-project')}
+                          >
+                            Generated Project
+                          </button>
+                        </li>
+                    )}
+                  </ul>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                  <div className="tab-content" id="myTabContent">
+                    <div
+                        className={`tab-pane fade ${activeTab === 'basic-info' ? 'show active' : ''}`}
+                        id="basic-info"
+                        role="tabpanel"
+                        aria-labelledby="basic-tab"
+                        tabIndex={0}
+                    >
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
+                              <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
+                                <i className="ti ti-photo text-gray-2 fs-16" />
+                              </div>
+                              <div className="profile-upload">
+                                <div className="mb-2">
+                                  <h6 className="mb-1">Upload Project Logo</h6>
+                                  <p className="fs-12">Image should be below 4 mb</p>
+                                </div>
+                                <div className="profile-uploader d-flex align-items-center">
+                                  <div className="drag-upload-btn btn btn-sm btn-primary me-2">
+                                    Upload
+                                    <input
+                                        type="file"
+                                        className="form-control image-sign"
+                                        accept="image/*"
+                                        onChange={handleLogoChange}
+                                    />
+                                  </div>
+                                  <button
+                                      type="button"
+                                      className="btn btn-light btn-sm"
+                                      onClick={clearSelectedLogo}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                {logoPreview && (
+                                    <div className="mt-3">
+                                      <p className="mb-1">Preview:</p>
+                                      <img
+                                          src={logoPreview}
+                                          alt="Logo Preview"
+                                          className="img-thumbnail"
+                                          style={{ maxWidth: '100px', maxHeight: '100px' }}
+                                      />
+                                    </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Project Title *</label>
+                              <input
+                                  type="text"
+                                  className="form-control"
+                                  placeholder="Enter project title"
+                                  maxLength={100}
+                                  name="title"
+                                  value={formData.title}
+                                  onChange={handleInputChange}
+                                  required
+                              />
+                              <small className="text-muted">Maximum 100 characters</small>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="row">
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Start Date</label>
+                                  <div className="input-icon-end position-relative">
+                                    <DatePicker
+                                        className="form-control datetimepicker"
+                                        format={{
+                                          format: "DD-MM-YYYY",
+                                          type: "mask",
+                                        }}
+                                        getPopupContainer={getModalContainer}
+                                        placeholder="DD-MM-YYYY"
+                                    />
+                                    <span className="input-icon-addon">
+                              <i className="ti ti-calendar text-gray-7" />
+                            </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">End Date</label>
+                                  <div className="input-icon-end position-relative">
+                                    <DatePicker
+                                        className="form-control datetimepicker"
+                                        format={{
+                                          format: "DD-MM-YYYY",
+                                          type: "mask",
+                                        }}
+                                        getPopupContainer={getModalContainer}
+                                        placeholder="DD-MM-YYYY"
+                                    />
+                                    <span className="input-icon-addon">
+                              <i className="ti ti-calendar text-gray-7" />
+                            </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Description *</label>
+                              <textarea
+                                  className="form-control"
+                                  rows={4}
+                                  placeholder="Enter project description"
+                                  name="description"
+                                  value={formData.description}
+                                  onChange={handleInputChange}
+                                  required
+                              ></textarea>
+                            </div>
+                          </div>
+
+                          {/* New fields added here */}
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Difficulty</label>
+                              <select
+                                  className="form-select"
+                                  name="difficulty"
+                                  value={formData.difficulty || 'Medium'}
+                                  onChange={handleInputChange}
+                              >
+                                {difficultyOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Status</label>
+                              <select
+                                  className="form-select"
+                                  name="status"
+                                  value={formData.status || 'Not Started'}
+                                  onChange={handleInputChange}
+                              >
+                                {statusOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Speciality</label>
+                              <select
+                                  className="form-select"
+                                  name="speciality"
+                                  value={formData.speciality || 'Twin'}
+                                  onChange={handleInputChange}
+                              >
+                                {specialityOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          {/* End of new fields */}
+
+                          <div className="col-md-12">
+                            <div className="input-block mb-0">
+                              <label className="form-label">Upload Files</label>
+                              <input className="form-control" type="file" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-end">
+                          <button
+                              type="button"
+                              className="btn btn-outline-light border me-2"
+                              data-bs-dismiss="modal"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                              className="btn btn-primary"
+                              type="button"
+                              onClick={() => {
+                                document.getElementById('features-tab')?.click();
+                              }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                        className={`tab-pane fade ${activeTab === 'features' ? 'show active' : ''}`}
+                        id="features"
+                        role="tabpanel"
+                        aria-labelledby="features-tab"
+                        tabIndex={0}
+                    >
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label me-2">Keywords *</label>
+                              <CommonTagsInput
+                                  value={projectKeywords}
+                                  onChange={(keywords: string[]) => {
+                                    const validKeywords = keywords.map(keyword => keyword.length > 500 ? keyword.substring(0, 500) : keyword)
+                                    setProjectKeywords(keywords);
+                                    setFormData({
+                                      ...formData,
+                                      keywords: validKeywords
+                                    });
+                                  }}
+                                  placeholder="Add keyword and press enter"
+                                  className="custom-input-class"
+                              />
+                              <small className="text-muted">Enter at least one keyword</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-between w-100">
+                          <button
+                              type="button"
+                              className="btn btn-outline-primary"
+                              onClick={() => {
+                                document.getElementById('basic-tab')?.click();
+                              }}
+                          >
+                            Back
+                          </button>
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light border me-2"
+                                data-bs-dismiss="modal"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                type="submit"
+                                disabled={loading}
+                            >
+                              {loading ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Saving...
+                                  </>
+                              ) : (
+                                  'Save Project'
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Generate Tab */}
+                    <div
+                        className={`tab-pane fade ${activeTab === 'ai-generate' ? 'show active' : ''}`}
+                        id="ai-generate"
+                        role="tabpanel"
+                        aria-labelledby="ai-generate-tab"
+                        tabIndex={0}
+                    >
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12 mb-4">
+                            <div className="alert alert-info">
+                              <i className="ti ti-bulb me-2"></i>
+                              Describe your project idea and our AI will generate the project details for you.
+                            </div>
+                          </div>
+
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Project Prompt *</label>
+                              <textarea
+                                  className="form-control"
+                                  rows={5}
+                                  placeholder="Describe your project idea (e.g., 'A mobile app for tracking water consumption with reminders and statistics')"
+                                  value={prompt}
+                                  onChange={(e) => setPrompt(e.target.value)}
+                                  required
+                              ></textarea>
+                              <small className="text-muted">Be as specific as possible for better results</small>
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Difficulty</label>
+                              <select
+                                  className="form-select"
+                                  name="difficulty"
+                                  value={formData.difficulty || 'Medium'}
+                                  onChange={handleInputChange}
+                              >
+                                {difficultyOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            <div className="mb-3">
+                              <label className="form-label">Speciality</label>
+                              <select
+                                  className="form-select"
+                                  name="speciality"
+                                  value={formData.speciality || 'Twin'}
+                                  onChange={handleInputChange}
+                              >
+                                {specialityOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {generationError && (
+                              <div className="col-md-12">
+                                <div className="alert alert-danger">
+                                  <i className="ti ti-alert-circle me-2"></i>
+                                  {generationError}
+                                </div>
+                              </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-between w-100">
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-primary me-2"
+                                onClick={() => {
+                                  document.getElementById('basic-tab')?.click();
+                                }}
+                            >
+                              Back to Manual Entry
+                            </button>
+                          </div>
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light border me-2"
+                                data-bs-dismiss="modal"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-success me-2"
+                                onClick={handleDirectProjectCreation}
+                                disabled={isGenerating || !prompt.trim()}
+                            >
+                              {isGenerating ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Creating...
+                                  </>
+                              ) : (
+                                  <>
+                                    <i className="ti ti-wand me-1"></i>
+                                    Generate & Save Directly
+                                  </>
+                              )}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleGenerateProject}
+                                disabled={isGenerating || !prompt.trim()}
+                            >
+                              {isGenerating ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Generating...
+                                  </>
+                              ) : (
+                                  <>
+                                    <i className="ti ti-pencil me-1"></i>
+                                    Generate & Edit
+                                  </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Generated Project Preview Tab */}
+                    {generatedProject && (
+                        <div
+                            className={`tab-pane fade ${activeTab === 'generated-project' ? 'show active' : ''}`}
+                            id="generated-project"
+                            role="tabpanel"
+                            aria-labelledby="generated-project-tab"
+                            tabIndex={0}
+                        >
+                          <div className="modal-body">
+                            <div className="row">
+                              <div className="col-md-12 mb-4">
+                                <div className="alert alert-success">
+                                  <i className="ti ti-check-circle me-2"></i>
+                                  Project details have been generated successfully! Review before saving.
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Project Title</label>
+                                  <input
+                                      type="text"
+                                      className="form-control"
+                                      value={formData.title}
+                                      onChange={handleInputChange}
+                                      name="title"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Project Description</label>
+                                  <textarea
+                                      className="form-control"
+                                      rows={5}
+                                      value={formData.description}
+                                      onChange={handleInputChange}
+                                      name="description"
+                                  ></textarea>
+                                </div>
+                              </div>
+
+                              <div className="col-md-12">
+                                <div className="mb-3">
+                                  <label className="form-label fw-bold">Keywords</label>
+                                  <CommonTagsInput
+                                      value={projectKeywords}
+                                      onChange={(keywords: string[]) => {
+                                        setProjectKeywords(keywords);
+                                        setFormData({
+                                          ...formData,
+                                          keywords: keywords
+                                        });
+                                      }}
+                                      className="custom-input-class"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Key Features section removed as requested */}
+
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Difficulty</label>
+                                  <select
+                                      className="form-select"
+                                      name="difficulty"
+                                      value={formData.difficulty || 'Medium'}
+                                      onChange={handleInputChange}
+                                  >
+                                    {difficultyOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Speciality</label>
+                                  <select
+                                      className="form-select"
+                                      name="speciality"
+                                      value={formData.speciality || 'Twin'}
+                                      onChange={handleInputChange}
+                                  >
+                                    {specialityOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="modal-footer">
+                            <div className="d-flex align-items-center justify-content-between w-100">
+                              <div>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-primary"
+                                    onClick={handleResetGeneration}
+                                >
+                                  <i className="ti ti-refresh me-1"></i> Generate Another
+                                </button>
+                              </div>
+                              <div>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-light border me-2"
+                                    data-bs-dismiss="modal"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleSaveGeneratedProject}
+                                    disabled={loading}
+                                >
+                                  {loading ? (
+                                      <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        Saving...
+                                      </>
+                                  ) : (
+                                      <>
+                                        <i className="ti ti-device-floppy me-1"></i> Save Project
+                                      </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
+        {/* /Add Project */}
+
+        {/* Edit Project */}
+        <div className="modal fade" id="edit_project" role="dialog">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content">
+              <div className="modal-header header-border align-items-center justify-content-between">
+                <div className="d-flex align-items-center">
+                  <h5 className="modal-title me-2">Edit Project </h5>
+                  <p className="text-dark">Project ID : {projectToEdit?._id ? projectToEdit._id.substring(0, 8) : ''}</p>
+                </div>
+                <button
+                    type="button"
+                    className="btn-close custom-btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Close"
+                >
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              <div className="add-info-fieldset">
+                <div className="contact-grids-tab p-3 pb-0">
+                  <ul className="nav nav-underline" id="myTab1" role="tablist">
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${editActiveTab === 'basic-info' ? 'active' : ''}`}
+                          id="basic-tab1"
+                          data-bs-toggle="tab"
+                          data-bs-target="#basic-info1"
+                          type="button"
+                          role="tab"
+                          aria-selected={editActiveTab === 'basic-info'}
+                          onClick={() => setEditActiveTab('basic-info')}
+                      >
+                        Basic Information
+                      </button>
+                    </li>
+                    <li className="nav-item" role="presentation">
+                      <button
+                          className={`nav-link ${editActiveTab === 'keywords' ? 'active' : ''}`}
+                          id="keywords-tab1"
+                          data-bs-toggle="tab"
+                          data-bs-target="#keywords1"
+                          type="button"
+                          role="tab"
+                          aria-selected={editActiveTab === 'keywords'}
+                          onClick={() => setEditActiveTab('keywords')}
+                      >
+                        Keywords
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                <div className="tab-content" id="myTabContent1">
+                  <div
+                      className={`tab-pane fade ${editActiveTab === 'basic-info' ? 'show active' : ''}`}
+                      id="basic-info1"
+                      role="tabpanel"
+                      aria-labelledby="basic-tab1"
+                      tabIndex={0}
+                  >
+                    <form>
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
+                              <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
+                                {editLogoPreview ? (
+                                    <img
+                                        src={editLogoPreview}
+                                        alt="Project Logo"
+                                        className="img-fluid rounded-circle"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                ) : (
+                                    <i className="ti ti-photo text-gray-2 fs-16" />
+                                )}
+                              </div>
+                              <div className="profile-upload">
+                                <div className="mb-2">
+                                  <h6 className="mb-1">Upload Project Logo</h6>
+                                  <p className="fs-12">Image should be below 4 mb</p>
+                                </div>
+                                <div className="profile-uploader d-flex align-items-center">
+                                  <div className="drag-upload-btn btn btn-sm btn-primary me-2">
+                                    Upload
+                                    <input
+                                        type="file"
+                                        className="form-control image-sign"
+                                        accept="image/*"
+                                        onChange={handleEditLogoChange}
+                                    />
+                                  </div>
+                                  <button
+                                      type="button"
+                                      className="btn btn-light btn-sm"
+                                      onClick={clearEditLogo}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Project Title *</label>
+                              <input
+                                  type="text"
+                                  className="form-control"
+                                  placeholder="Enter project title"
+                                  name="title"
+                                  value={editFormData.title}
+                                  onChange={handleEditInputChange}
+                                  required
+                              />
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="row">
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Difficulty</label>
+                                  <select
+                                      className="form-select"
+                                      name="difficulty"
+                                      value={editFormData.difficulty || 'Medium'}
+                                      onChange={handleEditInputChange}
+                                  >
+                                    {difficultyOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="col-md-6">
+                                <div className="mb-3">
+                                  <label className="form-label">Status</label>
+                                  <select
+                                      className="form-select"
+                                      name="status"
+                                      value={editFormData.status || 'Not Started'}
+                                      onChange={handleEditInputChange}
+                                  >
+                                    {statusOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Speciality</label>
+                              <select
+                                  className="form-select"
+                                  name="speciality"
+                                  value={editFormData.speciality || 'Twin'}
+                                  onChange={handleEditInputChange}
+                              >
+                                {specialityOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label">Description *</label>
+                              <textarea
+                                  className="form-control"
+                                  rows={4}
+                                  placeholder="Enter project description"
+                                  name="description"
+                                  value={editFormData.description}
+                                  onChange={handleEditInputChange}
+                                  required
+                              ></textarea>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-end">
+                          <button
+                              type="button"
+                              className="btn btn-outline-light border me-2"
+                              data-bs-dismiss="modal"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                              className="btn btn-primary"
+                              type="button"
+                              onClick={() => setEditActiveTab('keywords')}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                  <div
+                      className={`tab-pane fade ${editActiveTab === 'keywords' ? 'show active' : ''}`}
+                      id="keywords1"
+                      role="tabpanel"
+                      aria-labelledby="keywords-tab1"
+                      tabIndex={0}
+                  >
+                    <form onSubmit={handleEditSubmit}>
+                      <div className="modal-body">
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="mb-3">
+                              <label className="form-label me-2">Keywords *</label>
+                              <CommonTagsInput
+                                  value={editKeywords}
+                                  onChange={(keywords: string[]) => {
+                                    const validKeywords = keywords.map(keyword =>
+                                        keyword.length > 500 ? keyword.substring(0, 500) : keyword
+                                    )
+                                    setEditKeywords(keywords);
+                                    setEditFormData({
+                                      ...editFormData,
+                                      keywords: validKeywords
+                                    });
+                                  }}
+                                  placeholder="Add keyword and press enter"
+                                  className="custom-input-class"
+                              />
+                              <small className="text-muted">Enter at least one keyword</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <div className="d-flex align-items-center justify-content-between w-100">
+                          <button
+                              type="button"
+                              className="btn btn-outline-primary"
+                              onClick={() => setEditActiveTab('basic-info')}
+                          >
+                            Back
+                          </button>
+                          <div>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light border me-2"
+                                data-bs-dismiss="modal"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                type="submit"
+                                disabled={loading}
+                            >
+                              {loading ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Saving...
+                                  </>
+                              ) : (
+                                  'Update Project'
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* /Edit Project */}
+
+        {/* Success Modal */}
+        <div className="modal fade" id="success_modal" role="dialog">
+          <div className="modal-dialog modal-dialog-centered modal-sm">
+            <div className="modal-content">
+              <div className="modal-body">
+                <div className="text-center p-3">
+          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+            <i className="ti ti-check fs-24" />
+          </span>
+                  <h5 className="mb-2">Project Added Successfully</h5>
+                  <p className="mb-3">
+                    Project has been added with ID:{" "}
+                    <span className="text-primary">#pro-0004</span>
+                  </p>
+                  <div>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <Link to="#" className="btn btn-dark w-100" onClick={() => {
+                          const modal = document.getElementById('success_modal');
+                          if (modal && window.bootstrap?.Modal) {
+                            const modalInstance = window.bootstrap.Modal.getInstance(modal);
+                            if (modalInstance) {
+                              modalInstance.hide();
+                            }
+                          }
+                        }}>
+                          Back to List
+                        </Link>
+                      </div>
+                      <div className="col-6">
+                        <Link
+                            to="#"
+                            className="btn btn-primary w-100"
+                        >
+                          View Details
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* /Success Modal */}
+
       </>
   )
 }

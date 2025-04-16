@@ -42,8 +42,7 @@ require('./Models/tasks');
 require('./config/passportConfig');
 require('./config/passportGoogle');
 
-const PORT = process.env.PORT || 9777;
-
+const PORT = parseInt(process.env.PORT || '9777');
 // Middleware setup
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -121,4 +120,18 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+});
+
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('Process terminated');
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    server.close(() => {
+        console.log('Process terminated');
+    });
 });
