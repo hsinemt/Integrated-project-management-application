@@ -15,14 +15,6 @@ pipeline {
         NODE_VERSION = "18.x"
     }
 
-    stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: "${GIT_BRANCH}", 
-                url: "${GIT_REPO}",
-                credentialsId: 'github-credentials'
-            }
-        }
 
         stage('Install Dependencies') {
             parallel {
