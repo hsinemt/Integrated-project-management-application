@@ -10,10 +10,7 @@ pipeline {
         BACKEND_IMAGE = "${registry}/backend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         FRONTEND_IMAGE = "${registry}/frontend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         
-        // Git Configuration
-        GIT_REPO = "https://github.com/your-username/your-repo.git"
-        GIT_BRANCH = "main"
-        
+     
         // Node Configuration
         NODE_VERSION = "18.x"
     }
