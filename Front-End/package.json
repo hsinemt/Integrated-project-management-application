@@ -4,8 +4,7 @@
   "homepage": "/",
   "private": true,
   "dependencies": {
-    // Keep all your existing dependencies
-    // ... (they look good)
+
   },
   "scripts": {
     "start": "react-scripts start",
@@ -43,7 +42,7 @@
     ]
   },
   "devDependencies": {
-    // Keep all your existing devDependencies and add these:
+ 
     "@storybook/addon-actions": "^7.6.6",
     "@storybook/addon-essentials": "^7.6.6",
     "@storybook/addon-interactions": "^7.6.6",
@@ -59,7 +58,7 @@
     "msw": "^2.2.14",
     "@testing-library/react-hooks": "^8.1.0",
     "typescript": "^5.3.3",
-    // ... (keep your existing @types packages)
+
   },
   "jest": {
     // Keep your existing jest config and add:
