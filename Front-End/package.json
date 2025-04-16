@@ -61,7 +61,7 @@
 
   },
   "jest": {
-    // Keep your existing jest config and add:
+
     "coverageReporters": [
       "json",
       "lcov",
