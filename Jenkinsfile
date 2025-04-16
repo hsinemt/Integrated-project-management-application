@@ -10,11 +10,14 @@ pipeline {
         BACKEND_IMAGE = "${registry}/backend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         FRONTEND_IMAGE = "${registry}/frontend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         
-     
+
+        
         // Node Configuration
         NODE_VERSION = "18.x"
     }
 
+    stages {
+ 
 
         stage('Install Dependencies') {
             parallel {
