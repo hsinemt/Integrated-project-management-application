@@ -10,30 +10,26 @@ pipeline {
         BACKEND_IMAGE = "${registry}/backend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         FRONTEND_IMAGE = "${registry}/frontend:${GIT_COMMIT.take(7)}-${BUILD_NUMBER}"
         
-
-        
         // Node Configuration
-        NODE_VERSION = "18.x"
+        NODE_VERSION = "18"
     }
 
     stages {
- 
-
         stage('Install Dependencies') {
             parallel {
                 stage('Backend Dependencies') {
                     steps {
                         dir('backend') {
-                            sh "nvm use ${NODE_VERSION} || nvm install ${NODE_VERSION}"
-                            sh 'npm ci --prefer-offline'
+                            bat "nvm use ${NODE_VERSION} || nvm install ${NODE_VERSION}"
+                            bat 'npm ci --prefer-offline'
                         }
                     }
                 }
                 stage('Frontend Dependencies') {
                     steps {
                         dir('frontend') {
-                            sh "nvm use ${NODE_VERSION} || nvm install ${NODE_VERSION}"
-                            sh 'npm ci --prefer-offline'
+                            bat "nvm use ${NODE_VERSION} || nvm install ${NODE_VERSION}"
+                            bat 'npm ci --prefer-offline'
                         }
                     }
                 }
@@ -46,25 +42,25 @@ pipeline {
                     steps {
                         dir('backend') {
                             // Linting
-                            sh 'npm run lint'
+                            bat 'npm run lint'
                             
                             // Security Audit
-                            sh 'npm run security-check || true'
+                            bat 'npm run security-check || exit 0'
                             
                             // Unit Tests
-                            sh 'npm run test'
+                            bat 'npm run test'
                             
                             // Integration Tests
-                            sh 'npm run test:integration'
+                            bat 'npm run test:integration'
                             
                             // SonarQube Analysis
                             script {
                                 if (fileExists('sonar-project.properties')) {
                                     def scannerHome = tool name: 'sonar-scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                                     withSonarQubeEnv('sonarqube') {
-                                        sh """
-                                            ${scannerHome}/bin/sonar-scanner \
-                                            -Dproject.settings=./sonar-project.properties \
+                                        bat """
+                                            "${scannerHome}\\bin\\sonar-scanner" ^
+                                            -Dproject.settings=./sonar-project.properties ^
                                             -Dsonar.working.directory=.scannerwork
                                         """
                                     }
@@ -72,7 +68,7 @@ pipeline {
                             }
                             
                             // Build Docker Image
-                            sh "docker build --no-cache -t ${BACKEND_IMAGE} ."
+                            bat "docker build --no-cache -t ${BACKEND_IMAGE} ."
                         }
                     }
                     
@@ -88,22 +84,22 @@ pipeline {
                     steps {
                         dir('frontend') {
                             // Linting
-                            sh 'npm run lint'
+                            bat 'npm run lint'
                             
                             // Security Audit
-                            sh 'npm run security-check || true'
+                            bat 'npm run security-check || exit 0'
                             
                             // Unit Tests
-                            sh 'npm run test:ci'
+                            bat 'npm run test:ci'
                             
                             // Build Production Bundle
-                            sh 'npm run build'
+                            bat 'npm run build'
                             
                             // Build Docker Image
-                            sh "docker build --no-cache -t ${FRONTEND_IMAGE} ."
+                            bat "docker build --no-cache -t ${FRONTEND_IMAGE} ."
                             
                             // Run Accessibility Tests
-                            sh 'npm run test:a11y'
+                            bat 'npm run test:a11y'
                         }
                     }
                     
@@ -130,8 +126,8 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("http://${registry}", registryCredentials) {
-                        sh "docker push ${BACKEND_IMAGE}"
-                        sh "docker push ${FRONTEND_IMAGE}"
+                        bat "docker push ${BACKEND_IMAGE}"
+                        bat "docker push ${FRONTEND_IMAGE}"
                     }
                 }
             }
@@ -145,14 +141,14 @@ pipeline {
                 script {
                     dir('deploy') {
                         // Update docker-compose with new images
-                        sh """
-                            sed -i "s|image: ${registry}/backend:.*|image: ${BACKEND_IMAGE}|g" docker-compose.yml
-                            sed -i "s|image: ${registry}/frontend:.*|image: ${FRONTEND_IMAGE}|g" docker-compose.yml
+                        bat """
+                            powershell -Command "(Get-Content docker-compose.yml) -replace 'image: ${registry}/backend:.*', 'image: ${BACKEND_IMAGE}' | Set-Content docker-compose.yml"
+                            powershell -Command "(Get-Content docker-compose.yml) -replace 'image: ${registry}/frontend:.*', 'image: ${FRONTEND_IMAGE}' | Set-Content docker-compose.yml"
                         """
                         
                         // Deploy to staging environment
                         sshagent(['staging-server-credentials']) {
-                            sh """
+                            bat """
                                 scp docker-compose.yml staging-server:/app/
                                 ssh staging-server "cd /app && docker-compose down && docker-compose up -d"
                             """
@@ -168,8 +164,8 @@ pipeline {
             }
             steps {
                 dir('tests/e2e') {
-                    sh 'npm install'
-                    sh 'npm run test'
+                    bat 'npm install'
+                    bat 'npm run test'
                 }
             }
         }
@@ -178,7 +174,7 @@ pipeline {
     post {
         always {
             // Clean up Docker to save space
-            sh 'docker system prune -f --volumes'
+            bat 'docker system prune -f --volumes'
             
             // Clean workspace
             cleanWs()
