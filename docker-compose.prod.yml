@@ -1,13 +1,13 @@
 version: '3'
 services:
-  backend:
+  Back-End:
     image: ${BACKEND_IMAGE}
     ports:
       - "9777:9777"
     environment:
       - NODE_ENV=production
   
-  frontend:
+  Front-End:
     image: ${FRONTEND_IMAGE}
     ports:
       - "3000:3000"
