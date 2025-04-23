@@ -250,17 +250,20 @@ const ProjectList = () => {
                     </ul>
                   </div>
                 </div>
-                <div className="mb-2">
-                  <Link
-                    to="#"
-                    data-bs-toggle="modal" data-inert={true}
-                    data-bs-target="#add_project"
-                    className="btn btn-primary d-flex align-items-center"
-                  >
-                    <i className="ti ti-circle-plus me-2" />
-                    Add Project
-                  </Link>
-                </div>
+                {/* Hide Add Project button for Student role */}
+                {localStorage.getItem('role') !== 'student' && (
+                  <div className="mb-2">
+                    <Link
+                      to="#"
+                      data-bs-toggle="modal" data-inert={true}
+                      data-bs-target="#add_project"
+                      className="btn btn-primary d-flex align-items-center"
+                    >
+                      <i className="ti ti-circle-plus me-2" />
+                      Add Project
+                    </Link>
+                  </div>
+                )}
                 <div className="ms-2 head-icons">
                 <CollapseHeader />
                 </div>

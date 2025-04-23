@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { all_routes } from '../../router/all_routes'
 import PredefinedDateRanges from '../../../core/common/datePicker'
@@ -8,8 +8,10 @@ import CommonSelect from '../../../core/common/commonSelect'
 import { DatePicker } from 'antd'
 import ReactApexChart from 'react-apexcharts'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-import {fetchUsers, users_type} from "../../../api/getUsers/getAllUsers";
+import {fetchUsers, users_type, updateUser, deleteUser} from "../../../api/getUsers/getAllUsers";
+import { updateUserWithPhoto, uploadUserPhoto } from "../../../api/uploadApi/uploadUserPhoto";
 import AddUserModal from "./addUser";
+import Swal from "sweetalert2";
 
 type PasswordField = "password" | "confirmPassword";
 
@@ -17,6 +19,135 @@ const UsersManagement = () => {
   const [data, setData] = useState<users_type[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedUser, setSelectedUser] = useState<users_type | null>(null);
+  const [editingUser, setEditingUser] = useState<users_type | null>(null);
+  const [editingUserRole, setEditingUserRole] = useState<string>('');
+
+  // User statistics state
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [managerCount, setManagerCount] = useState<number>(0);
+  const [tutorCount, setTutorCount] = useState<number>(0);
+  const [studentCount, setStudentCount] = useState<number>(0);
+
+  // Photo upload state for edit form
+  const [selectedEditFile, setSelectedEditFile] = useState<File | null>(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
+  const [isEditUploading, setIsEditUploading] = useState<boolean>(false);
+  const [editFileError, setEditFileError] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+
+  // Clean up preview URL when component unmounts or when editing user changes
+  useEffect(() => {
+    // Set loading state
+    setLoading(true);
+
+    // Get the current user ID from localStorage
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      setCurrentUserId(userId);
+      //console.log('Current user ID:', userId);
+      console.warn('No userId found in localStorage. User may need to log in again.');
+    }
+
+    const getData = async () => {
+      try {
+        const result = await fetchUsers();
+
+        const usersWithAvatars = result.map(user => ({
+          ...user,
+          avatar: user.avatar || generateAvatarUrl(user),
+          Status: 'Active'
+        }));
+        setData(usersWithAvatars);
+
+        // Calculate user statistics
+        setTotalUsers(usersWithAvatars.length);
+
+        // Count users by role
+        const managers = usersWithAvatars.filter(user => user.role === 'manager').length;
+        const tutors = usersWithAvatars.filter(user => user.role === 'tutor').length;
+        const students = usersWithAvatars.filter(user => user.role === 'student').length;
+
+        setManagerCount(managers);
+        setTutorCount(tutors);
+        setStudentCount(students);
+
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    getData();
+  }, []);
+
+// 2. useEffect for cleaning up preview URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (editPreviewUrl && !editPreviewUrl.startsWith('http')) {
+        URL.revokeObjectURL(editPreviewUrl);
+      }
+    };
+  }, [editPreviewUrl]);
+
+// 3. useEffect for resetting edit photo state when editing user changes
+  useEffect(() => {
+    if (editingUser) {
+      setEditPreviewUrl(editingUser.avatar || null);
+      setSelectedEditFile(null);
+      setEditFileError(null);
+      if (editFileInputRef.current) {
+        editFileInputRef.current.value = '';
+      }
+    }
+  }, [editingUser]);
+
+  // Handle file selection for edit form
+  const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setEditFileError(null);
+
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setEditFileError('Please select a valid image file (JPEG, PNG, GIF, or WEBP)');
+        return;
+      }
+
+      // Validate file size (4MB max)
+      if (file.size > 4 * 1024 * 1024) {
+        setEditFileError('Image size should be less than 4MB');
+        return;
+      }
+
+      setSelectedEditFile(file);
+
+      // Create preview URL
+      const objectUrl = URL.createObjectURL(file);
+      setEditPreviewUrl(objectUrl);
+    }
+  };
+
+  // Handle cancel button click for edit form
+  const handleEditCancelClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    // Reset file input
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = '';
+    }
+
+    // Clean up preview URL if it's a blob URL
+    if (editPreviewUrl && !editPreviewUrl.startsWith('http')) {
+      URL.revokeObjectURL(editPreviewUrl);
+    }
+
+    // Reset to user's original avatar
+    setSelectedEditFile(null);
+    setEditPreviewUrl(editingUser?.avatar || null);
+    setEditFileError(null);
+  };
   const generateAvatarUrl = (user: { name: string; lastname: string; role: string; }) => {
     const nameInitial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
     const lastnameInitial = user.lastname ? user.lastname.charAt(0).toUpperCase() : '';
@@ -35,16 +166,16 @@ const UsersManagement = () => {
 
   };
 
-// Update the useEffect hook to add avatars
+
   useEffect(() => {
     const getData = async () => {
       try {
         const result = await fetchUsers();
-        // Add avatar URLs to each user
+
         const usersWithAvatars = result.map(user => ({
           ...user,
           avatar: user.avatar || generateAvatarUrl(user),
-          Status: 'Active' // Assuming all users are active by default
+          Status: 'Active'
         }));
         setData(usersWithAvatars);
       } catch (error) {
@@ -56,7 +187,7 @@ const UsersManagement = () => {
     getData();
   }, []);
 
-// Update the refreshUserList function
+
   const refreshUserList = async () => {
     try {
       const result = await fetchUsers();
@@ -163,6 +294,10 @@ const UsersManagement = () => {
                 className="me-2"
                 data-bs-toggle="modal"
                 data-bs-target="#edit_company"
+                onClick={() => {
+                  setEditingUser(record);
+                  setEditingUserRole(record.role);
+                }}
             >
               <i className="ti ti-edit" />
             </Link>
@@ -170,6 +305,10 @@ const UsersManagement = () => {
                 to="#"
                 data-bs-toggle="modal"
                 data-bs-target="#delete_modal"
+                onClick={() => {
+                  setEditingUser(record);
+                  setEditingUserRole(record.role);
+                }}
             >
               <i className="ti ti-trash" />
             </Link>
@@ -225,8 +364,8 @@ const UsersManagement = () => {
     fill: {
       type: 'gradient',
       gradient: {
-        opacityFrom: 0, // Start with 0 opacity (transparent)
-        opacityTo: 0    // End with 0 opacity (transparent)
+        opacityFrom: 0,
+        opacityTo: 0
       }
     },
     chart: {
@@ -620,19 +759,19 @@ const UsersManagement = () => {
             </div>
             {/* /Breadcrumb */}
             <div className="row">
-              {/* Total Companies */}
+              {/* Total Users */}
               <div className="col-lg-3 col-md-6 d-flex">
                 <div className="card flex-fill">
                   <div className="card-body d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-primary flex-shrink-0">
-                      <i className="ti ti-building fs-16" />
+                      <i className="ti ti-users fs-16" />
                     </span>
                       <div className="ms-2 overflow-hidden">
                         <p className="fs-12 fw-medium mb-1 text-truncate">
-                          Total Companies
+                          Total Users
                         </p>
-                        <h4>950</h4>
+                        <h4>{totalUsers}</h4>
                       </div>
                     </div>
                     <ReactApexChart
@@ -644,20 +783,20 @@ const UsersManagement = () => {
                   </div>
                 </div>
               </div>
-              {/* /Total Companies */}
-              {/* Total Companies */}
+              {/* /Total Users */}
+              {/* Managers */}
               <div className="col-lg-3 col-md-6 d-flex">
                 <div className="card flex-fill">
                   <div className="card-body d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-success flex-shrink-0">
-                      <i className="ti ti-building fs-16" />
+                      <i className="ti ti-user-check fs-16" />
                     </span>
                       <div className="ms-2 overflow-hidden">
                         <p className="fs-12 fw-medium mb-1 text-truncate">
-                          Active Companies
+                          Managers
                         </p>
-                        <h4>920</h4>
+                        <h4>{managerCount}</h4>
                       </div>
                     </div>
                     <ReactApexChart
@@ -669,20 +808,20 @@ const UsersManagement = () => {
                   </div>
                 </div>
               </div>
-              {/* /Total Companies */}
-              {/* Inactive Companies */}
+              {/* /Managers */}
+              {/* Tutors */}
               <div className="col-lg-3 col-md-6 d-flex">
                 <div className="card flex-fill">
                   <div className="card-body d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-danger flex-shrink-0">
-                      <i className="ti ti-building fs-16" />
+                      <i className="ti ti-user-star fs-16" />
                     </span>
                       <div className="ms-2 overflow-hidden">
                         <p className="fs-12 fw-medium mb-1 text-truncate">
-                          Inactive Companies
+                          Tutors
                         </p>
-                        <h4>30</h4>
+                        <h4>{tutorCount}</h4>
                       </div>
                     </div>
                     <ReactApexChart
@@ -694,20 +833,20 @@ const UsersManagement = () => {
                   </div>
                 </div>
               </div>
-              {/* /Inactive Companies */}
-              {/* Company Location */}
+              {/* /Tutors */}
+              {/* Students */}
               <div className="col-lg-3 col-md-6 d-flex">
                 <div className="card flex-fill">
                   <div className="card-body d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center overflow-hidden">
                     <span className="avatar avatar-lg bg-skyblue flex-shrink-0">
-                      <i className="ti ti-map-pin-check fs-16" />
+                      <i className="ti ti-user-plus fs-16" />
                     </span>
                       <div className="ms-2 overflow-hidden">
                         <p className="fs-12 fw-medium mb-1 text-truncate">
-                          Company Location
+                          Students
                         </p>
-                        <h4>180</h4>
+                        <h4>{studentCount}</h4>
                       </div>
                     </div>
                     <ReactApexChart
@@ -719,7 +858,7 @@ const UsersManagement = () => {
                   </div>
                 </div>
               </div>
-              {/* /Company Location */}
+              {/* /Students */}
             </div>
             <div className="card">
               <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
@@ -865,14 +1004,14 @@ const UsersManagement = () => {
         </div>
         {/* /Page Wrapper */}
         {/* Add User */}
-        <AddUserModal onAddUser={refreshUserList} userId={''}  />
+        <AddUserModal onAddUser={refreshUserList} userId={currentUserId} />
         {/* /Add User */}
         {/* Edit User */}
         <div className="modal fade" id="edit_company">
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
               <div className="modal-header">
-                <h4 className="modal-title">Edit Company</h4>
+                <h4 className="modal-title">Edit User</h4>
                 <button
                     type="button"
                     className="btn-close custom-btn-close"
@@ -882,38 +1021,103 @@ const UsersManagement = () => {
                   <i className="ti ti-x" />
                 </button>
               </div>
-              <form action="companies.html">
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingUser?._id) return;
+
+                // Set uploading state
+                setIsEditUploading(true);
+
+                const formData = new FormData(e.currentTarget);
+                const userData = {
+                  name: formData.get('name'),
+                  lastname: formData.get('lastname'),
+                  email: formData.get('email'),
+                  role: formData.get('role'),
+                  password: formData.get('password') ? formData.get('password') : undefined
+                };
+
+                try {
+                  if (selectedEditFile) {
+                    // Use the new updateUserWithPhoto function if we have a file
+                    await updateUserWithPhoto(editingUser._id, userData, selectedEditFile);
+                  } else {
+                    // Use the original updateUser function if no file is selected
+                    await updateUser(editingUser._id, userData);
+                  }
+
+                  // Refresh user list
+                  refreshUserList();
+
+                  // Reset file state
+                  setSelectedEditFile(null);
+                  if (editFileInputRef.current) {
+                    editFileInputRef.current.value = '';
+                  }
+
+                  // Close modal
+                  document.getElementById('closeEditModal')?.click();
+
+                  // Show success message
+                  Swal.fire({
+                    title: 'Success!',
+                    text: 'User updated successfully',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                  });
+                } catch (error: any) {
+                  console.error('Error updating user:', error);
+                  Swal.fire({
+                    title: 'Error!',
+                    text: `Error updating user: ${error.response?.data?.message || error.message}`,
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                  });
+                } finally {
+                  // Reset uploading state
+                  setIsEditUploading(false);
+                }
+              }}>
                 <div className="modal-body pb-0">
                   <div className="row">
                     <div className="col-md-12">
                       <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                         <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                          <ImageWithBasePath
-                              src="assets/img/profiles/avatar-30.jpg"
-                              alt="img"
+                          <img
+                              src={editPreviewUrl || editingUser?.avatar || generateAvatarUrl(editingUser || { name: '', lastname: '', role: '' })}
+                              alt="Profile preview"
                               className="rounded-circle"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
                         </div>
                         <div className="profile-upload">
                           <div className="mb-2">
                             <h6 className="mb-1">Upload Profile Image</h6>
                             <p className="fs-12">Image should be below 4 mb</p>
+                            {editFileError && (
+                                <p className="text-danger fs-12">{editFileError}</p>
+                            )}
                           </div>
                           <div className="profile-uploader d-flex align-items-center">
                             <div className="drag-upload-btn btn btn-sm btn-primary me-2">
-                              Upload
+                              {isEditUploading ? 'Uploading...' : 'Upload'}
                               <input
+                                  ref={editFileInputRef}
                                   type="file"
                                   className="form-control image-sign"
-                                  multiple
+                                  accept="image/jpeg,image/png,image/gif,image/webp"
+                                  onChange={handleEditFileChange}
+                                  disabled={isEditUploading}
                               />
                             </div>
-                            <Link
-                                to="#"
+                            <button 
                                 className="btn btn-light btn-sm"
+                                onClick={handleEditCancelClick}
+                                disabled={isEditUploading || !selectedEditFile}
+                                type="button"
                             >
                               Cancel
-                            </Link>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -925,8 +1129,22 @@ const UsersManagement = () => {
                         </label>
                         <input
                             type="text"
+                            name="name"
                             className="form-control"
-                            defaultValue="Stellar Dynamics"
+                            defaultValue={editingUser?.name}
+                            required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="mb-3">
+                        <label className="form-label">Last Name</label>
+                        <input
+                            type="text"
+                            name="lastname"
+                            className="form-control"
+                            defaultValue={editingUser?.lastname}
+                            required
                         />
                       </div>
                     </div>
@@ -935,47 +1153,54 @@ const UsersManagement = () => {
                         <label className="form-label">Email Address</label>
                         <input
                             type="email"
+                            name="email"
                             className="form-control"
-                            defaultValue="sophie@example.com"
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Account URL</label>
-                        <input
-                            type="text"
-                            className="form-control"
-                            defaultValue="sd.example.com"
+                            defaultValue={editingUser?.email}
+                            required
                         />
                       </div>
                     </div>
                     <div className="col-md-6">
                       <div className="mb-3">
                         <label className="form-label">
-                          Phone Number <span className="text-danger"> *</span>
+                          User Role <span className="text-danger"> *</span>
                         </label>
-                        <input
-                            type="text"
-                            className="form-control"
-                            defaultValue="+1 895455450"
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">Website</label>
-                        <input
-                            type="text"
-                            className="form-control"
-                            defaultValue="Admin Website"
-                        />
+                        <div className="d-flex gap-2">
+                          <button
+                              type="button"
+                              className={`btn ${
+                                  editingUserRole === 'manager' ? 'btn-primary' : 'btn-outline-primary'
+                              }`}
+                              onClick={() => setEditingUserRole('manager')}
+                          >
+                              Manager
+                          </button>
+                          <button
+                              type="button"
+                              className={`btn ${
+                                  editingUserRole === 'tutor' ? 'btn-primary' : 'btn-outline-primary'
+                              }`}
+                              onClick={() => setEditingUserRole('tutor')}
+                          >
+                              Tutor
+                          </button>
+                          <button
+                              type="button"
+                              className={`btn ${
+                                  editingUserRole === 'student' ? 'btn-primary' : 'btn-outline-primary'
+                              }`}
+                              onClick={() => setEditingUserRole('student')}
+                          >
+                              Student
+                          </button>
+                        </div>
+                        <input type="hidden" name="role" value={editingUserRole} />
                       </div>
                     </div>
                     <div className="col-md-6">
                       <div className="mb-3 ">
                         <label className="form-label">
-                          Password <span className="text-danger"> *</span>
+                          Password <span className="text-muted">(Leave blank to keep current password)</span>
                         </label>
                         <div className="pass-group">
                           <input
@@ -984,6 +1209,7 @@ const UsersManagement = () => {
                                     ? "text"
                                     : "password"
                               }
+                              name="password"
                               className="pass-input form-control"
                           />
                           <span
@@ -998,96 +1224,6 @@ const UsersManagement = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Confirm Password <span className="text-danger"> *</span>
-                        </label>
-                        <div className="pass-group">
-                          <input
-                              type={
-                                passwordVisibility.confirmPassword
-                                    ? "text"
-                                    : "password"
-                              }
-                              className="pass-input form-control"
-                          />
-                          <span
-                              className={`ti toggle-passwords ${passwordVisibility.confirmPassword
-                                  ? "ti-eye"
-                                  : "ti-eye-off"
-                              }`}
-                              onClick={() =>
-                                  togglePasswordVisibility("confirmPassword")
-                              }
-                          ></span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Address</label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Plan Name <span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={planName}
-                            defaultValue={planName[1]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Plan Type <span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={planType}
-                            defaultValue={planType[1]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Currency <span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={currency}
-                            defaultValue={currency[1]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Language <span className="text-danger"> *</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={language}
-                            defaultValue={language[1]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3 ">
-                        <label className="form-label">Status</label>
-                        <CommonSelect
-                            className='select'
-                            options={statusChoose}
-                            defaultValue={statusChoose[1]}
-                        />
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -1095,10 +1231,11 @@ const UsersManagement = () => {
                       type="button"
                       className="btn btn-light me-2"
                       data-bs-dismiss="modal"
+                      id="closeEditModal"
                   >
                     Cancel
                   </button>
-                  <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
+                  <button type="submit" className="btn btn-primary">
                     Save Changes
                   </button>
                 </div>
@@ -1106,7 +1243,7 @@ const UsersManagement = () => {
             </div>
           </div>
         </div>
-        {/* /Edit Company */}
+        {/* /Edit User */}
         {/* Upgrade Information */}
         <div className="modal fade" id="upgrade_info">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -1122,51 +1259,51 @@ const UsersManagement = () => {
                   <i className="ti ti-x" />
                 </button>
               </div>
-              <div className="p-3 mb-1">
-                <div className="rounded bg-light p-3">
-                  <h5 className="mb-3">Current Plan Details</h5>
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Company Name</p>
-                        <p className="text-gray-9">BrightWave Innovations</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Plan Name</p>
-                        <p className="text-gray-9">Advanced</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Plan Type</p>
-                        <p className="text-gray-9">Monthly</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Price</p>
-                        <p className="text-gray-9">200</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Register Date</p>
-                        <p className="text-gray-9">12 Sep 2024</p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="mb-3">
-                        <p className="fs-12 mb-0">Expiring On</p>
-                        <p className="text-gray-9">11 Oct 2024</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/*<div className="p-3 mb-1">*/}
+              {/*  <div className="rounded bg-light p-3">*/}
+              {/*    <h5 className="mb-3">Current Plan Details</h5>*/}
+              {/*    <div className="row align-items-center">*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Company Name</p>*/}
+              {/*          <p className="text-gray-9">BrightWave Innovations</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Plan Name</p>*/}
+              {/*          <p className="text-gray-9">Advanced</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Plan Type</p>*/}
+              {/*          <p className="text-gray-9">Monthly</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*    </div>*/}
+              {/*    <div className="row align-items-center">*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Price</p>*/}
+              {/*          <p className="text-gray-9">200</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Register Date</p>*/}
+              {/*          <p className="text-gray-9">12 Sep 2024</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*      <div className="col-md-4">*/}
+              {/*        <div className="mb-3">*/}
+              {/*          <p className="fs-12 mb-0">Expiring On</p>*/}
+              {/*          <p className="text-gray-9">11 Oct 2024</p>*/}
+              {/*        </div>*/}
+              {/*      </div>*/}
+              {/*    </div>*/}
+              {/*  </div>*/}
+              {/*</div>*/}
               <form action="companies.html">
                 <div className="modal-body pb-0">
                   <h5 className="mb-4">Change Plan</h5>
@@ -1308,10 +1445,11 @@ const UsersManagement = () => {
                           to="#"
                           className="avatar avatar-md border rounded-circle flex-shrink-0 me-2"
                       >
-                        <ImageWithBasePath
-                            src="assets/img/company/company-01.svg"
-                            className="img-fluid"
-                            alt="img"
+                        <img
+                            src={selectedUser?.avatar || generateAvatarUrl(selectedUser || { name: '', lastname: '', role: '' })}
+                            className="img-fluid rounded-circle"
+                            alt={`${selectedUser?.name} ${selectedUser?.lastname}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       </Link>
                       <div>
@@ -1350,72 +1488,136 @@ const UsersManagement = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="row align-items-center">
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Currency</p>
-                          <p className="text-gray-9">United Stated Dollar (USD)</p>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Language</p>
-                          <p className="text-gray-9">English</p>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Addresss</p>
-                          <p className="text-gray-9">
-                            3705 Lynn Avenue, Phelps, WI 54554
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                    {/*<div className="row align-items-center">*/}
+                    {/*  <div className="col-md-4">*/}
+                    {/*    <div className="mb-3">*/}
+                    {/*      <p className="fs-12 mb-0">Currency</p>*/}
+                    {/*      <p className="text-gray-9">United Stated Dollar (USD)</p>*/}
+                    {/*    </div>*/}
+                    {/*  </div>*/}
+                    {/*  <div className="col-md-4">*/}
+                    {/*    <div className="mb-3">*/}
+                    {/*      <p className="fs-12 mb-0">Language</p>*/}
+                    {/*      <p className="text-gray-9">English</p>*/}
+                    {/*    </div>*/}
+                    {/*  </div>*/}
+                    {/*  <div className="col-md-4">*/}
+                    {/*    <div className="mb-3">*/}
+                    {/*      <p className="fs-12 mb-0">Addresss</p>*/}
+                    {/*      <p className="text-gray-9">*/}
+                    {/*        3705 Lynn Avenue, Phelps, WI 54554*/}
+                    {/*      </p>*/}
+                    {/*    </div>*/}
+                    {/*  </div>*/}
+                    {/*</div>*/}
                   </div>
-                  <p className="text-gray-9 fw-medium">Plan Details</p>
-                  <div>
-                    <div className="row align-items-center">
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Plan Name</p>
-                          <p className="text-gray-9">Advanced</p>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Plan Type</p>
-                          <p className="text-gray-9">Monthly</p>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Price</p>
-                          <p className="text-gray-9">$200</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="row align-items-center">
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Register Date</p>
-                          <p className="text-gray-9">12 Sep 2024</p>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="mb-3">
-                          <p className="fs-12 mb-0">Expiring On</p>
-                          <p className="text-gray-9">11 Oct 2024</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  {/*<p className="text-gray-9 fw-medium">Plan Details</p>*/}
+                  {/*<div>*/}
+                  {/*  <div className="row align-items-center">*/}
+                  {/*    <div className="col-md-4">*/}
+                  {/*      <div className="mb-3">*/}
+                  {/*        <p className="fs-12 mb-0">Plan Name</p>*/}
+                  {/*        <p className="text-gray-9">Advanced</p>*/}
+                  {/*      </div>*/}
+                  {/*    </div>*/}
+                  {/*    <div className="col-md-4">*/}
+                  {/*      <div className="mb-3">*/}
+                  {/*        <p className="fs-12 mb-0">Plan Type</p>*/}
+                  {/*        <p className="text-gray-9">Monthly</p>*/}
+                  {/*      </div>*/}
+                  {/*    </div>*/}
+                  {/*    <div className="col-md-4">*/}
+                  {/*      <div className="mb-3">*/}
+                  {/*        <p className="fs-12 mb-0">Price</p>*/}
+                  {/*        <p className="text-gray-9">$200</p>*/}
+                  {/*      </div>*/}
+                  {/*    </div>*/}
+                  {/*  </div>*/}
+                  {/*  <div className="row align-items-center">*/}
+                  {/*    <div className="col-md-4">*/}
+                  {/*      <div className="mb-3">*/}
+                  {/*        <p className="fs-12 mb-0">Register Date</p>*/}
+                  {/*        <p className="text-gray-9">12 Sep 2024</p>*/}
+                  {/*      </div>*/}
+                  {/*    </div>*/}
+                  {/*    <div className="col-md-4">*/}
+                  {/*      <div className="mb-3">*/}
+                  {/*        <p className="fs-12 mb-0">Expiring On</p>*/}
+                  {/*        <p className="text-gray-9">11 Oct 2024</p>*/}
+                  {/*      </div>*/}
+                  {/*    </div>*/}
+                  {/*  </div>*/}
+                  {/*</div>*/}
                 </div>
               </div>
             </div>
           </div>
         </div>
         {/* /Company Detail */}
+
+        {/* Delete User Modal */}
+        <div className="modal fade" id="delete_modal">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h4 className="modal-title">Delete User</h4>
+                <button
+                    type="button"
+                    className="btn-close custom-btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Close"
+                >
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              <div className="modal-body">
+                <p>Are you sure you want to delete this user?</p>
+                <p><strong>{editingUser?.name} {editingUser?.lastname}</strong> ({editingUser?.email})</p>
+                <p className="text-danger">This action cannot be undone.</p>
+              </div>
+              <div className="modal-footer">
+                <button
+                    type="button"
+                    className="btn btn-light me-2"
+                    data-bs-dismiss="modal"
+                    id="closeDeleteModal"
+                >
+                  Cancel
+                </button>
+                <button 
+                    type="button" 
+                    className="btn btn-danger"
+                    onClick={async () => {
+                      if (!editingUser?._id) return;
+
+                      try {
+                        await deleteUser(editingUser._id);
+                        refreshUserList();
+                        document.getElementById('closeDeleteModal')?.click();
+                        Swal.fire({
+                          title: 'Success!',
+                          text: 'User deleted successfully',
+                          icon: 'success',
+                          confirmButtonText: 'OK'
+                        });
+                      } catch (error: any) {
+                        console.error('Error deleting user:', error);
+                        Swal.fire({
+                          title: 'Error!',
+                          text: `Error deleting user: ${error.response?.data?.message || error.message}`,
+                          icon: 'error',
+                          confirmButtonText: 'OK'
+                        });
+                      }
+                    }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* /Delete User Modal */}
       </>
 
 

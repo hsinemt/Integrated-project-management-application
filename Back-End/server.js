@@ -10,13 +10,14 @@ const helmet = require('helmet');
 
 
 const UserRouter = require('./Routes/UserRouter');
+const UploadRouter = require('./Routes/UploadRouter');
 const projectRouter = require('./Routes/ProjectRouter');
 const taskRouter = require('./Routes/taskRoutes');
 const groupRouter = require('./Routes/groupRoutes');
 const authRoutes = require('./Routes/authRoutes');
 const choixRoutes = require('./Routes/choixRoutes');
 const tutorRoutes = require('./Routes/tutorRoutes');
-
+const codeReviewRouter = require('./Routes/codeReviewRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -37,6 +38,7 @@ require('./Models/Manager');
 require('./Models/Group');
 require('./Models/Project');
 require('./Models/tasks');
+require('./Models/CodeMark');
 
 // Passport configuration
 require('./config/passportConfig');
@@ -90,6 +92,7 @@ app.get('/', (req, res) => {
 
 // Route handlers
 app.use('/user', UserRouter);
+app.use('/upload', UploadRouter);
 app.use('/project', projectRouter);
 app.use('/project', taskRouter);
 app.use('/group', groupRouter);
@@ -97,6 +100,7 @@ app.use('/auth', authRoutes);
 app.use('/api/tasks', taskRouter);
 app.use('/choix', choixRoutes);
 app.use('/tutor', tutorRoutes);
+app.use('/api/code-review', codeReviewRouter);
 
 // AI and NLP routes
 app.use('/nlp', nlpController);

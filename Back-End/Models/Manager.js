@@ -3,7 +3,9 @@ const UserModel = require('./User');
 
 const ManagerSchema = new mongoose.Schema({
     speciality: {
-        type: String
+        type: String,
+        required: true,
+        enum: ['Twin', 'ERP/BI', 'AI', 'SAE', 'SE', 'SIM', 'NIDS', 'SLEAM', 'GAMIX', 'WIN', 'IoSyS', 'ArcTic']
     }
 });
 

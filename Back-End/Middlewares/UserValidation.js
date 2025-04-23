@@ -48,11 +48,11 @@ const authMiddleware = (req, res, next) => {
     const verifyToken = (req, res, next) => {
       const token = req.header("Authorization");
       //console.log("Extracted Token:", token);
-    
+
       if (!token) {
         return res.status(401).json({ message: "No token, authorization denied" });
       }
-    
+
       jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
         if (err) {
           //console.log("JWT Error:", err.message);
@@ -71,11 +71,74 @@ const authMiddleware = (req, res, next) => {
       }
       next();
     };
-  };  
-  
-module.exports = {
-    signupValidation,
-    userToken,
-    authMiddleware,
-    roleMiddleware
-}
+  };
+
+
+  const isAdminMiddleware = (req, res, next) => {
+    if (req.user.role === 'admin') {
+      return next();
+    }
+    return res.status(403).json({ message: "Access denied. Admin role required." });
+  };
+
+
+  const isManagerMiddleware = (req, res, next) => {
+    if (req.user.role === 'admin' || req.user.role === 'manager') {
+      return next();
+    }
+    return res.status(403).json({ message: "Access denied. Manager role required." });
+  };
+
+
+  const isTutorMiddleware = (req, res, next) => {
+    if (req.user.role === 'admin' || req.user.role === 'tutor') {
+      return next();
+    }
+    return res.status(403).json({ message: "Access denied. Tutor role required." });
+  };
+
+
+  const isStudentMiddleware = (req, res, next) => {
+    if (['admin', 'manager', 'tutor', 'student'].includes(req.user.role)) {
+      return next();
+    }
+    return res.status(403).json({ message: "Access denied. Valid role required." });
+  };
+
+
+  const isManagerOrTutorMiddleware = (req, res, next) => {
+    if (['admin', 'manager', 'tutor'].includes(req.user.role)) {
+      return next();
+    }
+    return res.status(403).json({ message: "Access denied. Manager or Tutor role required." });
+  };
+
+  const isAdmin = async (req, res, next) => {
+    try {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Only admin can perform this action' 
+        });
+      }
+      next();
+    } catch (error) {
+      return res.status(500).json({ 
+        success: false, 
+        message: error.message 
+      });
+    }
+  };
+
+  module.exports = {
+      signupValidation,
+      userToken,
+      authMiddleware,
+      roleMiddleware,
+      isAdmin,
+      isAdminMiddleware,
+      isManagerMiddleware,
+      isTutorMiddleware,
+      isStudentMiddleware,
+      isManagerOrTutorMiddleware
+  }

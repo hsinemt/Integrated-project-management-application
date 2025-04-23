@@ -17,11 +17,11 @@ import {
   ProjectType,
   ApiResponse,
   getProjectsCount,
-  generateProjectFromPrompt, // Import the new function
-  createProjectFromPrompt, updateProject // Import direct project creation function
+  generateProjectFromPrompt,
+  createProjectFromPrompt, updateProject
 } from '../../../api/projectsApi/project/projectApi'
 
-// New imports for task counts and group members
+
 import { getTaskCountsByProjectId, TaskCountsType } from "../../../api/projectsApi/task/taskApi"
 import { getGroupsByProjectId, GroupType } from '../../../api/projectsApi/group/groupApi'
 
@@ -52,7 +52,7 @@ const Project = () => {
   const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
   const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
 
-  // New state for task counts and group members
+
   const [projectTaskCounts, setProjectTaskCounts] = useState<{[key: string]: TaskCountsType}>({});
   const [loadingTaskCounts, setLoadingTaskCounts] = useState<boolean>(false);
   const [projectGroupMembers, setProjectGroupMembers] = useState<{[key: string]: number}>({});
@@ -61,7 +61,7 @@ const Project = () => {
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // New state for AI generation
+
   const [prompt, setPrompt] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generatedProject, setGeneratedProject] = useState<ProjectType | null>(null);
@@ -114,13 +114,13 @@ const Project = () => {
     }
   };
 
-  // Function to fetch task counts for visible projects
+
   const fetchTaskCounts = async (projectIds: string[]) => {
     setLoadingTaskCounts(true);
     try {
       const counts: {[key: string]: TaskCountsType} = {};
 
-      // Create an array of promises for all task count requests
+
       const promises = projectIds.map(async (projectId) => {
         try {
           const result = await getTaskCountsByProjectId(projectId);
@@ -131,10 +131,10 @@ const Project = () => {
         }
       });
 
-      // Wait for all requests to complete
+
       const results = await Promise.all(promises);
 
-      // Process the results
+
       results.forEach(({ projectId, result }) => {
         counts[projectId] = result;
       });
@@ -150,24 +150,23 @@ const Project = () => {
     }
   };
 
-  // Function to fetch group members
+
   const fetchGroupMembers = async (projectIds: string[]) => {
     setLoadingGroupMembers(true);
     try {
       const memberCounts: {[key: string]: number} = {};
 
-      // Create an array of promises for all group member requests
+
       const promises = projectIds.map(async (projectId) => {
         try {
-          // Get the groups without expecting populated data
+
           const groups = await getGroupsByProjectId(projectId);
 
-          // Calculate total number of students across all groups for this project
+
           let totalStudents = 0;
 
           groups.forEach(group => {
-            // Since we're getting unpopulated data, id_students will be just an array of IDs
-            // We can still count its length
+
             if (group.id_students && Array.isArray(group.id_students)) {
               totalStudents += group.id_students.length;
             }
@@ -176,15 +175,12 @@ const Project = () => {
           return { projectId, totalStudents };
         } catch (error) {
           console.error(`Error fetching group members for project ${projectId}:`, error);
-          // Return 0 students on error so we still show something
           return { projectId, totalStudents: 0 };
         }
       });
 
-      // Wait for all requests to complete
-      const results = await Promise.all(promises);
 
-      // Process the results
+      const results = await Promise.all(promises);
       results.forEach(({ projectId, totalStudents }) => {
         memberCounts[projectId] = totalStudents;
       });
@@ -224,7 +220,7 @@ const Project = () => {
       });
     }
 
-    // Add event listener for edit modal
+
     const editModal = document.getElementById('edit_project');
     if (editModal) {
       editModal.addEventListener('hidden.bs.modal', () => {
@@ -254,7 +250,7 @@ const Project = () => {
     };
   }, []);
 
-  // Effect to fetch task counts and group members when visible projects change
+
   useEffect(() => {
     if (projects.length > 0) {
       const visibleProjectIds = projects
@@ -372,14 +368,14 @@ const Project = () => {
       const response = await updateProject(projectToEdit._id, submissionData, editSelectedLogo || undefined);
 
       if (response.success) {
-        // Reset form and state
+
         setProjectToEdit(null);
         setEditFormData(initialProjectData);
         setEditKeywords([]);
         setEditLogoPreview(null);
         setEditSelectedLogo(null);
 
-        // Close modal
+
         const modal = document.getElementById('edit_project');
         if (modal && window.bootstrap?.Modal) {
           const modalInstance = window.bootstrap.Modal.getInstance(modal);
@@ -388,10 +384,9 @@ const Project = () => {
           }
         }
 
-        // Refresh projects list
+
         fetchProjects();
 
-        // Show success modal
         const successModal = document.getElementById('success_modal');
         if (successModal && window.bootstrap?.Modal) {
           const bsModal = new window.bootstrap.Modal(successModal);
@@ -539,7 +534,7 @@ const Project = () => {
     }
   };
 
-  // Function to handle generating project from prompt
+
   const handleGenerateProject = async () => {
     if (!prompt.trim()) {
       setGenerationError('Please enter a prompt');
@@ -552,19 +547,19 @@ const Project = () => {
       const project = await generateProjectFromPrompt(prompt);
       setGeneratedProject(project);
 
-      // Update form data with generated project details
+
       setFormData({
         ...formData,
         title: project.title,
         description: project.description,
       });
 
-      // Update keywords
+
       if (project.keywords && Array.isArray(project.keywords)) {
         setProjectKeywords(project.keywords);
       }
 
-      // Automatically switch to the generated project view
+
       setActiveTab('generated-project');
     } catch (error: any) {
       setGenerationError(error.message || 'Failed to generate project. Please try again.');
@@ -574,7 +569,7 @@ const Project = () => {
     }
   };
 
-  // Function to save generated project directly
+
   const handleSaveGeneratedProject = async () => {
     if (!generatedProject) return;
 
@@ -620,7 +615,7 @@ const Project = () => {
     }
   };
 
-  // Function to directly create project from prompt (server-side generation)
+
   const handleDirectProjectCreation = async () => {
     if (!prompt.trim()) {
       setGenerationError('Please enter a prompt');
@@ -665,7 +660,7 @@ const Project = () => {
     }
   };
 
-  // Function to reset the AI generation process
+
   const handleResetGeneration = () => {
     setGeneratedProject(null);
     setPrompt('');
@@ -798,15 +793,27 @@ const Project = () => {
                       </ul>
                     </div>
                   </div>
-                  <div className="mb-2">
+                  {/* Hide Add Project button for Student role */}
+                  {localStorage.getItem('role') !== 'student' && (
+                    <div className="mb-2">
+                      <Link
+                          to="#"
+                          data-bs-toggle="modal" data-inert={true}
+                          data-bs-target="#add_project"
+                          className="btn btn-primary d-flex align-items-center"
+                      >
+                        <i className="ti ti-circle-plus me-2" />
+                        Add Project
+                      </Link>
+                    </div>
+                  )}
+                  <div className="me-2 mb-2">
                     <Link
-                        to="#"
-                        data-bs-toggle="modal" data-inert={true}
-                        data-bs-target="#add_project"
-                        className="btn btn-primary d-flex align-items-center"
+                        to="/add-group"
+                        className="btn btn-white d-inline-flex align-items-center"
                     >
-                      <i className="ti ti-circle-plus me-2" />
-                      Add Project
+                      <i className="ti ti-plus me-1" />
+                      Add Group
                     </Link>
                   </div>
                   <div className="ms-2 head-icons">
@@ -936,7 +943,7 @@ const Project = () => {
                                   <div className="avatar avatar-md avatar-rounded me-2">
                                     {project.projectLogo ? (
                                         <img
-                                            src={project.projectLogo}
+                                            src={`http://localhost:9777${project.projectLogo}`} // Use absolute URL
                                             alt={project.title}
                                             className="img-fluid"
                                             onError={(e) => {
@@ -954,7 +961,7 @@ const Project = () => {
                                     )}
                                   </div>
                                   <h6 className="mb-0">
-                                    <Link to={`/project-details/${project._id}`}>{project.title}</Link>
+                                    <Link to={`/project-details/${project._id}`} state={{ project }}>{project.title}</Link>
                                   </h6>
                                 </div>
                                 <div className="dropdown">
@@ -1264,6 +1271,7 @@ const Project = () => {
           {/* /Page Wrapper */}
         </>
         {/* Add Project */}
+        {/* Add Project */}
         <div className="modal fade" id="add_project" role="dialog">
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
@@ -1416,48 +1424,48 @@ const Project = () => {
                               <small className="text-muted">Maximum 100 characters</small>
                             </div>
                           </div>
-                          <div className="col-md-12">
-                            <div className="row">
-                              <div className="col-md-6">
-                                <div className="mb-3">
-                                  <label className="form-label">Start Date</label>
-                                  <div className="input-icon-end position-relative">
-                                    <DatePicker
-                                        className="form-control datetimepicker"
-                                        format={{
-                                          format: "DD-MM-YYYY",
-                                          type: "mask",
-                                        }}
-                                        getPopupContainer={getModalContainer}
-                                        placeholder="DD-MM-YYYY"
-                                    />
-                                    <span className="input-icon-addon">
-                              <i className="ti ti-calendar text-gray-7" />
-                            </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-6">
-                                <div className="mb-3">
-                                  <label className="form-label">End Date</label>
-                                  <div className="input-icon-end position-relative">
-                                    <DatePicker
-                                        className="form-control datetimepicker"
-                                        format={{
-                                          format: "DD-MM-YYYY",
-                                          type: "mask",
-                                        }}
-                                        getPopupContainer={getModalContainer}
-                                        placeholder="DD-MM-YYYY"
-                                    />
-                                    <span className="input-icon-addon">
-                              <i className="ti ti-calendar text-gray-7" />
-                            </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          {/*<div className="col-md-12">*/}
+                          {/*  <div className="row">*/}
+                          {/*    <div className="col-md-6">*/}
+                          {/*      <div className="mb-3">*/}
+                          {/*        <label className="form-label">Start Date</label>*/}
+                          {/*        <div className="input-icon-end position-relative">*/}
+                          {/*          <DatePicker*/}
+                          {/*              className="form-control datetimepicker"*/}
+                          {/*              format={{*/}
+                          {/*                format: "DD-MM-YYYY",*/}
+                          {/*                type: "mask",*/}
+                          {/*              }}*/}
+                          {/*              getPopupContainer={getModalContainer}*/}
+                          {/*              placeholder="DD-MM-YYYY"*/}
+                          {/*          />*/}
+                          {/*          <span className="input-icon-addon">*/}
+                          {/*    <i className="ti ti-calendar text-gray-7" />*/}
+                          {/*  </span>*/}
+                          {/*        </div>*/}
+                          {/*      </div>*/}
+                          {/*    </div>*/}
+                          {/*    <div className="col-md-6">*/}
+                          {/*      <div className="mb-3">*/}
+                          {/*        <label className="form-label">End Date</label>*/}
+                          {/*        <div className="input-icon-end position-relative">*/}
+                          {/*          <DatePicker*/}
+                          {/*              className="form-control datetimepicker"*/}
+                          {/*              format={{*/}
+                          {/*                format: "DD-MM-YYYY",*/}
+                          {/*                type: "mask",*/}
+                          {/*              }}*/}
+                          {/*              getPopupContainer={getModalContainer}*/}
+                          {/*              placeholder="DD-MM-YYYY"*/}
+                          {/*          />*/}
+                          {/*          <span className="input-icon-addon">*/}
+                          {/*    <i className="ti ti-calendar text-gray-7" />*/}
+                          {/*  </span>*/}
+                          {/*        </div>*/}
+                          {/*      </div>*/}
+                          {/*    </div>*/}
+                          {/*  </div>*/}
+                          {/*</div>*/}
                           <div className="col-md-12">
                             <div className="mb-3">
                               <label className="form-label">Description *</label>
@@ -1651,7 +1659,6 @@ const Project = () => {
                                   placeholder="Describe your project idea (e.g., 'A mobile app for tracking water consumption with reminders and statistics')"
                                   value={prompt}
                                   onChange={(e) => setPrompt(e.target.value)}
-                                  required
                               ></textarea>
                               <small className="text-muted">Be as specific as possible for better results</small>
                             </div>
@@ -1738,7 +1745,7 @@ const Project = () => {
                               ) : (
                                   <>
                                     <i className="ti ti-wand me-1"></i>
-                                    Generate & Save Directly
+                                    Generate & Save
                                   </>
                               )}
                             </button>
@@ -1912,6 +1919,7 @@ const Project = () => {
             </div>
           </div>
         </div>
+        {/* /Add Project */}
         {/* /Add Project */}
 
         {/* Edit Project */}

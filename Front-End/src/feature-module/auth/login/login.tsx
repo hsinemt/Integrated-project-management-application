@@ -114,6 +114,7 @@ const Login = () => {
         // Sauvegarder le token et le rôle
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("role", response.data.role);
+        localStorage.setItem("userId", response.data.user.id);
 
         // Afficher l'alerte de succès et redirection
         Swal.fire({
@@ -126,8 +127,12 @@ const Login = () => {
 
         // Rediriger après un court délai
         setTimeout(() => {
-          const redirectTo = response.data.redirectTo || "/super-admin/users";
-          navigate(redirectTo);
+          if (['manager', 'tutor', 'student'].includes(response.data.role)) {
+            navigate("/projects-grid");
+          } else {
+            const redirectTo = response.data.redirectTo || "/index";
+            navigate(redirectTo);
+          }
         }, 2000);
       } else {
         setError(response.data.message || "Échec de connexion. Vérifiez vos informations.");

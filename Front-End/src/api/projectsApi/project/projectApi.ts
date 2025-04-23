@@ -240,7 +240,11 @@ export const getAllProjects = async (): Promise<ProjectType[]> => {
 
 export const getProjectById = async (id: string): Promise<ProjectType> => {
     try {
+        const token = localStorage.getItem('token');
         const response = await axios.get<{ success: boolean, project: ProjectType }>(`${API_URL}/project/getProjectById/${id}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
             withCredentials: true
         });
         return response.data.project;
@@ -336,7 +340,11 @@ export const deleteProject = async (id: string): Promise<ApiResponse<void>> => {
 
 export const getProjectsCount = async (): Promise<number> => {
     try {
+        const token = localStorage.getItem('token');
         const response = await axios.get<{success: boolean, count: number}>(`${API_URL}/project/count`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
             withCredentials: true
         });
         return response.data.count;
@@ -350,13 +358,26 @@ export const getProjectsCount = async (): Promise<number> => {
 export const getAllTutors = async (): Promise<TutorType[]> => {
     try {
         const token = localStorage.getItem('token');
-        const response = await axios.get<TutorResponse>(`${API_URL}/project/tutors`, {
+        const response = await axios.get<any>(`${API_URL}/user/getUsers`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             },
             withCredentials: true
         });
-        return response.data.tutors;
+
+        // Filter users to only include tutors and map to TutorType format
+        const tutors = response.data
+            .filter((user: any) => user.role === 'tutor')
+            .map((tutor: any) => ({
+                _id: tutor._id,
+                name: tutor.name,
+                lastname: tutor.lastname,
+                email: tutor.email,
+                classe: tutor.classe || '',
+                avatar: tutor.avatar || ''
+            }));
+
+        return tutors;
     } catch (error: any) {
         console.error('Error fetching tutors:', error);
         throw error.response ? error.response.data : {message: 'Failed to fetch tutors, please try again later.'};

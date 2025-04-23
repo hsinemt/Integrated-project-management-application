@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import CommonTagsInput from "../../../core/common/Taginput";
 import {
     getProjectById,
     ProjectType,
     TutorType,
     getAllTutors,
-    assignTutorToProject
+    assignTutorToProject,
+    updateProject,
 } from "../../../api/projectsApi/project/projectApi";
 import { getTasksByProjectId, TaskType, updateTaskStatus } from "../../../api/projectsApi/task/taskApi";
 
 const ProjectDetails = () => {
     const { id } = useParams<{ id: string }>();
+    const location = useLocation();
+    const [project, setProject] = useState<ProjectType | null>(location.state?.project || null);
     const navigate = useNavigate();
-    const [project, setProject] = useState<ProjectType | null>(null);
     const [tasks, setTasks] = useState<TaskType[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -26,10 +29,47 @@ const ProjectDetails = () => {
     const [assignSuccess, setAssignSuccess] = useState<boolean>(false);
     const [assignError, setAssignError] = useState<string | null>(null);
 
-    useEffect(() => {
 
+    const [editActiveTab, setEditActiveTab] = useState<string>("basic-info");
+    const [editFormData, setEditFormData] = useState<ProjectType | null>(null);
+    const [editKeywords, setEditKeywords] = useState<string[]>([]);
+    const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
+    const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
+    const [editLoading, setEditLoading] = useState<boolean>(false);
+
+
+    const difficultyOptions = [
+        { value: "Easy", label: "Easy" },
+        { value: "Medium", label: "Medium" },
+        { value: "Hard", label: "Hard" },
+        { value: "Very Hard", label: "Very Hard" },
+    ];
+
+    const statusOptions = [
+        { value: "Not Started", label: "Not Started" },
+        { value: "In Progress", label: "In Progress" },
+        { value: "On Hold", label: "On Hold" },
+        { value: "Completed", label: "Completed" },
+        { value: "Cancelled", label: "Cancelled" },
+    ];
+
+    const specialityOptions = [
+        { value: "Twin", label: "Twin" },
+        { value: "ERP/BI", label: "ERP/BI" },
+        { value: "AI", label: "AI" },
+        { value: "SAE", label: "SAE" },
+        { value: "SE", label: "SE" },
+        { value: "SIM", label: "SIM" },
+        { value: "NIDS", label: "NIDS" },
+        { value: "SLEAM", label: "SLEAM" },
+        { value: "GAMIX", label: "GAMIX" },
+        { value: "WIN", label: "WIN" },
+        { value: "IoSyS", label: "IoSyS" },
+        { value: "ArcTic", label: "ArcTic" },
+    ];
+
+    useEffect(() => {
         const userRole = localStorage.getItem("role");
-        // console.log("Current user role:", userRole);
         setIsManager(userRole === "manager");
 
         const fetchProjectDetails = async () => {
@@ -53,7 +93,6 @@ const ProjectDetails = () => {
                         setTutors(tutorsData);
                     } catch (err: any) {
                         console.error("Error fetching tutors:", err);
-
                     }
                 }
 
@@ -66,24 +105,38 @@ const ProjectDetails = () => {
         };
 
         fetchProjectDetails();
+
+        const editModal = document.getElementById("edit_project");
+        const handleModalShow = () => {
+            handleEditClick();
+        };
+
+        if (editModal) {
+            editModal.addEventListener("show.bs.modal", handleModalShow);
+        }
+
+        return () => {
+            if (editModal) {
+                editModal.removeEventListener("show.bs.modal", handleModalShow);
+            }
+        };
     }, [id]);
 
-
-    const handleTaskStatusChange = async (taskId: string, newStatus: 'To Do' | 'In Progress' | 'Completed' | 'In Review') => {
+    const handleTaskStatusChange = async (
+        taskId: string,
+        newStatus: "To Do" | "In Progress" | "Completed" | "In Review"
+    ) => {
         try {
-            const updatedTask = await updateTaskStatus(taskId, newStatus);
-
-            setTasks(prevTasks =>
-                prevTasks.map(task =>
+            await updateTaskStatus(taskId, newStatus);
+            setTasks((prevTasks) =>
+                prevTasks.map((task) =>
                     task._id === taskId ? { ...task, état: newStatus } : task
                 )
             );
         } catch (err: any) {
             console.error("Error updating task status:", err);
-
         }
     };
-
 
     const handleAssignTutor = async () => {
         if (!selectedTutorId || !id) {
@@ -100,11 +153,9 @@ const ProjectDetails = () => {
 
             if (response.success) {
                 setAssignSuccess(true);
-
                 if (response.data) {
                     setProject(response.data);
                 } else {
-
                     const updatedProject = await getProjectById(id);
                     setProject(updatedProject);
                 }
@@ -119,11 +170,101 @@ const ProjectDetails = () => {
         }
     };
 
+    const handleEditClick = () => {
+        if (!project) {
+            console.error("No project data available to edit");
+            return;
+        }
+        setEditFormData({
+            ...project,
+            keywords: project.keywords || [],
+        });
+        setEditKeywords(project.keywords || []);
+        setEditActiveTab("basic-info");
 
-    const completedTasks = tasks.filter(task => task.état === 'Completed').length;
+        if (project.projectLogo) {
+            setEditLogoPreview(`http://localhost:9777${project.projectLogo}`);
+        } else {
+            setEditLogoPreview(null);
+        }
+    };
+
+    const handleEditInputChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    ) => {
+        const { name, value } = e.target;
+        if (!editFormData) {
+            console.error("editFormData is null");
+            return;
+        }
+        setEditFormData({
+            ...editFormData,
+            [name]: value,
+        });
+    };
+
+    const handleEditLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setEditSelectedLogo(file);
+            const previewUrl = URL.createObjectURL(file);
+            setEditLogoPreview(previewUrl);
+        }
+    };
+
+    const clearEditLogo = () => {
+        setEditSelectedLogo(null);
+        if (editLogoPreview && !project?.projectLogo) {
+            URL.revokeObjectURL(editLogoPreview);
+            setEditLogoPreview(null);
+        } else if (project?.projectLogo) {
+            setEditLogoPreview(project.projectLogo);
+        }
+    };
+
+    const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+
+        if (!project?._id || !editFormData) {
+            alert("No project selected for editing");
+            return;
+        }
+
+        if (!editFormData.title || !editFormData.description || editKeywords.length === 0) {
+            alert("Please fill all required fields");
+            return;
+        }
+
+        setEditLoading(true);
+        try {
+            const submissionData = {
+                ...editFormData,
+                keywords: editKeywords,
+            };
+
+            const response = await updateProject(project._id, submissionData, editSelectedLogo || undefined);
+
+            if (response.success) {
+                setProject(response.data || editFormData);
+                const modal = document.getElementById("edit_project");
+                if (modal) {
+                    const modalInstance = window.bootstrap?.Modal.getInstance(modal);
+                    modalInstance?.hide();
+                }
+            } else {
+                alert(response.message || "Failed to update project");
+            }
+        } catch (error: any) {
+            console.error("Error updating project:", error);
+            alert(error.message || "An error occurred while updating the project");
+        } finally {
+            setEditLoading(false);
+        }
+    };
+
+    const completedTasks = tasks.filter((task) => task.état === "Completed").length;
     const totalTasks = tasks.length;
     const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
 
     const handleGoToMotivations = () => {
         if (project && project._id) {
@@ -171,10 +312,8 @@ const ProjectDetails = () => {
         );
     }
 
-
     return (
         <>
-            {/* Page Wrapper */}
             <div className="page-wrapper">
                 <div className="content">
                     <div className="row align-items-center mb-4">
@@ -193,6 +332,7 @@ const ProjectDetails = () => {
                                         data-bs-toggle="modal"
                                         data-bs-target="#edit_project"
                                         data-inert={true}
+                                        onClick={handleEditClick}
                                     >
                                         <i className="ti ti-edit me-1" />
                                         Edit Project
@@ -245,7 +385,6 @@ const ProjectDetails = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Display assigned tutor if exists */}
                                         {project.assignedTutor && (
                                             <div className="list-group-item">
                                                 <div className="d-flex align-items-center justify-content-between">
@@ -266,7 +405,9 @@ const ProjectDetails = () => {
                                                         </span>
                                                         <p className="text-gray-9 mb-0">
                                                             {`${project.assignedTutor.name} ${project.assignedTutor.lastname}`}
-                                                            <span className="d-block text-muted small">Tutor - {project.assignedTutor.classe || 'N/A'}</span>
+                                                            <span className="d-block text-muted small">
+                                                                Tutor - {project.assignedTutor.classe || "N/A"}
+                                                            </span>
                                                         </p>
                                                     </div>
                                                 </div>
@@ -281,20 +422,26 @@ const ProjectDetails = () => {
                                                         className="dropdown-toggle btn btn-sm btn-white d-inline-flex align-items-center"
                                                         data-bs-toggle="dropdown"
                                                     >
-                                                        <span className={`rounded-circle ${
-                                                            project.difficulty === 'Hard' || project.difficulty === 'Very Hard'
-                                                                ? 'bg-transparent-danger'
-                                                                : project.difficulty === 'Medium'
-                                                                    ? 'bg-transparent-warning'
-                                                                    : 'bg-transparent-success'
-                                                        } d-flex justify-content-center align-items-center me-2`}>
-                                                            <i className={`ti ti-point-filled ${
-                                                                project.difficulty === 'Hard' || project.difficulty === 'Very Hard'
-                                                                    ? 'text-danger'
-                                                                    : project.difficulty === 'Medium'
-                                                                        ? 'text-warning'
-                                                                        : 'text-success'
-                                                            }`} />
+                                                        <span
+                                                            className={`rounded-circle ${
+                                                                project.difficulty === "Hard" ||
+                                                                project.difficulty === "Very Hard"
+                                                                    ? "bg-transparent-danger"
+                                                                    : project.difficulty === "Medium"
+                                                                        ? "bg-transparent-warning"
+                                                                        : "bg-transparent-success"
+                                                            } d-flex justify-content-center align-items-center me-2`}
+                                                        >
+                                                            <i
+                                                                className={`ti ti-point-filled ${
+                                                                    project.difficulty === "Hard" ||
+                                                                    project.difficulty === "Very Hard"
+                                                                        ? "text-danger"
+                                                                        : project.difficulty === "Medium"
+                                                                            ? "text-warning"
+                                                                            : "text-success"
+                                                                }`}
+                                                            />
                                                         </span>
                                                         {project.difficulty || "Medium"}
                                                     </Link>
@@ -349,7 +496,6 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
 
-                                    {/* Manager-only section for tutor assignment - Only shown if user is a manager */}
                                     {localStorage.getItem("role") === "manager" && (
                                         <div className="mb-4">
                                             <h5 className="mb-3">Assign Tutor</h5>
@@ -375,7 +521,9 @@ const ProjectDetails = () => {
                                                                 {`${project.assignedTutor.name} ${project.assignedTutor.lastname}`}
                                                             </span>
                                                         </div>
-                                                        <p className="text-muted small mt-2">To change assignment, select another tutor below</p>
+                                                        <p className="text-muted small mt-2">
+                                                            To change assignment, select another tutor below
+                                                        </p>
                                                     </div>
                                                 ) : (
                                                     <p className="mb-2">This project is not assigned to any tutor yet.</p>
@@ -389,7 +537,7 @@ const ProjectDetails = () => {
                                                     <option value="">Select a tutor</option>
                                                     {tutors.map((tutor) => (
                                                         <option key={tutor._id} value={tutor._id}>
-                                                            {`${tutor.name} ${tutor.lastname} (${tutor.classe || 'No Class'})`}
+                                                            {`${tutor.name} ${tutor.lastname} (${tutor.classe || "No Class"})`}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -401,11 +549,17 @@ const ProjectDetails = () => {
                                                 >
                                                     {assignLoading ? (
                                                         <>
-                                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                            <span
+                                                                className="spinner-border spinner-border-sm me-2"
+                                                                role="status"
+                                                                aria-hidden="true"
+                                                            ></span>
                                                             Assigning...
                                                         </>
+                                                    ) : project.assignedTutor ? (
+                                                        "Reassign Project"
                                                     ) : (
-                                                        project.assignedTutor ? 'Reassign Project' : 'Assign Project'
+                                                        "Assign Project"
                                                     )}
                                                 </button>
 
@@ -429,7 +583,9 @@ const ProjectDetails = () => {
                                     <h5 className="mb-3">Tasks Details</h5>
                                     <div className="bg-light p-2 rounded">
                                         <span className="d-block mb-1">Tasks Done</span>
-                                        <h4 className="mb-2">{completedTasks} / {totalTasks}</h4>
+                                        <h4 className="mb-2">
+                                            {completedTasks} / {totalTasks}
+                                        </h4>
                                         <div className="progress progress-xs mb-2">
                                             <div
                                                 className="progress-bar"
@@ -450,16 +606,18 @@ const ProjectDetails = () => {
                                 <div className="card-body">
                                     <div className="bg-light rounded p-3 mb-3">
                                         <div className="d-flex align-items-center">
-                                            <Link
-                                                to="#"
-                                                className="flex-shrink-0 me-2"
-                                            >
+                                            <Link to="#" className="flex-shrink-0 me-2">
                                                 {project.projectLogo ? (
                                                     <img
-                                                        src={project.projectLogo}
+                                                        src={`http://localhost:9777${project.projectLogo}`}
                                                         alt={project.title}
-                                                        style={{ width: "60px", height: "60px" }}
+                                                        style={{ width: "60px", height: "60px", borderRadius: "50%" }} // Added borderRadius for fully rounded logo
                                                         className="rounded"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.onerror = null;
+                                                            target.src = "assets/img/social/project-01.svg";
+                                                        }}
                                                     />
                                                 ) : (
                                                     <ImageWithBasePath
@@ -473,7 +631,7 @@ const ProjectDetails = () => {
                                                     <button
                                                         onClick={handleGoToMotivations}
                                                         className="btn btn-link p-0 text-decoration-none"
-                                                        style={{ fontSize: 'inherit', fontWeight: 'inherit' }}
+                                                        style={{ fontSize: "inherit", fontWeight: "inherit" }}
                                                     >
                                                         {project.title}
                                                     </button>
@@ -489,15 +647,17 @@ const ProjectDetails = () => {
                                             </p>
                                         </div>
                                         <div className="col-sm-9">
-                                            <span className={`badge ${
-                                                project.status === 'In Progress'
-                                                    ? 'badge-soft-purple'
-                                                    : project.status === 'Completed'
-                                                        ? 'badge-soft-success'
-                                                        : project.status === 'On Hold'
-                                                            ? 'badge-soft-warning'
-                                                            : 'badge-soft-secondary'
-                                            } d-inline-flex align-items-center mb-3`}>
+                                            <span
+                                                className={`badge ${
+                                                    project.status === "In Progress"
+                                                        ? "badge-soft-purple"
+                                                        : project.status === "Completed"
+                                                            ? "badge-soft-success"
+                                                            : project.status === "On Hold"
+                                                                ? "badge-soft-warning"
+                                                                : "badge-soft-secondary"
+                                                } d-inline-flex align-items-center mb-3`}
+                                            >
                                                 <i className="ti ti-point-filled me-1" />
                                                 {project.status || "Not Started"}
                                             </span>
@@ -511,21 +671,22 @@ const ProjectDetails = () => {
                                         </div>
                                         <div className="col-sm-9">
                                             <div className="d-flex flex-wrap mb-3 gap-2">
-                                                {project.keywords && project.keywords.map((keyword, index) => (
-                                                    <Link
-                                                        key={index}
-                                                        to="#"
-                                                        className="badge task-tag bg-pink rounded-pill"
-                                                        style={{
-                                                            whiteSpace: "normal",
-                                                            fontWeight: "500",
-                                                            padding: "6px 12px",
-                                                            textDecoration: "none"
-                                                        }}
-                                                    >
-                                                        {keyword}
-                                                    </Link>
-                                                ))}
+                                                {project.keywords &&
+                                                    project.keywords.map((keyword, index) => (
+                                                        <Link
+                                                            key={index}
+                                                            to="#"
+                                                            className="badge task-tag bg-pink rounded-pill"
+                                                            style={{
+                                                                whiteSpace: "normal",
+                                                                fontWeight: "500",
+                                                                padding: "6px 12px",
+                                                                textDecoration: "none",
+                                                            }}
+                                                        >
+                                                            {keyword}
+                                                        </Link>
+                                                    ))}
                                                 {(!project.keywords || project.keywords.length === 0) && (
                                                     <>
                                                         <Link
@@ -549,9 +710,7 @@ const ProjectDetails = () => {
                                         <div className="col-sm-12">
                                             <div className="mb-3">
                                                 <h6 className="mb-1">Description</h6>
-                                                <p>
-                                                    {project.description}
-                                                </p>
+                                                <p>{project.description}</p>
                                             </div>
                                         </div>
                                         <div className="col-md-12">
@@ -568,12 +727,8 @@ const ProjectDetails = () => {
                                 </div>
                             </div>
 
-                            {/* Tasks Section */}
                             <div className="custom-accordion-items">
-                                <div
-                                    className="accordion accordions-items-seperate"
-                                    id="accordionExample"
-                                >
+                                <div className="accordion accordions-items-seperate" id="accordionExample">
                                     <div className="accordion-item">
                                         <div className="accordion-header" id="headingTwo">
                                             <div className="accordion-button">
@@ -601,9 +756,11 @@ const ProjectDetails = () => {
                                             <div className="accordion-body">
                                                 <div className="list-group list-group-flush">
                                                     {tasks.length > 0 ? (
-                                                        // Render dynamic tasks
                                                         tasks.map((task) => (
-                                                            <div key={task._id} className="list-group-item border rounded mb-2 p-2">
+                                                            <div
+                                                                key={task._id}
+                                                                className="list-group-item border rounded mb-2 p-2"
+                                                            >
                                                                 <div className="row align-items-center row-gap-3">
                                                                     <div className="col-md-7">
                                                                         <div className="todo-inbox-check d-flex align-items-center flex-wrap row-gap-3">
@@ -614,36 +771,42 @@ const ProjectDetails = () => {
                                                                                 <input
                                                                                     className="form-check-input"
                                                                                     type="checkbox"
-                                                                                    checked={task.état === 'Completed'}
+                                                                                    checked={task.état === "Completed"}
                                                                                     onChange={(e) =>
                                                                                         handleTaskStatusChange(
                                                                                             task._id,
-                                                                                            e.target.checked ? 'Completed' : 'To Do'
+                                                                                            e.target.checked ? "Completed" : "To Do"
                                                                                         )
                                                                                     }
                                                                                 />
                                                                             </div>
                                                                             <span className="me-2 d-flex align-items-center rating-select">
-                                                                                <i className={`ti ti-star${task.priority === 'High' ? '-filled filled' : ''}`} />
+                                                                                <i
+                                                                                    className={`ti ti-star${
+                                                                                        task.priority === "High"
+                                                                                            ? "-filled filled"
+                                                                                            : ""
+                                                                                    }`}
+                                                                                />
                                                                             </span>
                                                                             <div className="strike-info">
-                                                                                <h4 className="fs-14">
-                                                                                    {task.name}
-                                                                                </h4>
+                                                                                <h4 className="fs-14">{task.name}</h4>
                                                                             </div>
                                                                         </div>
                                                                     </div>
                                                                     <div className="col-md-5">
                                                                         <div className="d-flex align-items-center justify-content-md-end flex-wrap row-gap-3">
-                                                                            <span className={`badge ${
-                                                                                task.état === 'In Progress'
-                                                                                    ? 'bg-soft-purple'
-                                                                                    : task.état === 'Completed'
-                                                                                        ? 'bg-soft-success'
-                                                                                        : task.état === 'In Review'
-                                                                                            ? 'bg-soft-info'
-                                                                                            : 'bg-soft-pink'
-                                                                            } d-inline-flex align-items-center me-3`}>
+                                                                            <span
+                                                                                className={`badge ${
+                                                                                    task.état === "In Progress"
+                                                                                        ? "bg-soft-purple"
+                                                                                        : task.état === "Completed"
+                                                                                            ? "bg-soft-success"
+                                                                                            : task.état === "In Review"
+                                                                                                ? "bg-soft-info"
+                                                                                                : "bg-soft-pink"
+                                                                                } d-inline-flex align-items-center me-3`}
+                                                                            >
                                                                                 <i className="fas fa-circle fs-6 me-1" />
                                                                                 {task.état}
                                                                             </span>
@@ -661,7 +824,8 @@ const ProjectDetails = () => {
                                                                                             <Link
                                                                                                 to="#"
                                                                                                 className="dropdown-item rounded-1"
-                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-toggle="modal"
+                                                                                                data-inert={true}
                                                                                                 data-bs-target="#edit_todo"
                                                                                             >
                                                                                                 <i className="ti ti-edit me-2" />
@@ -672,7 +836,8 @@ const ProjectDetails = () => {
                                                                                             <Link
                                                                                                 to="#"
                                                                                                 className="dropdown-item rounded-1"
-                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-toggle="modal"
+                                                                                                data-inert={true}
                                                                                                 data-bs-target="#delete_modal"
                                                                                             >
                                                                                                 <i className="ti ti-trash me-2" />
@@ -683,7 +848,8 @@ const ProjectDetails = () => {
                                                                                             <Link
                                                                                                 to="#"
                                                                                                 className="dropdown-item rounded-1"
-                                                                                                data-bs-toggle="modal" data-inert={true}
+                                                                                                data-bs-toggle="modal"
+                                                                                                data-inert={true}
                                                                                                 data-bs-target="#view_todo"
                                                                                             >
                                                                                                 <i className="ti ti-eye me-2" />
@@ -699,13 +865,11 @@ const ProjectDetails = () => {
                                                             </div>
                                                         ))
                                                     ) : (
-                                                        // Show a message when no tasks exist
                                                         <div className="text-center py-3">
                                                             <p>No tasks found for this project.</p>
                                                         </div>
                                                     )}
 
-                                                    {/* Add 'New task' button */}
                                                     <button
                                                         className="btn bg-primary-transparent border-dashed border-primary w-100 text-start"
                                                         data-bs-toggle="modal"
@@ -727,11 +891,319 @@ const ProjectDetails = () => {
                 <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
                     <p className="mb-0">2014 - 2025 © SmartHR.</p>
                     <p>
-                        Designed &amp; Developed By{" "}
+                        Designed & Developed By{" "}
                         <Link to="#" className="text-primary">
                             Dreams
                         </Link>
                     </p>
+                </div>
+            </div>
+
+            <div className="modal fade" id="edit_project" role="dialog">
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content">
+                        <div className="modal-header header-border align-items-center justify-content-between">
+                            <div className="d-flex align-items-center">
+                                <h5 className="modal-title me-2">Edit Project</h5>
+                                <p className="text-dark">Project ID : {project?._id?.substring(0, 8) || ""}</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-close custom-btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"
+                            >
+                                <i className="ti ti-x" />
+                            </button>
+                        </div>
+                        <div className="add-info-fieldset">
+                            <div className="contact-grids-tab p-3 pb-0">
+                                <ul className="nav nav-underline" id="myTab1" role="tablist">
+                                    <li className="nav-item" role="presentation">
+                                        <button
+                                            className={`nav-link ${editActiveTab === "basic-info" ? "active" : ""}`}
+                                            id="basic-tab1"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#basic-info1"
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={editActiveTab === "basic-info"}
+                                            onClick={() => setEditActiveTab("basic-info")}
+                                        >
+                                            Basic Information
+                                        </button>
+                                    </li>
+                                    <li className="nav-item" role="presentation">
+                                        <button
+                                            className={`nav-link ${editActiveTab === "keywords" ? "active" : ""}`}
+                                            id="keywords-tab1"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#keywords1"
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={editActiveTab === "keywords"}
+                                            onClick={() => setEditActiveTab("keywords")}
+                                        >
+                                            Keywords
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div className="tab-content" id="myTabContent1">
+                                <div
+                                    className={`tab-pane fade ${editActiveTab === "basic-info" ? "show active" : ""}`}
+                                    id="basic-info1"
+                                    role="tabpanel"
+                                    aria-labelledby="basic-tab1"
+                                    tabIndex={0}
+                                >
+                                    {editFormData ? (
+                                        <form>
+                                            <div className="modal-body">
+                                                <div className="row">
+                                                    <div className="col-md-12">
+                                                        <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
+                                                            <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
+                                                                {editLogoPreview ? (
+                                                                    <img
+                                                                        src={editLogoPreview}
+                                                                        alt="Project Logo"
+                                                                        className="img-fluid rounded-circle" // Already rounded-circle
+                                                                        style={{
+                                                                            width: "100%",
+                                                                            height: "100%",
+                                                                            objectFit: "cover",
+                                                                        }}
+                                                                        onError={(e) => {
+                                                                            const target = e.target as HTMLImageElement;
+                                                                            target.onerror = null;
+                                                                            target.src = "assets/img/social/project-01.svg";
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <i className="ti ti-photo text-gray-2 fs-16" />
+                                                                )}
+                                                            </div>
+                                                            <div className="profile-upload">
+                                                                <div className="mb-2">
+                                                                    <h6 className="mb-1">Upload Project Logo</h6>
+                                                                    <p className="fs-12">Image should be below 4 mb</p>
+                                                                </div>
+                                                                <div className="profile-uploader d-flex align-items-center">
+                                                                    <div className="drag-upload-btn btn btn-sm btn-primary me-2">
+                                                                        Upload
+                                                                        <input
+                                                                            type="file"
+                                                                            className="form-control image-sign"
+                                                                            accept="image/*"
+                                                                            onChange={handleEditLogoChange}
+                                                                        />
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-light btn-sm"
+                                                                        onClick={clearEditLogo}
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-12">
+                                                        <div className="mb-3">
+                                                            <label className="form-label">Project Title *</label>
+                                                            <input
+                                                                type="text"
+                                                                className="form-control"
+                                                                placeholder="Enter project title"
+                                                                name="title"
+                                                                value={editFormData.title}
+                                                                onChange={handleEditInputChange}
+                                                                required
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-6">
+                                                        <div className="mb-3">
+                                                            <label className="form-label">Difficulty</label>
+                                                            <select
+                                                                className="form-select"
+                                                                name="difficulty"
+                                                                value={editFormData.difficulty || "Medium"}
+                                                                onChange={handleEditInputChange}
+                                                            >
+                                                                {difficultyOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-6">
+                                                        <div className="mb-3">
+                                                            <label className="form-label">Status</label>
+                                                            <select
+                                                                className="form-select"
+                                                                name="status"
+                                                                value={editFormData.status || "Not Started"}
+                                                                onChange={handleEditInputChange}
+                                                            >
+                                                                {statusOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-12">
+                                                        <div className="mb-3">
+                                                            <label className="form-label">Speciality</label>
+                                                            <select
+                                                                className="form-select"
+                                                                name="speciality"
+                                                                value={editFormData.speciality || "Twin"}
+                                                                onChange={handleEditInputChange}
+                                                            >
+                                                                {specialityOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-12">
+                                                        <div className="mb-3">
+                                                            <label className="form-label">Description *</label>
+                                                            <textarea
+                                                                className="form-control"
+                                                                rows={4}
+                                                                placeholder="Enter project description"
+                                                                name="description"
+                                                                value={editFormData.description}
+                                                                onChange={handleEditInputChange}
+                                                                required
+                                                            ></textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="modal-footer">
+                                                <div className="d-flex align-items-center justify-content-end">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-light border me-2"
+                                                        data-bs-dismiss="modal"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        type="button"
+                                                        onClick={() => setEditActiveTab("keywords")}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    ) : (
+                                        <div className="modal-body">
+                                            <p>Loading project data...</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div
+                                    className={`tab-pane fade ${editActiveTab === "keywords" ? "show active" : ""}`}
+                                    id="keywords1"
+                                    role="tabpanel"
+                                    aria-labelledby="keywords-tab1"
+                                    tabIndex={0}
+                                >
+                                    {editFormData ? (
+                                        <form onSubmit={handleEditSubmit}>
+                                            <div className="modal-body">
+                                                <div className="row">
+                                                    <div className="col-md-12">
+                                                        <div className="mb-3">
+                                                            <label className="form-label me-2">Keywords *</label>
+                                                            <CommonTagsInput
+                                                                value={editKeywords}
+                                                                onChange={(keywords: string[]) => {
+                                                                    const validKeywords = keywords.map((keyword) =>
+                                                                        keyword.length > 500
+                                                                            ? keyword.substring(0, 500)
+                                                                            : keyword
+                                                                    );
+                                                                    setEditKeywords(validKeywords);
+                                                                    setEditFormData((prev) =>
+                                                                        prev
+                                                                            ? {
+                                                                                ...prev,
+                                                                                keywords: validKeywords,
+                                                                            }
+                                                                            : prev
+                                                                    );
+                                                                }}
+                                                                placeholder="Add keyword and press enter"
+                                                                className="custom-input-class"
+                                                            />
+                                                            <small className="text-muted">Enter at least one keyword</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="modal-footer">
+                                                <div className="d-flex align-items-center justify-content-between w-100">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-primary"
+                                                        onClick={() => setEditActiveTab("basic-info")}
+                                                    >
+                                                        Back
+                                                    </button>
+                                                    <div>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-light border me-2"
+                                                            data-bs-dismiss="modal"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-primary"
+                                                            type="submit"
+                                                            disabled={editLoading}
+                                                        >
+                                                            {editLoading ? (
+                                                                <>
+                                                                    <span
+                                                                        className="spinner-border spinner-border-sm me-2"
+                                                                        role="status"
+                                                                        aria-hidden="true"
+                                                                    ></span>
+                                                                    Saving...
+                                                                </>
+                                                            ) : (
+                                                                "Update Project"
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    ) : (
+                                        <div className="modal-body">
+                                            <p>Loading project data...</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </>

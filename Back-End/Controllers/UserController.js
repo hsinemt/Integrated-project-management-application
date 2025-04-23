@@ -96,13 +96,13 @@ const signup = async (req, res) => {
 const isUserEmailAvailable = async (req, res) => {
     try {
       const { email } = req.query;
-  
+
       if (!email) {
         return res.status(400).json({ message: "L'email est requis" });
       }
-  
+
       const user = await UserModel.findOne({ email });
-  
+
       if (user) {
         // Assurez-vous que skills est un tableau et ne contient pas de valeurs undefined
         const skills = user.skills ? user.skills.map(skill => skill ? skill.toString().toLowerCase() : "").filter(skill => skill.trim()) : [];
@@ -118,7 +118,7 @@ const isUserEmailAvailable = async (req, res) => {
       res.status(500).json({ message: "Erreur serveur" });
     }
   };
- 
+
 const verifyOtp = async (req, res) => {
     const { email, otp } = req.body;
 
@@ -151,36 +151,36 @@ const verifyOtp = async (req, res) => {
   const login = async (req, res) => {
     try {
       const { email, password, captchaToken, otp  } = req.body;
-  
+
       // Vérification du reCAPTCHA
       const isCaptchaValid = await verifyRecaptcha(captchaToken);
       if (!isCaptchaValid) {
         return res.status(400).json({ message: "Échec de la validation reCAPTCHA" });
       }
-  
+
       // Recherche de l'utilisateur dans la base de données
       const user = await UserModel.findOne({ email });
       if (!user) return res.status(400).json({ message: "Mauvais email" });
-  
+
       // Vérification du mot de passe
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(400).json({ message: "Mot de passe incorrect" });
-  
+
       // Vérification de la 2FA si activée
       if (user.twoFactorAuth) {
         if (!otp) return res.status(400).json({ message: "Le code OTP est requis pour la 2FA" });
-  
+
         // Verify the OTP
         if (user.verifyOtp !== otp || user.verifyOtpExpirationAt < Date.now()) {
           return res.status(400).json({ message: "OTP invalide ou expiré" });
         }
-  
+
         // Clear the OTP after successful verification
         user.verifyOtp = '';
         user.verifyOtpExpirationAt = 0;
         await user.save();
       }
-  
+
       // Création du token JWT
       const token = jwt.sign(
         { id: user._id, role: user.role },
@@ -193,16 +193,16 @@ const verifyOtp = async (req, res) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'none':'strict',
             maxAge: 3 * 60 * 60 * 1000
         });
-  
-      const redirectTo = "/super-admin/users"; // Redirection vers la page après la connexion
-  
+
+      const redirectTo = "/index"; // Redirection vers la page après la connexion
+
       res.json({ 
         token, 
         role: user.role, 
         user: { id: user._id, email: user.email, role: user.role, avatar: user.avatar },
         redirectTo 
       });
-  
+
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
@@ -278,8 +278,15 @@ const verifyEmail = async (req, res) => {
 
 const addManager = async (req, res) => {
     try {
-        const { name, lastname, email, password, speciality } = req.body;
+        const { name, lastname, email, password, speciality, avatar } = req.body;
         const adminUser = await UserModel.findById(req.body.userId);
+
+        if (!adminUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin user not found'
+            });
+        }
 
         if (adminUser.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'Only admin can add managers' });
@@ -289,7 +296,7 @@ const addManager = async (req, res) => {
             return res.status(409).json({ success: false, message: `The email ${email} already exists, try another email` });
         }
 
-        const manager = new ManagerModel({ name, lastname, email, password, role: 'manager', speciality });
+        const manager = new ManagerModel({ name, lastname, email, password, role: 'manager', speciality, avatar });
         manager.password = await bcrypt.hash(password, 10);
         await manager.save();
 
@@ -310,8 +317,15 @@ const addManager = async (req, res) => {
 
 const addTutor = async (req, res) => {
     try {
-        const { name, lastname, email, password, classe } = req.body;
+        const { name, lastname, email, password, classe, avatar } = req.body;
         const adminUser = await UserModel.findById(req.body.userId);
+
+        if (!adminUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin user not found'
+            });
+        }
 
         if (adminUser.role !== 'admin' && adminUser.role !== 'manager') {
             return res.status(403).json({ success: false, message: 'Only admin can add tutors' });
@@ -321,7 +335,7 @@ const addTutor = async (req, res) => {
             return res.status(409).json({ success: false, message: `The email ${email} already exists, try another email` });
         }
 
-        const tutor = new TutorModel({ name, lastname, email, password, role: 'tutor', classe });
+        const tutor = new TutorModel({ name, lastname, email, password, role: 'tutor', classe, avatar });
         tutor.password = await bcrypt.hash(password, 10);
         await tutor.save();
 
@@ -334,7 +348,7 @@ const addTutor = async (req, res) => {
 
         await transporter.sendMail(mailOptions);
 
-        res.status(201).json({ success: true, message: `Tutor added successfully by ${adminUser.role } ${adminUser.name}`});
+        res.status(201).json({ success: true, message: 'Tutor added successfully' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -342,13 +356,20 @@ const addTutor = async (req, res) => {
 
 const addStudent = async (req, res) => {
     try {
-        const { name, lastname, email, password, speciality, skills, level } = req.body;
+        const { name, lastname, email, password, speciality, skills, level, avatar } = req.body;
         const adminUser = await UserModel.findById(req.body.userId);
 
         if (skills !== undefined && !Array.isArray(skills)) {
             return res.status(400).json({
                 success: false,
                 message: 'Skills must be an array of strings'
+            });
+        }
+
+        if (!adminUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin user not found'
             });
         }
 
@@ -375,7 +396,8 @@ const addStudent = async (req, res) => {
             role: 'student',
             speciality,
             skills: skills || [],
-            level
+            level,
+            avatar
         });
 
         student.password = await bcrypt.hash(password, 10);
@@ -561,6 +583,147 @@ const sendVerifyOtp1 = async (req, res) => {
     }
 };
 
+const updateUser = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const updates = req.body;
+        const newRole = updates.role;
+
+        console.log('Update request received:', { userId, updates });
+
+        // Prevent changing role to admin
+        if (newRole === 'admin') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Changing role to admin is not allowed' 
+            });
+        }
+
+        // Find the current user
+        const oldUser = await User.findById(userId);
+        if (!oldUser) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // If password is being updated, hash it
+        if (updates.password) {
+            const salt = await bcrypt.genSalt(10);
+            updates.password = await bcrypt.hash(updates.password, salt);
+        } else {
+            updates.password = oldUser.password;
+        }
+
+        // Check if the role is changing
+        if (newRole && newRole !== oldUser.role) {
+            // We need to delete and recreate with new role
+            console.log(`Changing role from ${oldUser.role} to ${newRole}`);
+
+            // Create a user data object with all fields
+            const userData = {
+                _id: oldUser._id,
+                name: updates.name || oldUser.name,
+                lastname: updates.lastname || oldUser.lastname,
+                email: updates.email || oldUser.email,
+                password: updates.password,
+                isVerified: oldUser.isVerified,
+                verifyOtp: oldUser.verifyOtp,
+                verifyOtpExpirationAt: oldUser.verifyOtpExpirationAt,
+                resetOtp: oldUser.resetOtp,
+                resetOtpExpirationAt: oldUser.resetOtpExpirationAt,
+                avatar: oldUser.avatar,
+                images: oldUser.images,
+                birthday: updates.birthday || oldUser.birthday,
+                role: newRole
+            };
+
+            // Add role-specific fields based on new role
+            if (newRole === 'student') {
+                userData.speciality = updates.speciality || 'Twin'; // Default value
+                userData.skills = updates.skills || [];
+                userData.level = updates.level || '';
+            } else if (newRole === 'manager') {
+                userData.speciality = updates.speciality || 'Twin'; // Default value
+            } else if (newRole === 'tutor') {
+                userData.classe = updates.classe || '';
+            }
+
+            // Delete old user
+            await User.findByIdAndDelete(userId);
+
+            // Create new user with appropriate model
+            let newUserModel;
+            if (newRole === 'student') {
+                newUserModel = require('../Models/Student');
+            } else if (newRole === 'manager') {
+                newUserModel = require('../Models/Manager');
+            } else if (newRole === 'tutor') {
+                newUserModel = require('../Models/Tutor');
+            } else {
+                newUserModel = User;
+            }
+
+            const newUser = new newUserModel(userData);
+            await newUser.save();
+
+            const updatedUser = await User.findById(userId).select('-password');
+
+            return res.status(200).json({
+                success: true,
+                data: updatedUser,
+                message: `User updated successfully with role change from ${oldUser.role} to ${newRole}`
+            });
+        } else {
+            // No role change, perform normal update
+            // Only update fields that are not the discriminator key
+            delete updates.role; // Remove role from updates to avoid errors
+
+            // Update user properties manually
+            Object.keys(updates).forEach(key => {
+                oldUser[key] = updates[key];
+            });
+
+            // Save the updated user
+            await oldUser.save();
+
+            // Get the updated user without password
+            const updatedUser = await User.findById(userId).select('-password');
+            console.log('Updated user data:', updatedUser);
+
+            return res.status(200).json({
+                success: true,
+                data: updatedUser,
+                message: 'User updated successfully'
+            });
+        }
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+  const deleteUser = async (req, res) => {
+    try {
+      const userId = req.params.id;
+
+      const deletedUser = await User.findByIdAndDelete(userId);
+
+      if (!deletedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'User deleted successfully'
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
 
 module.exports = {
     signup,
@@ -577,6 +740,8 @@ module.exports = {
     logout,
     isUserEmailAvailable,
     verifyOtp,
-    sendVerifyOtp1
+    sendVerifyOtp1,
+    updateUser,
+    deleteUser
 
 };
