@@ -34,15 +34,15 @@ async function generateTasks(projectDescription, students, keywords = []) {
 
         while (attempts < maxAttempts && !task) {
             try {
-                console.log(`🔹 Tentative ${attempts + 1}/${maxAttempts} pour ${studentName}`);
+               // console.log(`🔹 Tentative ${attempts + 1}/${maxAttempts} pour ${studentName}`);
                 const prompt = `Projet : "${enrichedDescription}". Génère une tâche unique pour ${studentName} au format exact : "Nom: ${studentName} - [titre de la tâche], Description: [description], Priorité: [High/Medium/Low]". Utilise ${keywords.join(', ') || 'des éléments généraux'} pour personnaliser la tâche. La tâche doit être différente de celles-ci : ${tasks.map(t => `"${t.name}: ${t.description}"`).join(', ') || 'aucune tâche précédente'}. Ne répète pas les idées déjà utilisées.`;
 
-                console.log(`🔹 Prompt envoyé pour ${studentName}:`, prompt);
+                //console.log(`🔹 Prompt envoyé pour ${studentName}:`, prompt);
 
                 const result = await model.generateContent(prompt);
                 const generatedText = result.response.text().trim();
 
-                console.log(`🔹 Texte généré pour ${studentName}:`, generatedText);
+                //console.log(`🔹 Texte généré pour ${studentName}:`, generatedText);
 
                 const taskMatch = generatedText.match(/Nom:\s*([^,]+),\s*Description:\s*([\s\S]+?),\s*Priorité:\s*(High|Medium|Low)/i);
 
@@ -50,7 +50,7 @@ async function generateTasks(projectDescription, students, keywords = []) {
 
                 if (taskMatch) {
                     [, name, description, priority] = taskMatch;
-                    console.log(`🔹 Regex match - Name: ${name}, Description: ${description}, Priority: ${priority}`);
+                    //console.log(`🔹 Regex match - Name: ${name}, Description: ${description}, Priority: ${priority}`);
                 } else {
                     throw new Error(`Format invalide - Impossible de parser : ${generatedText}`);
                 }
@@ -85,7 +85,7 @@ async function generateTasks(projectDescription, students, keywords = []) {
         console.log(`🔹 Tâche ajoutée pour ${studentName}:`, JSON.stringify(task, null, 2));
     }
 
-    console.log(`✅ Total tâches générées : ${tasks.length}`);
+    //console.log(`✅ Total tâches générées : ${tasks.length}`);
     return tasks;
 }
 

@@ -3,6 +3,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const passport = require('passport');
@@ -17,7 +18,7 @@ const groupRouter = require('./Routes/groupRoutes');
 const authRoutes = require('./Routes/authRoutes');
 const choixRoutes = require('./Routes/choixRoutes');
 const tutorRoutes = require('./Routes/tutorRoutes');
-const codeReviewRouter = require('./Routes/codeReviewRoutes');
+//const codeReviewRouter = require('./Routes/codeReviewRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -45,12 +46,22 @@ require('./config/passportConfig');
 require('./config/passportGoogle');
 
 const PORT = parseInt(process.env.PORT || '9777');
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    console.log('Creating uploads directory:', uploadsDir);
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 // Middleware setup
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(uploadsDir));
+
+// Configure body parser
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(cors({
     credentials: true,
@@ -100,7 +111,7 @@ app.use('/auth', authRoutes);
 app.use('/api/tasks', taskRouter);
 app.use('/choix', choixRoutes);
 app.use('/tutor', tutorRoutes);
-app.use('/api/code-review', codeReviewRouter);
+//app.use('/api/code-review', codeReviewRouter);
 
 // AI and NLP routes
 app.use('/nlp', nlpController);
@@ -122,8 +133,18 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Please:
+        1. Stop the other process using this port, or
+        2. Use a different port by setting the PORT environment variable.`);
+        process.exit(1);
+    } else {
+        console.error('Server error:', err);
+        process.exit(1);
+    }
 });
 
 process.on('SIGTERM', () => {

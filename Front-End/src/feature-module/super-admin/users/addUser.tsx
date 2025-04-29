@@ -266,7 +266,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                                                         disabled={isUploading}
                                                     />
                                                 </div>
-                                                <button 
+                                                <button
                                                     className="btn btn-light btn-sm"
                                                     onClick={handleCancelClick}
                                                     disabled={isUploading || !selectedFile}

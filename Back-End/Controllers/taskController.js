@@ -103,7 +103,7 @@ exports.previewTasks = async (req, res) => {
             };
         });
 
-        console.log('✅ Tâches générées avec succès:', tasksToPreview.length);
+        //console.log('✅ Tâches générées avec succès:', tasksToPreview.length);
         return res.status(200).json({
             success: true,
             message: `${tasksToPreview.length} tâches générées pour prévisualisation`,

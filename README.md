@@ -1,4 +1,6 @@
-# Project README
+# Integrated Project Management Application
+
+![CI Pipeline](https://github.com/hsinemt/Integrated-project-management-application/actions/workflows/main.yml/badge.svg)
 
 ## Project Structure
 ```
@@ -71,3 +73,28 @@ server.js      - Main server entry point
    - Once approved, your changes will be merged into `main`.
    - Delete your feature branch after merging to keep the repository clean.
 
+## CI Pipeline
+
+This project uses GitHub Actions for continuous integration. The pipeline is configured to run tests, linting, and security checks on the codebase.
+
+### Main CI Pipeline (`main.yml`)
+
+The CI pipeline performs the following tasks:
+
+- **Setup**: 
+  - Runs on Ubuntu with Node.js 16.x and 18.x
+  - Sets up the environment and caches dependencies
+
+- **Backend Checks**:
+  - Installs backend dependencies
+  - Runs security audit on backend dependencies
+  - Verifies the backend server can start
+
+- **Frontend Checks**:
+  - Installs frontend dependencies
+  - Runs ESLint for code quality checks
+  - Runs frontend tests
+  - Builds the frontend application
+  - Runs security audit on frontend dependencies
+
+The pipeline runs on pushes and pull requests to the main, development, and Code-Overview branches.

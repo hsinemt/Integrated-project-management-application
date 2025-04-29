@@ -7,6 +7,7 @@ import 'dragula/dist/dragula.css';
 import Modal from 'react-modal';
 import styles from "./page.module.css";
 import TaskColumn from './TaskColumn';
+import Webcam from 'react-webcam';
 
 Modal.setAppElement('#root');
 
@@ -81,6 +82,10 @@ const TaskBoard = () => {
     const [updatedTasks, setUpdatedTasks] = useState<Map<string, string>>(new Map());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+    const [verificationStatus, setVerificationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const webcamRef = useRef<Webcam>(null);
 
     const toDoTasksRef = useRef<HTMLDivElement>(null);
     const inProgressTasksRef = useRef<HTMLDivElement>(null);
@@ -96,7 +101,7 @@ const TaskBoard = () => {
                     setLoading(false);
                     return;
                 }
-    
+
                 // Make the API request using the token from localStorage
                 const response = await axios.get('http://localhost:9777/user/profilegroupe', {
                     headers: {
@@ -110,7 +115,7 @@ const TaskBoard = () => {
                         estimatedTime,
                     };
                 }));
-    
+
                 setTasks(tasksWithEstimatedTime);
                 if (response.data.projects && response.data.projects.length > 0) {
                     setProjectName(response.data.projects[0].title);
@@ -121,7 +126,7 @@ const TaskBoard = () => {
                 setLoading(false);
             }
         };
-    
+
         fetchTasks();
     }, []);
 
@@ -203,6 +208,64 @@ const TaskBoard = () => {
         setSelectedImage(null);
     };
 
+    const openCamera = () => {
+        setIsCameraOpen(true);
+        setVerificationStatus('idle');
+        setVerificationMessage(null);
+    };
+
+    const closeCamera = () => {
+        setIsCameraOpen(false);
+    };
+
+    const verifyFace = async () => {
+        try {
+            if (!webcamRef.current) {
+                setVerificationStatus('error');
+                setVerificationMessage('Camera not available');
+                return;
+            }
+
+            // Capture image from webcam
+            const imageSrc = webcamRef.current.getScreenshot();
+            if (!imageSrc) {
+                setVerificationStatus('error');
+                setVerificationMessage('Failed to capture image');
+                return;
+            }
+
+            setVerificationStatus('loading');
+            setVerificationMessage('Verifying your face...');
+
+            // Call the loginWithFace API endpoint
+            const response = await axios.post(
+                'http://localhost:9777/user/loginWithFace',
+                { imageData: imageSrc },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                setVerificationStatus('success');
+                setVerificationMessage('Face verification successful! Quiz passed.');
+                // Wait 3 seconds before closing the camera modal
+                setTimeout(() => {
+                    closeCamera();
+                }, 3000);
+            } else {
+                setVerificationStatus('error');
+                setVerificationMessage('Face verification failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error during face verification:', error);
+            setVerificationStatus('error');
+            setVerificationMessage('Error during verification. Please try again.');
+        }
+    };
+
     if (loading) {
         return <div>Loading...</div>;
     }
@@ -216,7 +279,7 @@ const TaskBoard = () => {
     const filteredTasks = tasks.filter(task =>
         (selectedPriority === 'All' || task.priority === selectedPriority) &&
         (task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchQuery.toLowerCase()))
+            task.description.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     return (
@@ -344,15 +407,18 @@ const TaskBoard = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="d-flex justify-content-end mt-3">
+                            <div className="d-flex justify-content-between mt-3">
+                                <button className="btn btn-success" onClick={openCamera}>
+                                    <i className="ti ti-camera"></i> Verify to Pass Quiz
+                                </button>
                                 <button className="btn btn-primary" onClick={saveTaskStatusChanges}>Save</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <Modal 
+
+            <Modal
                 isOpen={isModalOpen}
                 onRequestClose={closeModal}
                 contentLabel="Image Modal"
@@ -361,6 +427,75 @@ const TaskBoard = () => {
             >
                 <button onClick={closeModal} className="close-button">Close</button>
                 {selectedImage && <img src={selectedImage} alt="Full Size" className="full-size-image" />}
+            </Modal>
+
+            <Modal
+                isOpen={isCameraOpen}
+                onRequestClose={closeCamera}
+                contentLabel="Face Verification"
+                className={styles.modal}
+                overlayClassName="overlay"
+            >
+                <div className="camera-modal">
+                    <h3>Face Verification</h3>
+                    <div className="webcam-container">
+                        <Webcam
+                            audio={false}
+                            ref={webcamRef}
+                            screenshotFormat="image/jpeg"
+                            width={500}
+                            height={375}
+                            videoConstraints={{
+                                width: 500,
+                                height: 375,
+                                facingMode: "user"
+                            }}
+                        />
+                    </div>
+
+                    {verificationStatus === 'idle' && (
+                        <button
+                            className="btn btn-primary mt-3"
+                            onClick={verifyFace}
+                        >
+                            Capture and Verify
+                        </button>
+                    )}
+
+                    {verificationStatus === 'loading' && (
+                        <div className="mt-3">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                            <p>{verificationMessage}</p>
+                        </div>
+                    )}
+
+                    {verificationStatus === 'success' && (
+                        <div className="alert alert-success mt-3">
+                            {verificationMessage}
+                        </div>
+                    )}
+
+                    {verificationStatus === 'error' && (
+                        <div className="alert alert-danger mt-3">
+                            {verificationMessage}
+                            <button
+                                className="btn btn-primary mt-2"
+                                onClick={verifyFace}
+                            >
+                                Try Again
+                            </button>
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-secondary mt-3 ms-2"
+                        onClick={closeCamera}
+                    >
+                        Close
+                    </button>
+                </div>
             </Modal>
         </>
     );

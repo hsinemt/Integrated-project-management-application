@@ -8,8 +8,9 @@ import CommonSelect from '../../../core/common/commonSelect'
 import { DatePicker } from 'antd'
 import ReactApexChart from 'react-apexcharts'
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-import {fetchUsers, users_type, updateUser, deleteUser} from "../../../api/getUsers/getAllUsers";
+import { fetchUsers, users_type, updateUser, deleteUser } from "../../../api/getUsers/getAllUsers";
 import { updateUserWithPhoto, uploadUserPhoto } from "../../../api/uploadApi/uploadUserPhoto";
+import { API_URL, getFullAvatarUrl } from "../../../api/config";
 import AddUserModal from "./addUser";
 import Swal from "sweetalert2";
 
@@ -36,6 +37,24 @@ const UsersManagement = () => {
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
+  // Generate avatar URL for users without photos
+  const generateAvatarUrl = (user: { name: string; lastname: string; role: string; }) => {
+    const nameInitial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+    const lastnameInitial = user.lastname ? user.lastname.charAt(0).toUpperCase() : '';
+    const initials = nameInitial + lastnameInitial;
+
+    const roleColors: { [key: string]: string } = {
+      'admin': '8e44ad',
+      'manager': '2980b9',
+      'tutor': '27ae60',
+      'student': 'e67e22',
+      'default': '7f8c8d'
+    };
+    const roleColor = roleColors[user.role] || roleColors['default'];
+
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&backgroundColor=${roleColor}&radius=50`;
+  };
+
   // Clean up preview URL when component unmounts or when editing user changes
   useEffect(() => {
     // Set loading state
@@ -45,7 +64,7 @@ const UsersManagement = () => {
     const userId = localStorage.getItem('userId');
     if (userId) {
       setCurrentUserId(userId);
-      //console.log('Current user ID:', userId);
+    } else {
       console.warn('No userId found in localStorage. User may need to log in again.');
     }
 
@@ -81,7 +100,7 @@ const UsersManagement = () => {
     getData();
   }, []);
 
-// 2. useEffect for cleaning up preview URL when component unmounts
+  // 2. useEffect for cleaning up preview URL when component unmounts
   useEffect(() => {
     return () => {
       if (editPreviewUrl && !editPreviewUrl.startsWith('http')) {
@@ -90,7 +109,7 @@ const UsersManagement = () => {
     };
   }, [editPreviewUrl]);
 
-// 3. useEffect for resetting edit photo state when editing user changes
+  // 3. useEffect for resetting edit photo state when editing user changes
   useEffect(() => {
     if (editingUser) {
       setEditPreviewUrl(editingUser.avatar || null);
@@ -148,45 +167,6 @@ const UsersManagement = () => {
     setEditPreviewUrl(editingUser?.avatar || null);
     setEditFileError(null);
   };
-  const generateAvatarUrl = (user: { name: string; lastname: string; role: string; }) => {
-    const nameInitial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
-    const lastnameInitial = user.lastname ? user.lastname.charAt(0).toUpperCase() : '';
-    const initials = nameInitial + lastnameInitial;
-
-    const roleColors: { [key: string]: string } = {
-      'admin': '8e44ad',
-      'manager': '2980b9',
-      'tutor': '27ae60',
-      'student': 'e67e22',
-      'default': '7f8c8d'
-    };
-    const roleColor = roleColors[user.role] || roleColors['default'];
-
-    return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&backgroundColor=${roleColor}&radius=50`;
-
-  };
-
-
-  useEffect(() => {
-    const getData = async () => {
-      try {
-        const result = await fetchUsers();
-
-        const usersWithAvatars = result.map(user => ({
-          ...user,
-          avatar: user.avatar || generateAvatarUrl(user),
-          Status: 'Active'
-        }));
-        setData(usersWithAvatars);
-      } catch (error) {
-        console.error("Error fetching users:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getData();
-  }, []);
-
 
   const refreshUserList = async () => {
     try {
@@ -197,11 +177,16 @@ const UsersManagement = () => {
         Status: 'Active'
       }));
       setData(usersWithAvatars);
+
+      // Update statistics
+      setTotalUsers(usersWithAvatars.length);
+      setManagerCount(usersWithAvatars.filter(user => user.role === 'manager').length);
+      setTutorCount(usersWithAvatars.filter(user => user.role === 'tutor').length);
+      setStudentCount(usersWithAvatars.filter(user => user.role === 'student').length);
     } catch (error) {
       console.error('Error refreshing user list:', error);
     }
   };
-
 
   const columns = [
     {
@@ -214,6 +199,10 @@ const UsersManagement = () => {
                   src={record.avatar || generateAvatarUrl(record)}
                   className="img-fluid rounded-circle"
                   alt={`${record.name} ${record.lastname}`}
+                  onError={(e) => {
+                    // Fallback to generated avatar if image fails to load
+                    (e.target as HTMLImageElement).src = generateAvatarUrl(record);
+                  }}
               />
             </Link>
             <div className="ms-2">
@@ -241,24 +230,10 @@ const UsersManagement = () => {
       render: (text: String, record: any) => (
           <div className="d-flex align-items-center justify-content-between">
             <p className="mb-0 me-2">{record.role}</p>
-            {/*<Link*/}
-            {/*    to="#"*/}
-            {/*    data-bs-toggle="modal"*/}
-            {/*    className="badge badge-purple badge-xs"*/}
-            {/*    data-bs-target="#upgrade_info"*/}
-            {/*>*/}
-            {/*  Upgrade*/}
-            {/*</Link>*/}
           </div>
-
       ),
-      sorter: (a: any, b: any) => a.Role.length - b.Role.length,
+      sorter: (a: any, b: any) => a.role.length - b.role.length,
     },
-    // {
-    //   title: "Created Date",
-    //   dataIndex: "CreatedDate",
-    //   sorter: (a: any, b: any) => a.CreatedDate.length - b.CreatedDate.length,
-    // },
     {
       title: "Status",
       dataIndex: "Status",
@@ -267,7 +242,6 @@ const UsersManagement = () => {
           <i className="ti ti-point-filled me-1" />
             {text}
         </span>
-
       ),
       sorter: (a: any, b: any) => a.Status.length - b.Status.length,
     },
@@ -282,10 +256,8 @@ const UsersManagement = () => {
                 data-bs-toggle="modal"
                 data-bs-target="#company_detail"
                 onClick={() => {
-                  // console.log("Opening Modal for User:", record);
                   setSelectedUser(record);
                 }}
-
             >
               <i className="ti ti-eye" />
             </Link>
@@ -313,10 +285,10 @@ const UsersManagement = () => {
               <i className="ti ti-trash" />
             </Link>
           </div>
-
       ),
     },
   ]
+
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
     confirmPassword: false,
@@ -1084,10 +1056,14 @@ const UsersManagement = () => {
                       <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                         <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
                           <img
-                              src={editPreviewUrl || editingUser?.avatar || generateAvatarUrl(editingUser || { name: '', lastname: '', role: '' })}
+                              src={getFullAvatarUrl(editPreviewUrl || editingUser?.avatar) || generateAvatarUrl(editingUser || { name: '', lastname: '', role: '' })}
                               alt="Profile preview"
                               className="rounded-circle"
                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                // Fallback to generated avatar if image fails to load
+                                (e.target as HTMLImageElement).src = generateAvatarUrl(editingUser || { name: '', lastname: '', role: '' });
+                              }}
                           />
                         </div>
                         <div className="profile-upload">
@@ -1110,7 +1086,7 @@ const UsersManagement = () => {
                                   disabled={isEditUploading}
                               />
                             </div>
-                            <button 
+                            <button
                                 className="btn btn-light btn-sm"
                                 onClick={handleEditCancelClick}
                                 disabled={isEditUploading || !selectedEditFile}
@@ -1173,7 +1149,7 @@ const UsersManagement = () => {
                               }`}
                               onClick={() => setEditingUserRole('manager')}
                           >
-                              Manager
+                            Manager
                           </button>
                           <button
                               type="button"
@@ -1182,7 +1158,7 @@ const UsersManagement = () => {
                               }`}
                               onClick={() => setEditingUserRole('tutor')}
                           >
-                              Tutor
+                            Tutor
                           </button>
                           <button
                               type="button"
@@ -1191,7 +1167,7 @@ const UsersManagement = () => {
                               }`}
                               onClick={() => setEditingUserRole('student')}
                           >
-                              Student
+                            Student
                           </button>
                         </div>
                         <input type="hidden" name="role" value={editingUserRole} />
@@ -1244,184 +1220,7 @@ const UsersManagement = () => {
           </div>
         </div>
         {/* /Edit User */}
-        {/* Upgrade Information */}
-        <div className="modal fade" id="upgrade_info">
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">Upgrade Package</h4>
-                <button
-                    type="button"
-                    className="btn-close custom-btn-close"
-                    data-bs-dismiss="modal"
-                    aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              {/*<div className="p-3 mb-1">*/}
-              {/*  <div className="rounded bg-light p-3">*/}
-              {/*    <h5 className="mb-3">Current Plan Details</h5>*/}
-              {/*    <div className="row align-items-center">*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Company Name</p>*/}
-              {/*          <p className="text-gray-9">BrightWave Innovations</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Plan Name</p>*/}
-              {/*          <p className="text-gray-9">Advanced</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Plan Type</p>*/}
-              {/*          <p className="text-gray-9">Monthly</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*    </div>*/}
-              {/*    <div className="row align-items-center">*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Price</p>*/}
-              {/*          <p className="text-gray-9">200</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Register Date</p>*/}
-              {/*          <p className="text-gray-9">12 Sep 2024</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*      <div className="col-md-4">*/}
-              {/*        <div className="mb-3">*/}
-              {/*          <p className="fs-12 mb-0">Expiring On</p>*/}
-              {/*          <p className="text-gray-9">11 Oct 2024</p>*/}
-              {/*        </div>*/}
-              {/*      </div>*/}
-              {/*    </div>*/}
-              {/*  </div>*/}
-              {/*</div>*/}
-              <form action="companies.html">
-                <div className="modal-body pb-0">
-                  <h5 className="mb-4">Change Plan</h5>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Plan Name <span className="text-danger">*</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={planName}
-                            defaultValue={planName[0]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3 ">
-                        <label className="form-label">
-                          Plan Type <span className="text-danger">*</span>
-                        </label>
-                        <CommonSelect
-                            className='select'
-                            options={planType}
-                            defaultValue={planType[0]}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Ammount<span className="text-danger">*</span>
-                        </label>
-                        <input type="text" className="form-control" />
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Payment Date <span className="text-danger">*</span>
-                        </label>
-                        <div className="input-icon-end position-relative">
-                          <DatePicker
-                              className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
-                              getPopupContainer={getModalContainer}
-                              placeholder="DD-MM-YYYY"
-                          />
-                          <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Next Payment Date <span className="text-danger">*</span>
-                        </label>
-                        <div className="input-icon-end position-relative">
-                          <DatePicker
-                              className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
-                              getPopupContainer={getModalContainer}
-                              placeholder="DD-MM-YYYY"
-                          />
-                          <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Expiring On <span className="text-danger">*</span>
-                        </label>
-                        <div className="input-icon-end position-relative">
-                          <DatePicker
-                              className="form-control datetimepicker"
-                              format={{
-                                format: "DD-MM-YYYY",
-                                type: "mask",
-                              }}
-                              getPopupContainer={getModalContainer}
-                              placeholder="DD-MM-YYYY"
-                          />
-                          <span className="input-icon-addon">
-                          <i className="ti ti-calendar text-gray-7" />
-                        </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button
-                      type="button"
-                      className="btn btn-light me-2"
-                      data-bs-dismiss="modal"
-                  >
-                    Cancel
-                  </button>
-                  <button type="button" data-bs-dismiss="modal" className="btn btn-primary">
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {/* /Upgrade Information */}
+
         {/* Company Detail */}
         <div className="modal fade" id="company_detail">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -1446,10 +1245,14 @@ const UsersManagement = () => {
                           className="avatar avatar-md border rounded-circle flex-shrink-0 me-2"
                       >
                         <img
-                            src={selectedUser?.avatar || generateAvatarUrl(selectedUser || { name: '', lastname: '', role: '' })}
+                            src={getFullAvatarUrl(selectedUser?.avatar) || generateAvatarUrl(selectedUser || { name: '', lastname: '', role: '' })}
                             className="img-fluid rounded-circle"
                             alt={`${selectedUser?.name} ${selectedUser?.lastname}`}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              // Fallback to generated avatar if image fails to load
+                              (e.target as HTMLImageElement).src = generateAvatarUrl(selectedUser || { name: '', lastname: '', role: '' });
+                            }}
                         />
                       </Link>
                       <div>
@@ -1488,66 +1291,7 @@ const UsersManagement = () => {
                         </div>
                       </div>
                     </div>
-                    {/*<div className="row align-items-center">*/}
-                    {/*  <div className="col-md-4">*/}
-                    {/*    <div className="mb-3">*/}
-                    {/*      <p className="fs-12 mb-0">Currency</p>*/}
-                    {/*      <p className="text-gray-9">United Stated Dollar (USD)</p>*/}
-                    {/*    </div>*/}
-                    {/*  </div>*/}
-                    {/*  <div className="col-md-4">*/}
-                    {/*    <div className="mb-3">*/}
-                    {/*      <p className="fs-12 mb-0">Language</p>*/}
-                    {/*      <p className="text-gray-9">English</p>*/}
-                    {/*    </div>*/}
-                    {/*  </div>*/}
-                    {/*  <div className="col-md-4">*/}
-                    {/*    <div className="mb-3">*/}
-                    {/*      <p className="fs-12 mb-0">Addresss</p>*/}
-                    {/*      <p className="text-gray-9">*/}
-                    {/*        3705 Lynn Avenue, Phelps, WI 54554*/}
-                    {/*      </p>*/}
-                    {/*    </div>*/}
-                    {/*  </div>*/}
-                    {/*</div>*/}
                   </div>
-                  {/*<p className="text-gray-9 fw-medium">Plan Details</p>*/}
-                  {/*<div>*/}
-                  {/*  <div className="row align-items-center">*/}
-                  {/*    <div className="col-md-4">*/}
-                  {/*      <div className="mb-3">*/}
-                  {/*        <p className="fs-12 mb-0">Plan Name</p>*/}
-                  {/*        <p className="text-gray-9">Advanced</p>*/}
-                  {/*      </div>*/}
-                  {/*    </div>*/}
-                  {/*    <div className="col-md-4">*/}
-                  {/*      <div className="mb-3">*/}
-                  {/*        <p className="fs-12 mb-0">Plan Type</p>*/}
-                  {/*        <p className="text-gray-9">Monthly</p>*/}
-                  {/*      </div>*/}
-                  {/*    </div>*/}
-                  {/*    <div className="col-md-4">*/}
-                  {/*      <div className="mb-3">*/}
-                  {/*        <p className="fs-12 mb-0">Price</p>*/}
-                  {/*        <p className="text-gray-9">$200</p>*/}
-                  {/*      </div>*/}
-                  {/*    </div>*/}
-                  {/*  </div>*/}
-                  {/*  <div className="row align-items-center">*/}
-                  {/*    <div className="col-md-4">*/}
-                  {/*      <div className="mb-3">*/}
-                  {/*        <p className="fs-12 mb-0">Register Date</p>*/}
-                  {/*        <p className="text-gray-9">12 Sep 2024</p>*/}
-                  {/*      </div>*/}
-                  {/*    </div>*/}
-                  {/*    <div className="col-md-4">*/}
-                  {/*      <div className="mb-3">*/}
-                  {/*        <p className="fs-12 mb-0">Expiring On</p>*/}
-                  {/*        <p className="text-gray-9">11 Oct 2024</p>*/}
-                  {/*      </div>*/}
-                  {/*    </div>*/}
-                  {/*  </div>*/}
-                  {/*</div>*/}
                 </div>
               </div>
             </div>
@@ -1584,8 +1328,8 @@ const UsersManagement = () => {
                 >
                   Cancel
                 </button>
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     className="btn btn-danger"
                     onClick={async () => {
                       if (!editingUser?._id) return;
@@ -1619,8 +1363,6 @@ const UsersManagement = () => {
         </div>
         {/* /Delete User Modal */}
       </>
-
-
   )
 }
 
