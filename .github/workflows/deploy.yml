@@ -24,7 +24,6 @@ jobs:
           host: ${{ secrets.DIGITALOCEAN_HOST }}
           username: ${{ secrets.DIGITALOCEAN_USERNAME }}
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
-          passphrase: ${{ secrets.DIGITALOCEAN_SSH_PASSPHRASE }}
           script: |
             # Navigate to project directory
             cd /var/www/my-mern-app
