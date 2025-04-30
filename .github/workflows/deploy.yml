@@ -3,7 +3,7 @@ name: CD Pipeline - DigitalOcean
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
-    branches: [main]
+    branches: [main, Code-Overview]
     types: [completed]
 
 jobs:
@@ -15,19 +15,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      # Option 1: Deploy to App Platform
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          ref: ${{ github.event.workflow_run.head_branch }}
 
-      - name: Deploy to App Platform
-        run: |
-          # Deploy backend
-          doctl apps create-deployment ${{ secrets.DIGITALOCEAN_APP_ID }}
-
-      # Option 2: Deploy to Droplet via SSH
       - name: Deploy to Droplet
         uses: appleboy/ssh-action@master
         with:
@@ -39,8 +29,20 @@ jobs:
             # Navigate to project directory
             cd /var/www/my-mern-app
             
-            # Pull latest changes
-            git pull origin main
+            # Determine branch name from the workflow that triggered this
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            
+            # Clone or update repository
+            if [ ! -d ".git" ]; then
+              # If directory doesn't exist, clone it
+              git clone https://github.com/hsinemt/Integrated-project-management-application.git .
+              git checkout $BRANCH
+            else
+              # If directory exists, pull latest changes
+              git fetch origin
+              git checkout $BRANCH
+              git pull origin $BRANCH
+            fi
             
             # Backend deployment
             cd Back-End
@@ -69,5 +71,5 @@ jobs:
       - name: Verify deployment
         run: |
           echo "Deployment to DigitalOcean completed"
-          # Add health check or verification request
+          # Add health check
           curl -s ${{ secrets.BACKEND_URL }}/health || echo "Health check failed but continuing"
