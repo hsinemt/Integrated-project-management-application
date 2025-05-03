@@ -85,7 +85,6 @@ export const updateUserWithPhoto = async (
 
         const formData = new FormData();
 
-
         Object.keys(userData).forEach(key => {
             if (userData[key] !== undefined) {
                 if (key === 'skills' && Array.isArray(userData[key])) {

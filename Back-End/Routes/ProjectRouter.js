@@ -3,9 +3,10 @@ const router = express.Router();
 const ProjectController = require('../Controllers/ProjectController');
 const CodeAssessmentController = require('../Controllers/CodeReviewController');
 const { validateProject } = require('../Middlewares/ProjectValidation');
-const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware } = require('../Middlewares/UserValidation');
+const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware, authMiddleware } = require('../Middlewares/UserValidation');
 const { uploadProjectLogo } = require('../Config/ProjectUploadConfig');
 
+router.post("/recommend-projects", ProjectController.recommend);
 
 
 router.post(
@@ -38,6 +39,7 @@ router.post('/assess-code', userToken, isStudentMiddleware, CodeAssessmentContro
 router.post('/:projectId/assess-code', userToken, isStudentMiddleware, CodeAssessmentController.submitCode);
 router.get('/:projectId/assessments', userToken, isManagerOrTutorMiddleware, CodeAssessmentController.getProjectAssessments);
 router.put('/assessment/:assessmentId/review', userToken, isManagerOrTutorMiddleware, CodeAssessmentController.tutorReview);
+router.get('/my-speciality', userToken, ProjectController.getProjectsByUserSpeciality);
 
 
 module.exports = router;

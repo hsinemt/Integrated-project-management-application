@@ -4,7 +4,7 @@ const UserModel = require('./User');
 const StudentSchema = new mongoose.Schema({
     speciality: {
         type: String,
-        required: true,
+        required: false,
         enum: ['Twin', 'ERP/BI', 'AI', 'SAE', 'SE', 'SIM', 'NIDS', 'SLEAM', 'GAMIX', 'WIN', 'IoSyS', 'ArcTic']
     },
     skills:{

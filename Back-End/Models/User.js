@@ -82,8 +82,8 @@ const UserSchema = new Schema({
     profileUrl: {
         type: String
     },
-    images: { type: String, required: false },
     birthday: { type: Date, required: false },
+    faceDescriptor: { type: [Number], required: false } // Descripteur facial
 }, options);
 
 function getRoleColor(role) {

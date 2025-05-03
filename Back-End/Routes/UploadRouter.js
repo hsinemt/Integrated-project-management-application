@@ -48,7 +48,7 @@ router.post("/upload", authMiddleware, upload.single("image"), async (req, res) 
 
         const updatedUser = await User.findByIdAndUpdate(
             req.user.id,
-            { $set: { images: imageUrl } },
+            { $set: { avatar: imageUrl } },
             { 
                 new: true,
                 runValidators: true,
@@ -64,7 +64,7 @@ router.post("/upload", authMiddleware, upload.single("image"), async (req, res) 
 
         return res.json({
             success: true,
-            message: "Image uploaded and user updated successfully",
+            message: "Image uploaded and user avatar updated successfully",
             imageUrl,
             user: updatedUser
         });

@@ -52,3 +52,43 @@ exports.getGroupesByProjectId = async (req, res) => {
         });
     }
 };
+
+exports.getGroupesByUserId = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required"
+            });
+        }
+
+        // Find groups where the user is either a student or a tutor
+        const groupes = await GroupeModel.find({
+            $or: [
+                { id_students: userId },
+                { id_tutor: userId }
+            ]
+        })
+        .populate('id_students', 'name email')
+        .populate('id_tutor', 'name email')
+        .populate('id_project', 'title');
+
+        if (!groupes || groupes.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No groups found for this user"
+            });
+        }
+
+        return res.status(200).json({ success: true, groups: groupes });
+    } catch (error) {
+        console.error("Error fetching groups by user ID:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching groups",
+            error: error.message
+        });
+    }
+};

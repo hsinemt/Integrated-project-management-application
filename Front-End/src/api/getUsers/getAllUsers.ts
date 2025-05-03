@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_URL = 'http://localhost:9777';
+import { API_URL, getFullAvatarUrl } from '../config';
 
 export type users_type = {
     _id?: string;
@@ -15,7 +14,16 @@ export type users_type = {
 export const fetchUsers = async (): Promise<users_type[]> => {
     try {
         const response = await axios.get(`${API_URL}/user/getUsers`);
-        return response.data;
+
+        // Process avatar URLs before returning the data
+        const users = response.data.map((user: users_type) => ({
+            ...user,
+            // Process avatar URL if it exists
+            avatar: user.avatar ? getFullAvatarUrl(user.avatar) : undefined,
+            Status: 'Active'
+        }));
+
+        return users;
     } catch (error) {
         console.error("Error fetching data:", error);
         throw error;

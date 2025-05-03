@@ -201,11 +201,24 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await axios.get("http://localhost:9777/project/getAllProjects");
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+    
+        const response = await axios.get("http://localhost:9777/project/my-speciality", {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
         setAvailableProjectsState(response.data.projects);
       } catch (error) {
         console.error("Erreur API projets :", error);
         setError("Erreur lors de la récupération des projets.");
+        // Redirection vers le login si le token est invalide
+       
       }
     };
     fetchProjects();

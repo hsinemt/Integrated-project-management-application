@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
@@ -12,9 +12,8 @@ const Register = () => {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(initialRegisterFormData);
-
   const [message, setMessage] = useState<string | null>(null);
-
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,
@@ -27,12 +26,35 @@ const Register = () => {
       [field]: !prevState[field],
     }));
   };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked} = e.target;
-    setFormData((prevData)=>({
-      ...prevData,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    const { name, value, type, checked, files } = e.target;
+
+    if (type === 'file' && files && files.length > 0) {
+      const file = files[0];
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        setFormData(prevData => ({
+          ...prevData,
+          photo: file,
+          photoPreview: reader.result as string
+        }));
+      };
+
+      reader.readAsDataURL(file);
+    } else {
+      setFormData((prevData) => ({
+        ...prevData,
+        [name]: type === 'checkbox' ? checked : value,
+      }));
+    }
+  };
+
+  const handlePhotoClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleSubmit = async (e:React.FormEvent) => {
@@ -212,6 +234,50 @@ const Register = () => {
                                     togglePasswordVisibility("confirmPassword")
                                 }
                             ></span>
+                          </div>
+                        </div>
+
+                        <div className="mb-3">
+                          <label className="form-label">Profile Photo (Optional)</label>
+                          <div className="d-flex align-items-center">
+                            <div 
+                              className="avatar-upload position-relative me-3" 
+                              onClick={handlePhotoClick}
+                              style={{ 
+                                width: '100px', 
+                                height: '100px', 
+                                borderRadius: '50%', 
+                                border: '2px dashed #ccc',
+                                cursor: 'pointer',
+                                overflow: 'hidden',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: '#f8f9fa'
+                              }}
+                            >
+                              {formData.photoPreview ? (
+                                <img 
+                                  src={formData.photoPreview} 
+                                  alt="Profile Preview" 
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <i className="ti ti-camera" style={{ fontSize: '24px', color: '#6c757d' }}></i>
+                              )}
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                name="photo"
+                                accept="image/*"
+                                onChange={handleChange}
+                                style={{ display: 'none' }}
+                              />
+                            </div>
+                            <div>
+                              <p className="mb-1">Upload your profile photo</p>
+                              <small className="text-muted">Click to browse or drag and drop</small>
+                            </div>
                           </div>
                         </div>
                         <div className="d-flex align-items-center justify-content-between mb-3">
