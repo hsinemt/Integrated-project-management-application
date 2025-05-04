@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "Back-End",
+			"path": ".."
+		},
+		{
+			"name": "uploadsimage",
+			"path": "../../../../../../azi/Integrated-project-management-application/Back-End/uploadsimage"
+		},
+		{
+			"name": "uploads",
+			"path": "../../../../../../azi/Integrated-project-management-application/Back-End/uploads"
+		}
+	],
+	"settings": {}
+}
