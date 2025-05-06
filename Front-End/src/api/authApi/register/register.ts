@@ -11,6 +11,7 @@ export const initialRegisterFormData = {
     agreeToTerms: false,
     photo: null as File | null,
     photoPreview: "",
+    speciality: "",
 };
 
 export const registerUser = async (userData: any) => {
@@ -26,7 +27,8 @@ export const registerUser = async (userData: any) => {
             lastname: userData.lastName,
             email: userData.email,
             password: userData.password,
-            role: 'student'
+            role: 'student',
+            speciality: userData.speciality || ''
         });
 
         if (response.data.success) {
@@ -54,6 +56,11 @@ export const registerUserWithPhoto = async (userData: any) => {
         formData.append('lastname', userData.lastName);
         formData.append('email', userData.email);
         formData.append('password', userData.password);
+
+        // Append speciality if it exists
+        if (userData.speciality) {
+            formData.append('speciality', userData.speciality);
+        }
 
         // Don't set role here, let the server handle it
         // formData.append('role', 'student');

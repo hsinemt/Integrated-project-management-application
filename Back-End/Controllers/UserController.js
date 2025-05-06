@@ -180,7 +180,7 @@ const signup = async (req, res) => {
     try {
         //console.log("Signup request body:", req.body);
 
-        const {name, lastname, email, password, role, avatar} = req.body;
+        const {name, lastname, email, password, role, avatar, speciality} = req.body;
 
         // Validate required fields
         if (!name || !lastname || !email || !password) {
@@ -198,6 +198,14 @@ const signup = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: "you can't signup with this access"
+            });
+        }
+
+        // Validate speciality if provided
+        if (speciality !== undefined && typeof speciality !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'Speciality must be a string'
             });
         }
 
@@ -247,7 +255,8 @@ const signup = async (req, res) => {
             email,
             password,
             role: userRole,
-            avatar
+            avatar,
+            speciality: speciality || 'Twin'
         };
 
         // Only add face descriptor if it was successfully extracted
@@ -533,7 +542,7 @@ const addManager = async (req, res) => {
 
 const addTutor = async (req, res) => {
     try {
-        const { name, lastname, email, password, classe, avatar } = req.body;
+        const { name, lastname, email, password, classe, avatar, git } = req.body;
         const adminUser = await UserModel.findById(req.body.userId);
 
         if (!adminUser) {
@@ -551,7 +560,7 @@ const addTutor = async (req, res) => {
             return res.status(409).json({ success: false, message: `The email ${email} already exists, try another email` });
         }
 
-        const tutor = new TutorModel({ name, lastname, email, password, role: 'tutor', classe, avatar });
+        const tutor = new TutorModel({ name, lastname, email, password, role: 'tutor', classe, avatar, git });
         tutor.password = await bcrypt.hash(password, 10);
         await tutor.save();
 
@@ -579,6 +588,13 @@ const addStudent = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Skills must be an array of strings'
+            });
+        }
+
+        if (speciality !== undefined && typeof speciality !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'Speciality must be a string'
             });
         }
 
@@ -895,6 +911,7 @@ const updateUser = async (req, res) => {
                 userData.speciality = updates.speciality || 'Twin'; // Default value
             } else if (newRole === 'tutor') {
                 userData.classe = updates.classe || '';
+                userData.git = updates.git || '';
             }
 
             // Delete old user

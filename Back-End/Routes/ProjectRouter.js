@@ -27,7 +27,7 @@ router.put(
 );
 
 router.get('/getAllProjects', userToken, ProjectController.getAllProjects);
-router.get('/getProjectById/:id', userToken, isManagerOrTutorMiddleware, ProjectController.getProjectById);
+router.get('/getProjectById/:id', userToken, isStudentMiddleware, ProjectController.getProjectById);
 router.delete('/delete/:id', userToken, isAdminMiddleware, ProjectController.deleteProject);
 router.get('/count', userToken, ProjectController.getProjectsCount);
 router.put('/assign-tutor/:id', userToken, isManagerOrTutorMiddleware, ProjectController.assignTutorToProject);

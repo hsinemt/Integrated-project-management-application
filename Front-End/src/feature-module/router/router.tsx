@@ -41,8 +41,8 @@ const ALLRoutes: React.FC = () => {
                 />
               </Route>
 
-              {/* Manager and Tutor routes */}
-              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'tutor']} />}>
+              {/* Manager, Tutor, and Student routes */}
+              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'tutor', 'student']} />}>
                 <Route
                   path="/deals-dashboard"
                   element={

@@ -3,6 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import {registerUser, initialRegisterFormData} from "../../../api/authApi/register/register";
+import Select from "react-select";
+import { Option } from "../../../core/common/multiSelect";
+
+// Available specialties array
+const specialties = ['Twin', 'ERP/BI', 'AI', 'SAE', 'SE', 'SIM', 'NIDS', 'SLEAM', 'GAMIX', 'WIN', 'IoSyS', 'ArcTic'];
 
 
 type PasswordField = "password" | "confirmPassword";
@@ -27,8 +32,8 @@ const Register = () => {
     }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked, files } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type, checked, files } = e.target as HTMLInputElement;
 
     if (type === 'file' && files && files.length > 0) {
       const file = files[0];
@@ -49,6 +54,14 @@ const Register = () => {
         [name]: type === 'checkbox' ? checked : value,
       }));
     }
+  };
+
+  // Handle speciality selection
+  const handleSpecialityChange = (selectedOption: Option | null) => {
+    setFormData(prevData => ({
+      ...prevData,
+      speciality: selectedOption ? selectedOption.value : ''
+    }));
   };
 
   const handlePhotoClick = () => {
@@ -235,6 +248,18 @@ const Register = () => {
                                 }
                             ></span>
                           </div>
+                        </div>
+
+                        <div className="mb-3">
+                          <label className="form-label">Speciality</label>
+                          <Select 
+                            options={specialties.map(specialty => ({ value: specialty, label: specialty }))}
+                            onChange={handleSpecialityChange}
+                            value={formData.speciality ? { value: formData.speciality, label: formData.speciality } : null}
+                            className="form-control"
+                            classNamePrefix="react-select"
+                            placeholder="Select a speciality"
+                          />
                         </div>
 
                         <div className="mb-3">

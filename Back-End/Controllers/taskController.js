@@ -36,7 +36,7 @@ const getFileExtension = (language) => {
 exports.getTasksByProjectId = async (req, res) => {
     try {
         const { projectId } = req.params;
-
+        const user = req.user; // Get the user from the request object
 
         if (!mongoose.Types.ObjectId.isValid(projectId)) {
             return res.status(400).json({
@@ -45,8 +45,13 @@ exports.getTasksByProjectId = async (req, res) => {
             });
         }
 
+        // Create a filter object for the query
+        const filter = { project: projectId };
 
-        const tasks = await TaskModel.find({ project: projectId })
+        // All users (including students) can see all tasks in a project
+        // For admin, tutor, and manager roles, show all tasks (no additional filter needed)
+
+        const tasks = await TaskModel.find(filter)
             .sort({ date: -1 })
             .populate('assignedTo', 'name lastname avatar');
 

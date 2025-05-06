@@ -4,6 +4,8 @@ import ImageWithBasePath from '../../../core/common/imageWithBasePath';
 import { addTutor, addManager, addStudent } from '../../../api/authApi/register/addUsers';
 import { createUserWithPhoto } from '../../../api/uploadApi/uploadUserPhoto';
 import Swal from 'sweetalert2';
+import MultiSelect, { Option } from '../../../core/common/multiSelect';
+import Select from 'react-select';
 
 // Available specialties array
 const specialties = ['Twin', 'ERP/BI', 'AI', 'SAE', 'SE', 'SIM', 'NIDS', 'SLEAM', 'GAMIX', 'WIN', 'IoSyS', 'ArcTic'];
@@ -24,6 +26,8 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
     const [userType, setUserType] = useState<'manager' | 'tutor' | 'student'>('manager');
     const [skills, setSkills] = useState<string[]>([]);
     const [skillInput, setSkillInput] = useState('');
+    const [selectedStudentSpeciality, setSelectedStudentSpeciality] = useState<Option | null>(null);
+    const [selectedManagerSpeciality, setSelectedManagerSpeciality] = useState<Option | null>(null);
 
     // Photo upload state
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -134,7 +138,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                 case 'manager':
                     userData = {
                         ...commonData,
-                        speciality: formData.get('speciality') as string,
+                        speciality: selectedManagerSpeciality ? selectedManagerSpeciality.value : '',
                         userId: userId, // Add this line to include the userId
                     };
                     break;
@@ -142,13 +146,14 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                     userData = {
                         ...commonData,
                         classe: formData.get('classe') as string,
+                        git: formData.get('git') as string,
                         userId: userId, // Add this line to include the userId
                     };
                     break;
                 case 'student':
                     userData = {
                         ...commonData,
-                        speciality: formData.get('speciality') as string,
+                        speciality: selectedStudentSpeciality ? selectedStudentSpeciality.value : '',
                         skills: skills,
                         level: formData.get('level') as string,
                         userId: userId, // Add this line to include the userId
@@ -363,25 +368,34 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                                     <div className="col-md-6">
                                         <div className="mb-3">
                                             <label className="form-label">Speciality</label>
-                                            <select name="speciality" className="form-select" required>
-                                                <option value="">Select a speciality</option>
-                                                {specialties.map((specialty, index) => (
-                                                    <option key={index} value={specialty}>
-                                                        {specialty}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <Select
+                                                className="form-control"
+                                                classNamePrefix="react-select"
+                                                options={specialties.map(specialty => ({ value: specialty, label: specialty }))}
+                                                placeholder="Select a speciality"
+                                                name="speciality"
+                                                value={selectedManagerSpeciality}
+                                                onChange={(option: Option | null) => setSelectedManagerSpeciality(option)}
+                                            />
                                         </div>
                                     </div>
                                 )}
 
                                 {userType === 'tutor' && (
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="form-label">Class</label>
-                                            <input type="text" name="classe" className="form-control" required />
+                                    <>
+                                        <div className="col-md-6">
+                                            <div className="mb-3">
+                                                <label className="form-label">Class</label>
+                                                <input type="text" name="classe" className="form-control" required />
+                                            </div>
                                         </div>
-                                    </div>
+                                        <div className="col-md-6">
+                                            <div className="mb-3">
+                                                <label className="form-label">Git Token</label>
+                                                <input type="text" name="git" className="form-control" required />
+                                            </div>
+                                        </div>
+                                    </>
                                 )}
 
                                 {userType === 'student' && (
@@ -389,14 +403,14 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onAddUser, userId }) => {
                                         <div className="col-md-6">
                                             <div className="mb-3">
                                                 <label className="form-label">Speciality</label>
-                                                <select name="speciality" className="form-select" required>
-                                                    <option value="">Select a speciality</option>
-                                                    {specialties.map((specialty, index) => (
-                                                        <option key={index} value={specialty}>
-                                                            {specialty}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <Select 
+                                                    options={specialties.map(specialty => ({ value: specialty, label: specialty }))}
+                                                    onChange={(option: Option | null) => setSelectedStudentSpeciality(option)}
+                                                    value={selectedStudentSpeciality}
+                                                    className="form-control"
+                                                    classNamePrefix="react-select"
+                                                    placeholder="Select a speciality"
+                                                />
                                             </div>
                                         </div>
                                         <div className="col-md-6">

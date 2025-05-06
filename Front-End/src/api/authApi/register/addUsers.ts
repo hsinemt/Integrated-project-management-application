@@ -8,6 +8,7 @@ export const initialTutorFormData = {
     email: "",
     password: "",
     classe: "",
+    git: "",
     userId: "",
     role: "Tutor",
 };
@@ -27,7 +28,7 @@ export const initialStudentFormData = {
     email: "",
     password: "",
     speciality: "",
-    skills: [],
+    skills: [] as string[],
     level: "",
     userId: "",
 };
@@ -45,6 +46,7 @@ export const addTutor = async (tutorData: any) => {
             email: tutorData.email,
             password: tutorData.password,
             classe: tutorData.classe,
+            git: tutorData.git,
             userId: tutorData.userId,
             role: "tutor",
         }, {

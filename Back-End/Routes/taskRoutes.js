@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../Controllers/taskController');
 const cloudinary = require('cloudinary').v2;
+const { userToken } = require('../Middlewares/UserValidation');
 
 const Project = require('../Models/Project');
 const Task = require('../Models/tasks');
@@ -13,7 +14,7 @@ const mongoose = require('mongoose');
 router.post('/preview', taskController.previewTasks);
 router.post('/save', taskController.saveTasks);
 
-router.get('/:projectId/tasks', taskController.getTasksByProjectId);
+router.get('/:projectId/tasks', userToken, taskController.getTasksByProjectId);
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
