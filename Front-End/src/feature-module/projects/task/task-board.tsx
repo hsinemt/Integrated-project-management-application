@@ -5,6 +5,7 @@ import dragula from 'dragula';
 import 'dragula/dist/dragula.css';
 import Modal from 'react-modal';
 import styles from "./page.module.css";
+import TaskCard from './TaskCard';
 import TaskColumn from './TaskColumn';
 import Webcam from 'react-webcam';
 import io from 'socket.io-client';
@@ -20,6 +21,7 @@ interface Task {
     état: string;
     image: string;
     estimatedTime: string;
+    git?: string;
     assignedTo: {
         name: string;
         lastname: string;
@@ -104,88 +106,158 @@ const TaskBoard = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
 
+    const handleGitBranchUpdate = (taskId: string, gitBranch: string) => {
+        setTasks(prevTasks => 
+            prevTasks.map(task => 
+                task._id === taskId ? { ...task, git: gitBranch } : task
+            )
+        );
+    };
+
+    const fetchMessagesWithBearer = async (groupId: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            console.log('Fetching messages with Bearer token:', token ? `Bearer ${token.substring(0, 20)}...` : 'No token');
+            if (!token) {
+                throw new Error('No token available');
+            }
+            const response = await axios.get(`http://localhost:9777/messages/group/${groupId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            console.log('Fetched messages:', response.data.messages);
+            setMessages(response.data.messages);
+            setChatError(null);
+        } catch (error: any) {
+            console.error('Error fetching messages:', error.response?.data || error.message);
+            const errorMessage = error.response?.status === 401
+                ? 'Session expirée. Veuillez vous reconnecter.'
+                : error.message === 'No token available'
+                ? 'Veuillez vous connecter pour accéder au chat.'
+                : `Impossible de charger les messages: ${error.message}`;
+            setChatError(errorMessage);
+        }
+    };
+
+    const fetchUserAndGroupForSocket = async (token: string) => {
+        try {
+            console.log('Fetching user and group for Socket.IO with Bearer token:', `Bearer ${token.substring(0, 20)}...`);
+            const response = await axios.get('http://localhost:9777/user/profilegroupe', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            console.log('User and group response for Socket.IO:', response.data);
+
+            const fetchedGroupId = response.data.group?._id;
+            const fetchedUserId = response.data.user?._id;
+            setGroupId(fetchedGroupId);
+            setUserId(fetchedUserId);
+
+            if (fetchedUserId && fetchedGroupId) {
+                socket.auth = { userId: fetchedUserId };
+                socket.connect();
+                console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', fetchedUserId);
+                socket.emit('joinGroup', { groupId: fetchedGroupId, userId: fetchedUserId });
+            } else {
+                console.error('Missing userId or groupId for Socket.IO:', { fetchedUserId, fetchedGroupId });
+                setChatError('Erreur: Impossible de rejoindre le groupe. Données manquantes.');
+            }
+
+            return { userId: fetchedUserId, groupId: fetchedGroupId };
+        } catch (error: any) {
+            console.error('Error fetching user and group for Socket.IO:', error.response?.data || error.message);
+            throw error;
+        }
+    };
+
+    const fetchTasksAndProject = async (token: string) => {
+        try {
+            console.log('Fetching tasks with token:', token.substring(0, 20) + '...');
+            const response = await axios.get('http://localhost:9777/user/profilegroupe', {
+                headers: {
+                    Authorization: token,
+                },
+            });
+
+            console.log('Tasks and project response:', response.data);
+
+            const tasksWithEstimatedTime = await Promise.all(response.data.tasks.map(async (task: Task) => {
+                const estimatedTime = await getEstimatedTimeFromGemini(task);
+                return {
+                    ...task,
+                    estimatedTime,
+                };
+            }));
+
+            setTasks(tasksWithEstimatedTime);
+            if (response.data.projects && response.data.projects.length > 0) {
+                setProjectName(response.data.projects[0].title);
+            }
+        } catch (error: any) {
+            console.error('Error fetching tasks or project:', error.response?.data || error.message);
+            throw error;
+        }
+    };
+
     useEffect(() => {
-        const fetchTasksAndGroup = async () => {
+        const initializeData = async () => {
             try {
                 const token = localStorage.getItem('token');
-                console.log('Token for /user/profilegroupe:', token ? token.substring(0, 20) + '...' : 'No token');
                 if (!token) {
                     console.error('No token found in localStorage');
-                    setChatError('Veuillez vous connecter pour accéder au chat.');
                     setLoading(false);
                     return;
                 }
 
-                const response = await axios.get('http://localhost:9777/user/profilegroupe', {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
+                await fetchTasksAndProject(token);
 
-                console.log('Profile group response:', response.data);
-
-                const tasksWithEstimatedTime = await Promise.all(response.data.tasks.map(async (task: Task) => {
-                    const estimatedTime = await getEstimatedTimeFromGemini(task);
-                    return {
-                        ...task,
-                        estimatedTime,
-                    };
-                }));
-
-                setTasks(tasksWithEstimatedTime);
-                if (response.data.projects && response.data.projects.length > 0) {
-                    setProjectName(response.data.projects[0].title);
-                }
-
-                const fetchedGroupId = response.data.group?._id;
-                const fetchedUserId = response.data.user?._id;
-                setGroupId(fetchedGroupId);
-                setUserId(fetchedUserId);
-
-                if (fetchedUserId && fetchedGroupId) {
-                    socket.auth = { userId: fetchedUserId };
-                    socket.connect();
-                    console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', fetchedUserId);
-                    socket.emit('joinGroup', { groupId: fetchedGroupId, userId: fetchedUserId });
-                } else {
-                    console.error('Missing userId or groupId for Socket.IO:', { fetchedUserId, fetchedGroupId });
-                    setChatError('Erreur: Impossible de rejoindre le groupe. Données manquantes.');
+                try {
+                    await fetchUserAndGroupForSocket(token);
+                } catch (socketError: any) {
+                    if (socketError.response?.status === 401) {
+                        const storedUserId = localStorage.getItem('userId');
+                        const storedRole = localStorage.getItem('role');
+                        if (storedUserId && storedRole) {
+                            setUserId(storedUserId);
+                            try {
+                                const groupResponse = await axios.get(`http://localhost:9777/group/by-user/${storedUserId}`);
+                                console.log('Fetched groups:', groupResponse.data);
+                                if (groupResponse.data.success && groupResponse.data.groups.length > 0) {
+                                    const fetchedGroupId = groupResponse.data.groups[0]._id;
+                                    setGroupId(fetchedGroupId);
+                                    socket.auth = { userId: storedUserId };
+                                    socket.connect();
+                                    console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', storedUserId);
+                                    socket.emit('joinGroup', { groupId: fetchedGroupId, userId: storedUserId });
+                                } else {
+                                    setChatError('Aucun groupe trouvé pour cet utilisateur.');
+                                }
+                            } catch (groupError: any) {
+                                console.error('Error fetching groups:', groupError.response?.data || groupError.message);
+                                setChatError('Erreur lors de la récupération des groupes: ' + (groupError.response?.data?.message || groupError.message));
+                            }
+                        } else {
+                            setChatError('Session expirée. Veuillez vous reconnecter.');
+                            setTimeout(() => {
+                                navigate('/login');
+                            }, 2000);
+                        }
+                    } else {
+                        setChatError(`Erreur lors du chargement des données du groupe: ${socketError.message}`);
+                    }
                 }
 
                 setLoading(false);
             } catch (error: any) {
-                console.error('Error fetching tasks or group:', error.response?.data || error.message);
+                console.error('Error initializing data:', error.response?.data || error.message);
                 if (error.response?.status === 401) {
-                    // Token expired, attempt to use localStorage data
-                    const storedUserId = localStorage.getItem('userId');
-                    const storedRole = localStorage.getItem('role');
-                    if (storedUserId && storedRole) {
-                        setUserId(storedUserId);
-                        try {
-                            // Fetch groups for the user using the new endpoint
-                            const groupResponse = await axios.get(`http://localhost:9777/group/by-user/${storedUserId}`);
-                            console.log('Fetched groups:', groupResponse.data);
-                            if (groupResponse.data.success && groupResponse.data.groups.length > 0) {
-                                const fetchedGroupId = groupResponse.data.groups[0]._id;
-                                setGroupId(fetchedGroupId);
-                                socket.auth = { userId: storedUserId };
-                                socket.connect();
-                                console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', storedUserId);
-                                socket.emit('joinGroup', { groupId: fetchedGroupId, userId: storedUserId });
-                            } else {
-                                setChatError('Aucun groupe trouvé pour cet utilisateur.');
-                            }
-                        } catch (groupError: any) {
-                            console.error('Error fetching groups:', groupError.response?.data || groupError.message);
-                            setChatError('Erreur lors de la récupération des groupes: ' + (groupError.response?.data?.message || groupError.message));
-                        }
-                    } else {
-                        setChatError('Session expirée. Veuillez vous reconnecter.');
-                        // Redirect to login page
-                        setTimeout(() => {
-                            navigate('/login');
-                        }, 2000);
-                    }
+                    setChatError('Session expirée. Veuillez vous reconnecter.');
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 2000);
                 } else {
                     setChatError(`Erreur lors du chargement des données: ${error.message}`);
                 }
@@ -193,7 +265,7 @@ const TaskBoard = () => {
             }
         };
 
-        fetchTasksAndGroup();
+        initializeData();
 
         socket.on('receiveMessage', (message: Message) => {
             console.log('Received message:', message);
@@ -207,7 +279,7 @@ const TaskBoard = () => {
 
         socket.on('connect', () => {
             console.log('Socket.IO connected');
-            setChatError(null); // Clear error on connect
+            setChatError(null);
         });
 
         socket.on('disconnect', () => {
@@ -226,32 +298,7 @@ const TaskBoard = () => {
 
     useEffect(() => {
         if (groupId) {
-            const fetchMessages = async () => {
-                try {
-                    const token = localStorage.getItem('token');
-                    console.log('Token for /messages/group:', token ? token.substring(0, 20) + '...' : 'No token');
-                    if (!token) {
-                        throw new Error('No token available');
-                    }
-                    const response = await axios.get(`http://localhost:9777/messages/group/${groupId}`, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    });
-                    console.log('Fetched messages:', response.data.messages);
-                    setMessages(response.data.messages);
-                    setChatError(null);
-                } catch (error: any) {
-                    console.error('Error fetching messages:', error.response?.data || error.message);
-                    const errorMessage = error.response?.status === 401
-                        ? 'Session expirée. Veuillez vous reconnecter.'
-                        : error.message === 'No token available'
-                        ? 'Veuillez vous connecter pour accéder au chat.'
-                        : `Impossible de charger les messages: ${error.message}`;
-                    setChatError(errorMessage);
-                }
-            };
-            fetchMessages();
+            fetchMessagesWithBearer(groupId);
         }
     }, [groupId]);
 
@@ -264,21 +311,34 @@ const TaskBoard = () => {
             toDoTasksRef.current,
             inProgressTasksRef.current,
             inReviewTasksRef.current,
-            completedTasksRef.current,
         ].filter((container) => container !== null) as HTMLDivElement[];
 
-        const drake = dragula(containers);
+        console.log('Dragula containers:', containers);
+
+        const drake = dragula(containers, {
+            moves: (el, source, handle, sibling) => {
+                console.log('Dragula moves:', { el, source, handle, sibling });
+                return source !== completedTasksRef.current;
+            },
+            accepts: (el, target, source, sibling) => {
+                console.log('Dragula accepts:', { el, target, source, sibling });
+                return target !== completedTasksRef.current;
+            }
+        });
 
         drake.on('drop', (el, target) => {
+            console.log('Dragula drop:', { el, target });
             const taskId = el.getAttribute('data-task-id');
             const newEtat = target.getAttribute('data-etat');
 
             if (taskId && newEtat) {
+                console.log('Updating task status:', { taskId, newEtat });
                 setUpdatedTasks((prev) => new Map(prev).set(taskId, newEtat));
             }
         });
 
         return () => {
+            console.log('Cleaning up dragula');
             drake.destroy();
         };
     }, [tasks]);
@@ -292,8 +352,14 @@ const TaskBoard = () => {
 
     const saveTaskStatusChanges = async () => {
         try {
+            const token = localStorage.getItem('token');
+            console.log('Saving task status with token:', token ? token.substring(0, 20) + '...' : 'No token');
             const statusUpdates = Array.from(updatedTasks.entries()).map(([taskId, newEtat]) =>
-                axios.put(`http://localhost:9777/api/tasks/tasks/${taskId}/status`, { etat: newEtat })
+                axios.put(`http://localhost:9777/api/tasks/tasks/${taskId}/status`, { etat: newEtat }, {
+                    headers: {
+                        Authorization: token,
+                    },
+                })
             );
             await Promise.all(statusUpdates);
             window.location.reload();
@@ -307,6 +373,8 @@ const TaskBoard = () => {
         if (file) {
             const formData = new FormData();
             formData.append('image', file);
+            const token = localStorage.getItem('token');
+            console.log('Uploading image with token:', token ? token.substring(0, 20) + '...' : 'No token');
 
             try {
                 const response = await axios.put(
@@ -315,6 +383,7 @@ const TaskBoard = () => {
                     {
                         headers: {
                             'Content-Type': 'multipart/form-data',
+                            Authorization: token,
                         },
                     }
                 );
@@ -372,12 +441,16 @@ const TaskBoard = () => {
             setVerificationStatus('loading');
             setVerificationMessage('Verifying your face...');
 
+            const token = localStorage.getItem('token');
+            console.log('Verifying face with token:', token ? token.substring(0, 20) + '...' : 'No token');
+
             const response = await axios.post(
                 'http://localhost:9777/user/loginWithFace',
                 { imageData: imageSrc },
                 {
                     headers: {
                         'Content-Type': 'application/json',
+                        Authorization: token,
                     },
                 }
             );
@@ -403,7 +476,7 @@ const TaskBoard = () => {
         console.log('Toggling chat, current isChatOpen:', isChatOpen);
         setIsChatOpen(!isChatOpen);
         if (!isChatOpen) {
-            setIsChatExpanded(true); // Expand when opening
+            setIsChatExpanded(true);
         }
     };
 
@@ -599,6 +672,7 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={toDoTasksRef}
+                                            onGitBranchUpdate={handleGitBranchUpdate}
                                         />
                                         <TaskColumn
                                             etat="In Progress"
@@ -620,24 +694,13 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={completedTasksRef}
+                                            isCompletedColumn={true}
+                                            openCamera={openCamera}
                                         />
                                     </div>
                                 </div>
                             </div>
-                            <div className="d-flex justify-content-between mt-3">
-                                <button
-                                    className="btn d-flex align-items-center"
-                                    style={{
-                                        backgroundColor: '#f97316',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        padding: '6px 12px',
-                                    }}
-                                    onClick={openCamera}
-                                >
-                                    <i className="ti ti-camera me-2"></i> Verify to Pass Quiz
-                                </button>
+                            <div className="d-flex justify-content-end mt-3">
                                 <button className="btn btn-primary" onClick={saveTaskStatusChanges}>Save</button>
                             </div>
                         </div>
@@ -645,7 +708,6 @@ const TaskBoard = () => {
                 </div>
             </div>
 
-            {/* Modale pour l'image */}
             <Modal
                 isOpen={isModalOpen}
                 onRequestClose={closeModal}
@@ -657,7 +719,6 @@ const TaskBoard = () => {
                 {selectedImage && <img src={selectedImage} alt="Full Size" className="full-size-image" />}
             </Modal>
 
-            {/* Modale pour la vérification faciale */}
             <Modal
                 isOpen={isCameraOpen}
                 onRequestClose={closeCamera}
@@ -727,7 +788,6 @@ const TaskBoard = () => {
                 </div>
             </Modal>
 
-            {/* Sidebar Chat */}
             {isChatOpen && (
                 <div
                     style={{
@@ -786,17 +846,7 @@ const TaskBoard = () => {
                                                 onClick={() => {
                                                     setChatError(null);
                                                     if (groupId) {
-                                                        const token = localStorage.getItem('token');
-                                                        if (token) {
-                                                            axios.get(`http://localhost:9777/messages/group/${groupId}`, {
-                                                                headers: { Authorization: `Bearer ${token}` },
-                                                            }).then(response => {
-                                                                setMessages(response.data.messages);
-                                                                setChatError(null);
-                                                            }).catch(err => {
-                                                                setChatError(`Erreur: ${err.message}`);
-                                                            });
-                                                        }
+                                                        fetchMessagesWithBearer(groupId);
                                                     }
                                                 }}
                                                 style={{

@@ -51,6 +51,15 @@ const ALLRoutes: React.FC = () => {
                     </Suspense>
                   }
                 />
+
+<Route
+                  path="/employee-dashboard/:studentId"
+                  element={
+                    <Suspense fallback={<LoadingFallback />}>
+                      {publicRoutes.find(route => route.path === '/employee-dashboard/:studentId')?.element}
+                    </Suspense>
+                  }
+                />
                 <Route
                   path="/project-details/:id"
                   element={

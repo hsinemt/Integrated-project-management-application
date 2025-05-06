@@ -4,6 +4,9 @@ const UserModel = require('./User');
 const TutorSchema = new mongoose.Schema({
     classe: {
         type: String,
+    },
+    git: {
+        type: String,
     }
 });
 

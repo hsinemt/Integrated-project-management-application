@@ -1,5 +1,19 @@
 const mongoose = require('mongoose');
 
+// Define the status history subdocument schema
+const statusHistorySchema = new mongoose.Schema({
+  status: {
+    type: String,
+    enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
+    required: true
+  },
+  changedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false }); // We don't need IDs for subdocuments
+
+// Main task schema
 const taskSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -23,7 +37,16 @@ const taskSchema = new mongoose.Schema({
         enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
         default: 'To Do',
     },
+    statusHistory: [statusHistorySchema], // Array of status history records
+    noteGit: {
+        type: String,
+        required: false
+    },
     image: {
+        type: String,
+        required: false,
+    },
+    git: {
         type: String,
         required: false,
     },
@@ -34,11 +57,14 @@ const taskSchema = new mongoose.Schema({
     },
     group: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Groupes', // Reference to the Groupe model
+        ref: 'Groupes',
         required: true,
     },
-    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true } // Assignation d'un étudiant
-
+    assignedTo: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User', 
+        required: true 
+    }
 });
 
 module.exports = mongoose.model('Task', taskSchema);

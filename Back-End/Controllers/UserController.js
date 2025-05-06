@@ -1133,6 +1133,84 @@ const loginWithFace = async (req, res) => {
         });
     }
 };
+const updateSdent = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+
+        const avatar = `/uploads/${req.file.filename}`;
+        console.log("Avatar URL:", avatar);
+        console.log("Authenticated User ID:", req.user.id);
+
+        // First verify the user exists
+        const userExists = await User.findById(req.user.id);
+        if (!userExists) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Initialize face descriptor as null
+        let faceDescriptor = null;
+
+        // Process face detection for the uploaded avatar
+        try {
+            const imageBuffer = fs.readFileSync(path.join(process.cwd(), avatar.startsWith('/') ? avatar.substring(1) : avatar));
+            const imageData = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+            //console.log("📷 Image converted to Base64 :", imageData.substring(0, 50) + "...");
+
+            // Extract face descriptor
+            faceDescriptor = await extractFaceDescriptor(imageData);
+
+            if (faceDescriptor) {
+                //console.log("✅ Face descriptor extracted successfully:", faceDescriptor.length, "dimensions");
+            } else {
+                //console.log("⚠️ No face detected or face detection skipped - proceeding without facial recognition");
+            }
+        } catch (imageError) {
+            console.error("⚠️ Error processing image for face descriptor:", imageError);
+            // Continue with update even if face detection fails
+        }
+
+        // Prepare update data
+        const updateData = { avatar };
+        if (faceDescriptor) {
+            updateData.faceDescriptor = faceDescriptor;
+            console.log("Adding face descriptor to update data");
+        }
+
+        // Update with explicit $set and proper error handling
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: updateData },
+            { 
+                new: true,
+                runValidators: true,
+                context: 'query'
+            }
+        ).select('-password'); // Exclude sensitive data
+
+        console.log("Updated user document:", updatedUser);
+
+        if (!updatedUser) {
+            return res.status(500).json({ message: "Failed to update user" });
+        }
+
+        return res.json({
+            success: true,
+            message: "Avatar uploaded and user updated successfully",
+            avatar,
+            user: updatedUser
+        });
+
+    } catch (error) {
+        console.error("Full upload error:", error);
+        return res.status(500).json({
+            message: "Error in avatar upload process",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
 
 module.exports = {
     signup,
@@ -1153,5 +1231,6 @@ module.exports = {
     sendVerifyOtp1,
     updateUser,
     deleteUser,
-    updateUserAvatar
+    updateUserAvatar,
+    updateSdent
 };

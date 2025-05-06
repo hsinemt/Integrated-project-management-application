@@ -16,7 +16,8 @@ const {
     isUserEmailAvailable,
     loginWithFace,
     updateUser,
-    deleteUser
+    deleteUser,
+    updateSdent
 } = require('../Controllers/UserController');
 
 const User = require("../Models/User");
@@ -152,7 +153,7 @@ router.post('/signupWithPhoto', (req, res, next) => {
         signup(req, res);
     });
 });
-
+router.post("/upload", authMiddleware, upload.single("image"),updateSdent);
 // Email verification routes
 router.post('/sendVerifyOtp', userToken, sendVerifyOtp);
 router.post('/verifyAccount', userToken, verifyEmail);
@@ -260,6 +261,35 @@ router.use((err, req, res, next) => {
         success: false,
         message: err.message || 'An unexpected error occurred'
     });
+});
+
+router.put('/update-profile/:userId', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { name, lastname, birthday, password } = req.body;
+
+      const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { name, lastname, birthday, password: hashedPassword },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        updatedUser,
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      res.status(500).json({ message: 'Error updating profile', error });
+    }
 });
 
 module.exports = router;

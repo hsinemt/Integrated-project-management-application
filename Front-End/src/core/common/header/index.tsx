@@ -32,7 +32,7 @@ const Header = () => {
     email: "",
     birthday: "",
     password: "",
-    images: "",
+    avatar: "",
     skills: [],
   });
 
@@ -60,7 +60,7 @@ const Header = () => {
             email: response.data.email,
             birthday: formattedBirthday,
             password: "",
-            images: response.data.images,
+            avatar: response.data.avatar,
             skills: response.data.skills || [],
           });
         }
@@ -375,9 +375,9 @@ const Header = () => {
               <div className="dropdown profile-dropdown">
                 <Link to="#" className="dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
                 <span className="avatar avatar-lg me-2 avatar-rounded">
-  {user.images ? (
+  {user.avatar ? (
     <img 
-      src={user.images.startsWith("/uploads") ? `http://localhost:9777${user.images}` : user.images}
+      src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
       alt="Profile"
       className="img-fluid rounded-circle"
       onError={(e) => {
@@ -398,9 +398,9 @@ const Header = () => {
                     <div className="card-header">
                       <div className="d-flex align-items-center">
                       <span className="avatar avatar-lg me-2 avatar-rounded">
-  {user.images ? (
+  {user.avatar ? (
     <img 
-      src={user.images.startsWith("/uploads") ? `http://localhost:9777${user.images}` : user.images}
+      src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
       alt="Profile"
       className="img-fluid rounded-circle"
       onError={(e) => {

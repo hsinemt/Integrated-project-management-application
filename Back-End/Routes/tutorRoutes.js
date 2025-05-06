@@ -43,6 +43,7 @@ router.get('/groups-progress', authMiddleware, async (req, res) => {
                     projectId: group.id_project?._id?.toString() || null,
                     projectName: group.id_project?.title || null,
                     studentCount: group.id_students?.length || 0,
+                    id_students: group.id_students || [],
                     progress,
                     completedTasks,
                     totalTasks
@@ -60,4 +61,30 @@ router.get('/groups-progress', authMiddleware, async (req, res) => {
         });
     }
 });
+
+
+router.post('/bulk', async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      // Convert string IDs to MongoDB ObjectId
+      const objectIds = ids.map(id => new mongoose.Types.ObjectId(id));
+      
+      const users = await User.find(
+        { _id: { $in: objectIds } },
+        { _id: 1, name: 1, lastname: 1, email: 1 }
+      ).lean();
+  
+      res.json({ 
+        success: true,
+        users: users.map(user => ({
+          ...user,
+          _id: user._id.toString() // Convert ObjectId to string
+        }))
+      });
+    } catch (err) {
+      console.error("Bulk user error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
 module.exports = router;

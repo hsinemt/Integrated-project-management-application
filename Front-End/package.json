@@ -104,6 +104,7 @@
     "react-tag-input-component": "^2.0.2",
     "react-time-picker": "^7.0.0",
     "react-webcam": "^7.2.0",
+    "recharts": "^2.15.3",
     "resolve": "^1.20.0",
     "resolve-url-loader": "^4.0.0",
     "sass": "^1.82.0",
