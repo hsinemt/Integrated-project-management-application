@@ -40,7 +40,7 @@ const userToken = async (req, res, next) => {
         req.user = tokenDecode;
         next();
     } catch (err) {
-        console.error("Token verification error:", err);
+        //console.error("Token verification error:", err);
         res.status(401).json({ success: false, message: "Invalid token" });
     }
 };

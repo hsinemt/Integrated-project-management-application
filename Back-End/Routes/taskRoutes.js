@@ -152,4 +152,19 @@ router.put('/tasks/:taskId/status', async (req, res) => {
     }
 });
 
+// Get a task by ID
+router.get('/tasks/:taskId', taskController.getTaskById);
+
+// Save code to a task
+router.put('/tasks/:taskId/code', taskController.saveTaskCode);
+
+// Add a new code file to a task
+router.post('/tasks/:taskId/codefile', taskController.addCodeFile);
+
+// Delete a code file from a task
+router.delete('/tasks/:taskId/codefile/:fileName', taskController.deleteCodeFile);
+
+// Update a code file in a task
+router.put('/tasks/:taskId/codefile/:fileName', taskController.updateCodeFile);
+
 module.exports = router;

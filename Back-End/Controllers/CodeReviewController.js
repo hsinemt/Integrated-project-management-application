@@ -1,247 +1,449 @@
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
+// Import the robust SonarCloud service
+const codeAnalysisService = require('../Services/RobustSonarCloudService');
 const CodeMark = require('../Models/CodeMark');
 const Project = require('../Models/Project');
-const Student = require('../Models/Student');
-const Task = require('../Models/tasks');
-const codeReviewService = require('../services/codeReviewService');
+const User = require('../Models/User');
 
+/**
+ * Controller for handling code assessments and reviews
+ */
+exports.submitCode = async (req, res) => {
+    let codeAssessment = null;
 
-const CodeReviewController = {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id;
 
-    submitCode: async (req, res) => {
-        try {
-            const { projectId, taskId, code, language } = req.body;
+        if (!projectId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Project ID is required'
+            });
+        }
 
+        // Check if file was uploaded
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Code file is required'
+            });
+        }
 
-            const studentId = req.user?.id;
+        // Get project information
+        const project = await Project.findById(projectId);
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
 
-            if (!studentId) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Authentication required - student ID not found in token'
-                });
+        // Get user information
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Generate a unique submission ID
+        const submissionId = new mongoose.Types.ObjectId().toString();
+
+        // Get file path
+        const filePath = req.file.path;
+
+        // Get file extension and type
+        const fileExt = path.extname(req.file.originalname).toLowerCase();
+        const fileType = getFileType(fileExt);
+
+        // Log file information for debugging
+        console.log(`File information: ${req.file.originalname} (${fileType}, ${fileExt})`);
+
+        // Create initial assessment record before analysis
+        // This helps avoid ECONNRESET by responding early
+        codeAssessment = new CodeMark({
+            project: projectId,
+            student: userId,
+            submissionId: submissionId,
+            fileUrl: filePath,
+            fileName: req.file.originalname,
+            fileType: fileType,
+            fileLanguage: getLanguage(fileExt),
+            sonarResults: {},
+            sonarProjectKey: `${userId}_${projectId}_${submissionId}`,
+            score: 0,  // Will be updated after analysis
+            feedback: '',
+            status: 'Processing',
+            analysisSource: 'unknown',
+            tutorReview: {
+                reviewed: false,
+                score: null,
+                feedback: ''
+            },
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+
+        // Save initial record
+        await codeAssessment.save();
+
+        // Send initial response to client to prevent timeout
+        res.status(202).json({
+            success: true,
+            message: 'Code submitted successfully. Analysis in progress.',
+            assessment: {
+                id: codeAssessment._id,
+                submissionId: submissionId,
+                status: 'Processing'
             }
+        });
 
-
-            if (!projectId || !code || !language) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Project ID, code, and language are required'
-                });
-            }
-
-
-            const project = await Project.findById(projectId);
-            if (!project) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Project not found'
-                });
-            }
-
-
-            if (taskId) {
-                const task = await Task.findById(taskId);
-                if (!task) {
-                    return res.status(404).json({
-                        success: false,
-                        message: 'Task not found'
-                    });
+        // Set a timeout to update status if analysis takes too long
+        const timeoutId = setTimeout(async () => {
+            try {
+                const assessment = await CodeMark.findById(codeAssessment._id);
+                if (assessment && assessment.status === 'Processing') {
+                    console.log(`Analysis timeout for ${submissionId}, updating status to Failed`);
+                    assessment.status = 'Failed';
+                    assessment.feedback = 'Analysis timed out after 3 minutes';
+                    assessment.updatedAt = new Date();
+                    await assessment.save();
                 }
+            } catch (timeoutError) {
+                console.error('Error handling analysis timeout:', timeoutError);
             }
+        }, 180000); // 3 minutes
 
-
-            const assessmentCriteria = project.assessmentCriteria || {};
-
-
-            const assessment = await codeReviewService.assessCode(code, language, assessmentCriteria);
-
-            const codeMark = new CodeMark({
-                studentId,
+        // Now run the analysis asynchronously
+        try {
+            console.log(`Starting code analysis for submission ${submissionId}...`);
+            const analysisResult = await codeAnalysisService.analyzeCode(
+                filePath,
+                submissionId,
+                userId,
                 projectId,
-                taskId: taskId || null,
-                code,
-                language,
-                assessment
-            });
+                req.file.originalname,
+                false
+            );
 
-            await codeMark.save();
+            // Determine status and feedback based on analysis source
+            let statusMessage = 'Pending';
+            let feedbackMessage = '';
 
-            return res.status(201).json({
-                success: true,
-                message: 'Code submitted and assessed successfully',
-                data: {
-                    assessmentId: codeMark._id,
-                    score: assessment.score,
-                    feedback: assessment.overallFeedback
-                }
-            });
-        } catch (error) {
-            console.error('Error submitting and assessing code:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error submitting and assessing code',
-                error: error.message
-            });
+            // Provide information about which analyzer was used
+            if (analysisResult.analysisSource === 'sonarcloud') {
+                feedbackMessage = 'Analysis completed using SonarCloud.';
+                statusMessage = 'Pending';
+            } else if (analysisResult.analysisSource === 'localAnalyzer') {
+                feedbackMessage = 'Analysis completed using local analyzer. For more detailed results, contact your instructor.';
+                statusMessage = 'Analyzed';
+            } else if (analysisResult.analysisSource === 'defaultFallback') {
+                feedbackMessage = 'Analysis based on file properties. Limited metrics available.';
+                statusMessage = 'Limited';
+            }
+
+            await CodeMark.findByIdAndUpdate(
+                codeAssessment._id,
+                {
+                    sonarResults: analysisResult.analysisResults,
+                    sonarProjectKey: analysisResult.projectKey,
+                    score: analysisResult.score,
+                    detailedScores: analysisResult.detailedScores,
+                    status: statusMessage,
+                    feedback: feedbackMessage,
+                    analysisSource: analysisResult.analysisSource,
+                    updatedAt: new Date()
+                },
+                { new: true }
+            );
+
+            console.log(`Analysis completed for submission ${submissionId} with score ${analysisResult.score} using ${analysisResult.analysisSource}`);
+
+        } catch (analysisError) {
+            // Clear the timeout since analysis failed
+            clearTimeout(timeoutId);
+
+            console.error('Error during code analysis:', analysisError);
+
+            // Provide more informative error message
+            const errorMessage = analysisError.message.includes('SonarCloud')
+                ? 'SonarCloud analysis failed. The system is currently unable to process your code.'
+                : `Analysis failed: ${analysisError.message}`;
+
+            // Update status to Failed if analysis fails
+            await CodeMark.findByIdAndUpdate(
+                codeAssessment._id,
+                {
+                    status: 'Failed',
+                    feedback: errorMessage,
+                    updatedAt: new Date()
+                },
+                { new: true }
+            );
         }
-    },
 
+    } catch (error) {
+        console.error('Error submitting code:', error);
 
-    getAssessment: async (req, res) => {
-        try {
-            const { assessmentId } = req.params;
-            const userId = req.user.id;
-            const userRole = req.user.role;
-
-            const assessment = await CodeMark.findById(assessmentId)
-                .populate('studentId', 'name email')
-                .populate('projectId', 'name description')
-                .populate('taskId', 'name description');
-
-            if (!assessment) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Assessment not found'
-                });
+        // If we already created a record, update it with error status
+        if (codeAssessment) {
+            try {
+                await CodeMark.findByIdAndUpdate(
+                    codeAssessment._id,
+                    {
+                        status: 'Failed',
+                        feedback: `Analysis failed: ${error.message}`,
+                        updatedAt: new Date()
+                    },
+                    { new: true }
+                );
+            } catch (updateError) {
+                console.error('Error updating assessment status:', updateError);
             }
-
-
-            if (userRole !== 'tutor' && userRole !== 'manager' &&
-                assessment.studentId._id.toString() !== userId.toString()) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Not authorized to access this assessment'
-                });
-            }
-
-            return res.status(200).json({
-                success: true,
-                data: assessment
-            });
-        } catch (error) {
-            console.error('Error retrieving assessment:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error retrieving assessment',
-                error: error.message
-            });
         }
-    },
 
-
-    tutorReview: async (req, res) => {
-        try {
-            const { assessmentId } = req.params;
-            const { approved, comments, adjustedScore } = req.body;
-            const tutorId = req.user.id;
-
-
-            if (req.user.role !== 'tutor' && req.user.role !== 'manager') {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Only tutors and managers can review assessments'
-                });
-            }
-
-            const assessment = await CodeMark.findById(assessmentId);
-            if (!assessment) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Assessment not found'
-                });
-            }
-
-
-            assessment.tutorReview = {
-                approved,
-                comments,
-                adjustedScore: adjustedScore || assessment.assessment.score
-            };
-
-            assessment.updatedAt = Date.now();
-            await assessment.save();
-
-            return res.status(200).json({
-                success: true,
-                message: 'Assessment reviewed successfully',
-                data: {
-                    assessmentId: assessment._id,
-                    approved,
-                    adjustedScore: assessment.tutorReview.adjustedScore
-                }
-            });
-        } catch (error) {
-            console.error('Error reviewing assessment:', error);
-            return res.status(500).json({
+        // If response has not been sent yet, send error response
+        if (!res.headersSent) {
+            res.status(500).json({
                 success: false,
-                message: 'Error reviewing assessment',
-                error: error.message
-            });
-        }
-    },
-
-
-    getProjectAssessments: async (req, res) => {
-        try {
-            const { projectId } = req.params;
-
-            if (req.user.role !== 'tutor' && req.user.role !== 'manager') {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Access denied'
-                });
-            }
-
-            const assessments = await CodeMark.find({ projectId })
-                .populate('studentId', 'name email')
-                .populate('projectId', 'name description')
-                .populate('taskId', 'name description');
-
-            return res.status(200).json({
-                success: true,
-                data: assessments
-            });
-        } catch (error) {
-            console.error('Error retrieving project assessments:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error retrieving project assessments',
-                error: error.message
-            });
-        }
-    },
-
-
-    getStudentAssessments: async (req, res) => {
-        try {
-            const { studentId } = req.params;
-            const userId = req.user.id;
-            const userRole = req.user.role;
-
-            if (userRole !== 'tutor' && userRole !== 'manager' &&
-                studentId !== userId.toString()) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Not authorized to access these assessments'
-                });
-            }
-
-            const assessments = await CodeMark.find({ studentId })
-                .populate('projectId', 'name description')
-                .populate('taskId', 'name description');
-
-            return res.status(200).json({
-                success: true,
-                data: assessments
-            });
-        } catch (error) {
-            console.error('Error retrieving student assessments:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error retrieving student assessments',
+                message: 'Failed to submit code for analysis',
                 error: error.message
             });
         }
     }
 };
 
-module.exports = CodeReviewController;
+/**
+ * Helper function to determine file type from extension
+ */
+function getFileType(extension) {
+    const webExtensions = ['.html', '.css', '.js', '.jsx', '.ts', '.tsx'];
+    const backendExtensions = ['.php', '.py', '.rb', '.java', '.c', '.cpp', '.cs', '.go'];
+    const configExtensions = ['.json', '.xml', '.yml', '.yaml', '.toml', '.ini'];
+    const dbExtensions = ['.sql'];
+    const archiveExtensions = ['.zip', '.rar', '.tar', '.gz'];
+
+    if (webExtensions.includes(extension)) return 'Web';
+    if (backendExtensions.includes(extension)) return 'Backend';
+    if (configExtensions.includes(extension)) return 'Configuration';
+    if (dbExtensions.includes(extension)) return 'Database';
+    if (archiveExtensions.includes(extension)) return 'Archive';
+
+    return 'Unknown';
+}
+
+/**
+ * Helper function to determine programming language from extension
+ */
+function getLanguage(extension) {
+    const languageMap = {
+        '.html': 'HTML',
+        '.css': 'CSS',
+        '.js': 'JavaScript',
+        '.jsx': 'JavaScript (React)',
+        '.ts': 'TypeScript',
+        '.tsx': 'TypeScript (React)',
+        '.php': 'PHP',
+        '.py': 'Python',
+        '.rb': 'Ruby',
+        '.java': 'Java',
+        '.c': 'C',
+        '.cpp': 'C++',
+        '.cs': 'C#',
+        '.go': 'Go',
+        '.json': 'JSON',
+        '.xml': 'XML',
+        '.yml': 'YAML',
+        '.yaml': 'YAML',
+        '.toml': 'TOML',
+        '.ini': 'INI',
+        '.sql': 'SQL',
+        '.zip': 'Archive',
+        '.rar': 'Archive',
+        '.tar': 'Archive',
+        '.gz': 'Archive'
+    };
+
+    return languageMap[extension] || 'Unknown';
+}
+
+/**
+ * Get all assessments for a specific project
+ */
+exports.getProjectAssessments = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+        if (!projectId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Project ID is required'
+            });
+        }
+
+        // Find all assessments for the project
+        const assessments = await CodeMark.find({ project: projectId })
+            .populate('student', 'name lastname email')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: assessments.length,
+            assessments
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch assessments',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Add tutor review to a code assessment
+ */
+exports.tutorReview = async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const { score, feedback } = req.body;
+        const tutorId = req.user.id;
+
+        if (!assessmentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Assessment ID is required'
+            });
+        }
+
+        if (score === undefined || !feedback) {
+            return res.status(400).json({
+                success: false,
+                message: 'Score and feedback are required'
+            });
+        }
+
+        // Find the assessment
+        const assessment = await CodeMark.findById(assessmentId);
+        if (!assessment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assessment not found'
+            });
+        }
+
+        // Update with tutor review
+        assessment.tutorReview = {
+            reviewed: true,
+            score: score,
+            feedback: feedback,
+            tutor: tutorId,
+            reviewDate: new Date()
+        };
+
+        assessment.status = 'Reviewed';
+        assessment.updatedAt = new Date();
+
+        await assessment.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Assessment reviewed successfully',
+            assessment
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to review assessment',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get assessment details by ID
+ */
+exports.getAssessmentById = async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+
+        if (!assessmentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Assessment ID is required'
+            });
+        }
+
+        // Find the assessment
+        const assessment = await CodeMark.findById(assessmentId)
+            .populate('student', 'name lastname email')
+            .populate('project', 'title description');
+
+        if (!assessment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assessment not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            assessment
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch assessment',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Check assessment status
+ */
+exports.checkAssessmentStatus = async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+
+        if (!assessmentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Assessment ID is required'
+            });
+        }
+
+        // Find the assessment
+        const assessment = await CodeMark.findById(assessmentId);
+
+        if (!assessment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assessment not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            assessment: {
+                id: assessment._id,
+                status: assessment.status,
+                score: assessment.score,
+                submissionId: assessment.submissionId,
+                fileType: assessment.fileType,
+                fileLanguage: assessment.fileLanguage,
+                analysisSource: assessment.analysisSource
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check assessment status',
+            error: error.message
+        });
+    }
+};

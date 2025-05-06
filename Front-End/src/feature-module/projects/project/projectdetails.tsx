@@ -496,7 +496,7 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
 
-                                    {localStorage.getItem("role") === "manager" && (
+                                    {localStorage.getItem("role") === "manager" || localStorage.getItem("role") === "admin" && (
                                         <div className="mb-4">
                                             <h5 className="mb-3">Assign Tutor</h5>
                                             <div className="bg-light p-3 rounded">
@@ -790,7 +790,13 @@ const ProjectDetails = () => {
                                                                                 />
                                                                             </span>
                                                                             <div className="strike-info">
-                                                                                <h4 className="fs-14">{task.name}</h4>
+                                                                                <h4 
+                                                                                    className="fs-14" 
+                                                                                    style={{ cursor: 'pointer' }}
+                                                                                    onClick={() => navigate(`/task-details/${task._id}`)}
+                                                                                >
+                                                                                    {task.name}
+                                                                                </h4>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -846,11 +852,8 @@ const ProjectDetails = () => {
                                                                                         </li>
                                                                                         <li>
                                                                                             <Link
-                                                                                                to="#"
+                                                                                                to={`/task-details/${task._id}`}
                                                                                                 className="dropdown-item rounded-1"
-                                                                                                data-bs-toggle="modal"
-                                                                                                data-inert={true}
-                                                                                                data-bs-target="#view_todo"
                                                                                             >
                                                                                                 <i className="ti ti-eye me-2" />
                                                                                                 View

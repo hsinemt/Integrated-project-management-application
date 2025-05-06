@@ -1,16 +1,25 @@
 import React, { useEffect, useState } from "react";
-import axios, {AxiosError} from "axios";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { Chart } from "primereact/chart";
+
+interface User {
+  _id: string;
+  name: string;
+  lastname: string;
+  email?: string;
+}
 
 interface Group {
   _id: string;
-  nom_groupe: string;
+  name: string;
   progress: number;
   completedTasks: number;
   totalTasks: number;
   projectName: string | null;
   projectId: string | null;
   studentCount: number;
+  id_students: string[];
 }
 
 interface DashboardData {
@@ -18,15 +27,8 @@ interface DashboardData {
   groups: Group[];
 }
 
-interface Task {
-  name: string;
-  description: string;
-  priority: string;
-  date: string;
-  état: string;
-  project: string;
-  group: string;
-  assignedTo: string;
+interface BulkUsersResponse {
+  users: User[];
 }
 
 const DealsDashboard = () => {
@@ -34,149 +36,108 @@ const DealsDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartData, setChartData] = useState<any>(null);
-
-  // États pour la génération de tâches
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [taskLoading, setTaskLoading] = useState<boolean>(false);
-  const [taskError, setTaskError] = useState<string | null>(null);
-  const [taskSuccess, setTaskSuccess] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string>("");
-  const [groupId, setGroupId] = useState<string>("");
+  const [studentsData, setStudentsData] = useState<Record<string, User>>({});
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:9777";
 
+  // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await axios.get(`${API_URL}/tutor/groups-progress`, {
+        const response = await axios.get<DashboardData>(`${API_URL}/tutor/groups-progress`, {
           headers: {
             Authorization: `${localStorage.getItem('token')}`
           }
         });
 
-        console.log("API Response Data:", response.data);
-
-        if (!response.data) {
-          throw new Error("Received empty response from server");
-        }
-
-        const data = response.data;
-        setDashboardData(data);
-
+        setDashboardData(response.data);
+        console.log(response.data)
         // Prepare chart data
-        if (data.groups && data.groups.length > 0) {
+        if (response.data.groups?.length > 0) {
           setChartData({
-            labels: data.groups.map((group: Group) =>
-                `${group.projectName ? ` (${group.projectName})` : ''}`
+            labels: response.data.groups.map(group =>
+                `${group.name}${group.projectName ? ` (${group.projectName})` : ''}`
             ),
             datasets: [{
               label: 'Progress %',
-              data: data.groups.map((group: Group) => group.progress),
+              data: response.data.groups.map(group => group.progress),
               backgroundColor: '#F26522',
               borderColor: '#F26522',
               minBarLength: 5
             }]
           });
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("API Error:", err);
-        setError(err.response?.data?.message || err.message || "Failed to load dashboard data");
+
       } finally {
         setLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, []);
+  }, [API_URL]);
 
-  // Fonction pour générer les tâches (preview)
-  const previewTasks = async () => {
-    if (!projectId || !groupId) {
-      setTaskError("Veuillez entrer un ID de projet et un ID de groupe.");
-      return;
-    }
+  // Fetch student data
+  useEffect(() => {
+    let isMounted = true;
 
-    setTaskLoading(true);
-    setTaskError(null);
-    setTaskSuccess(null);
+    if (dashboardData?.groups) {
+      const studentIds = dashboardData.groups.flatMap(group => group.id_students || []);
+      const uniqueStudentIds = Array.from(new Set(studentIds.filter(id => id)));
 
-    try {
-      const response = await axios.post<{ success: boolean; message: string; tasks: Task[] }>(
-          `${API_URL}/api/tasks/preview`,
-          {
-            projectId: projectId,
-            groupId: groupId,
-          },
-          {
-            headers: {
-              Authorization: `${localStorage.getItem('token')}`
-            }
+      const fetchStudents = async () => {
+        try {
+          setStudentsLoading(true);
+          setStudentsError(null);
+
+          if (uniqueStudentIds.length === 0) {
+            setStudentsData({});
+            return;
           }
-      );
 
-      if (response.data.success) {
-        setTasks(response.data.tasks);
-        setTaskSuccess(response.data.message);
-      } else {
-        setTaskError(response.data.message || "Erreur inattendue lors de la génération des tâches.");
-      }
-    } catch (err) {
-      const error = err as AxiosError<{ message?: string }>;
-      setTaskError(error.response?.data?.message || "Erreur serveur lors de la génération des tâches.");
-      console.error("Erreur génération tâches :", error.message);
-    } finally {
-      setTaskLoading(false);
-    }
-  };
+          const response = await axios.post<BulkUsersResponse>(
+              `${API_URL}/tutor/bulk`,
+              { ids: uniqueStudentIds },
+              {
+                headers: {
+                  Authorization: `${localStorage.getItem('token')}`
+                }
+              }
+          );
 
-  // Fonction pour gérer les modifications des champs des tâches
-  const handleTaskChange = (index: number, field: keyof Task, value: string) => {
-    const updatedTasks = [...tasks];
-    updatedTasks[index][field] = value;
-    setTasks(updatedTasks);
-  };
-
-  // Fonction pour enregistrer les tâches modifiées
-  const saveTasks = async () => {
-    if (tasks.length === 0) {
-      setTaskError("Aucune tâche à enregistrer.");
-      return;
-    }
-
-    setTaskLoading(true);
-    setTaskError(null);
-    setTaskSuccess(null);
-
-    try {
-      const response = await axios.post<{ success: boolean; message: string; tasks: Task[] }>(
-          `${API_URL}/api/tasks/save`,
-          {
-            tasks: tasks,
-          },
-          {
-            headers: {
-              Authorization: `${localStorage.getItem('token')}`
-            }
+          if (isMounted) {
+            const studentsMap = response.data.users.reduce((acc: Record<string, User>, user: User) => {
+              acc[user._id] = user;
+              return acc;
+            }, {});
+            setStudentsData(studentsMap);
           }
-      );
+        } catch (error) {
+          if (isMounted) {
+            console.error("Error fetching students:", error);
+            setStudentsError("Failed to load student data");
+          }
+        } finally {
+          if (isMounted) {
+            setStudentsLoading(false);
+          }
+        }
+      };
 
-      if (response.data.success) {
-        setTaskSuccess(response.data.message);
-        setTasks([]); // Réinitialiser les tâches après l'enregistrement
-      } else {
-        setTaskError(response.data.message || "Erreur inattendue lors de l'enregistrement des tâches.");
-      }
-    } catch (err) {
-      const error = err as AxiosError<{ message?: string }>;
-      setTaskError(error.response?.data?.message || "Erreur serveur lors de l'enregistrement des tâches.");
-      console.error("Erreur enregistrement tâches :", error.message);
-    } finally {
-      setTaskLoading(false);
+      fetchStudents();
     }
-  };
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dashboardData, API_URL]);
 
   const chartOptions = {
     responsive: true,
@@ -209,6 +170,7 @@ const DealsDashboard = () => {
           label: function(context: any) {
             const group = dashboardData?.groups[context.dataIndex];
             return [
+              `Group: ${group?.name}`,
               `Progress: ${context.raw}%`,
               `Tasks: ${group?.completedTasks}/${group?.totalTasks}`,
               `Project: ${group?.projectName || 'None'}`
@@ -252,208 +214,109 @@ const DealsDashboard = () => {
       <div className="container py-3">
         <h1 className="mb-4">Tutor Dashboard</h1>
 
-        {/* Section : Générer et Modifier des Tâches */}
+        {/* Progress Chart Section */}
         <div className="card shadow-sm mb-4">
-          <div className="card-header bg-primary text-white">
-            <h2 className="mb-0">Générer et Modifier des Tâches</h2>
-          </div>
-          <div className="card-body">
-            <div className="mb-3">
-              <label htmlFor="projectIdInput" className="form-label">ID du Projet</label>
-              <input
-                  type="text"
-                  id="projectIdInput"
-                  className="form-control"
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  placeholder="Entrez l'ID du projet"
-              />
-            </div>
-            <div className="mb-3">
-              <label htmlFor="groupIdInput" className="form-label">ID du Groupe</label>
-              <input
-                  type="text"
-                  id="groupIdInput"
-                  className="form-control"
-                  value={groupId}
-                  onChange={(e) => setGroupId(e.target.value)}
-                  placeholder="Entrez l'ID du groupe"
-              />
-            </div>
-            <button
-                type="button"
-                onClick={previewTasks}
-                disabled={taskLoading || !projectId || !groupId}
-                className="btn btn-primary mb-3"
-            >
-              {taskLoading ? "Génération en cours..." : "Générer les tâches"}
-            </button>
-
-            {taskError && (
-                <div className="alert alert-danger mt-3" role="alert">
-                  {taskError}
-                </div>
-            )}
-
-            {taskSuccess && (
-                <div className="alert alert-success mt-3" role="alert">
-                  {taskSuccess}
-                </div>
-            )}
-
-            {tasks.length > 0 && (
-                <div className="mt-3">
-                  <h6>Tâches générées ({tasks.length})</h6>
-                  <div className="list-group" style={{ maxHeight: "300px", overflowY: "auto" }}>
-                    {tasks.map((task, index) => (
-                        <div key={index} className="list-group-item mb-3 border rounded">
-                          <div className="mb-2">
-                            <label className="form-label">Nom:</label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={task.name}
-                                onChange={(e) => handleTaskChange(index, "name", e.target.value)}
-                            />
-                          </div>
-                          <div className="mb-2">
-                            <label className="form-label">Description:</label>
-                            <textarea
-                                className="form-control"
-                                value={task.description}
-                                onChange={(e) => handleTaskChange(index, "description", e.target.value)}
-                            />
-                          </div>
-                          <div className="mb-2">
-                            <label className="form-label">Priorité:</label>
-                            <select
-                                className="form-select"
-                                value={task.priority}
-                                onChange={(e) => handleTaskChange(index, "priority", e.target.value)}
-                            >
-                              <option value="High">High</option>
-                              <option value="Medium">Medium</option>
-                              <option value="Low">Low</option>
-                            </select>
-                          </div>
-                          <div className="mb-2">
-                            <label className="form-label">État:</label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={task.état}
-                                onChange={(e) => handleTaskChange(index, "état", e.target.value)}
-                            />
-                          </div>
-                          <small>
-                            Assigné à : {task.assignedTo} | Date : {new Date(task.date).toLocaleDateString()}
-                          </small>
-                        </div>
-                    ))}
-                  </div>
-                  <button
-                      type="button"
-                      onClick={saveTasks}
-                      disabled={taskLoading || tasks.length === 0}
-                      className="btn btn-success mt-3"
-                  >
-                    {taskLoading ? "Enregistrement en cours..." : "Enregistrer toutes les tâches"}
-                  </button>
-                </div>
-            )}
-          </div>
-        </div>
-
-        {/* Groups Progress Section */}
-        <div className="card shadow-sm">
           <div className="card-header bg-primary text-white">
             <h2 className="mb-0">Groups Progress</h2>
           </div>
           <div className="card-body">
-            {dashboardData.groups && dashboardData.groups.length > 0 ? (
-                <>
-                  {/* Progress Chart */}
-                  <div style={{ height: '300px' }} className="mb-4">
-                    {chartData ? (
-                        <Chart
-                            type="bar"
-                            data={chartData}
-                            options={chartOptions}
-                            style={{ width: '100%' }}
-                        />
-                    ) : (
-                        <div className="alert alert-info">
-                          No progress data available for chart
-                        </div>
-                    )}
-                  </div>
+            <div style={{ height: '300px' }}>
+              {chartData ? (
+                  <Chart
+                      type="bar"
+                      data={chartData}
+                      options={chartOptions}
+                      style={{ width: '100%' }}
+                  />
+              ) : (
+                  <div className="alert alert-info">No progress data available</div>
+              )}
+            </div>
+          </div>
+        </div>
 
-                  {/* Groups List */}
-                  <div className="row g-3">
-                    {dashboardData.groups.map(group => (
-                        <div key={group._id} className="col-md-6 col-lg-4">
-                          <div className="card h-100">
-                            <div className="card-header bg-light">
-                              <h3 className="h5 mb-0">{group.nom_groupe}</h3>
-                            </div>
-                            <div className="card-body">
-                              {/* Progress Bar */}
-                              <div className="mb-3">
-                                <div className="d-flex justify-content-between mb-1">
-                                  <span>Progress</span>
-                                  <span>{group.progress}%</span>
-                                </div>
-                                <div className="progress" style={{ height: '20px' }}>
-                                  <div
-                                      className="progress-bar bg-success"
-                                      role="progressbar"
-                                      style={{ width: `${group.progress}%` }}
-                                      aria-valuenow={group.progress}
-                                      aria-valuemin={0}
-                                      aria-valuemax={100}
-                                  >
-                                    {group.progress > 5 ? `${group.progress}%` : ''}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Tasks Info */}
-                              <div className="mb-2">
-                                <span className="d-block text-muted small">Tasks Completed:</span>
-                                <strong>
-                                  {group.completedTasks} / {group.totalTasks}
-                                </strong>
-                              </div>
-
-                              {/* Students Count */}
-                              <div className="mb-2">
-                                <span className="d-block text-muted small">Students:</span>
-                                <strong>{group.studentCount}</strong>
-                              </div>
-
-                              {/* Project Info */}
-                              <div className="mb-2">
-                                <span className="d-block text-muted small">Project:</span>
-                                <strong>{group.projectName || 'No project assigned'}</strong>
-                              </div>
-
-                              {/* Project ID (hidden if null) */}
-                              {group.projectId && (
-                                  <div>
-
-                                  </div>
-                              )}
+        {/* Groups List Section */}
+        <div className="card shadow-sm">
+          <div className="card-header bg-primary text-white">
+            <h2 className="mb-0">Groups</h2>
+          </div>
+          <div className="card-body">
+            <div className="row g-3">
+              {dashboardData.groups.map(group => (
+                  <div key={group._id} className="col-md-6 col-lg-4">
+                    <div className="card h-100">
+                      <div className="card-header bg-light">
+                        <h3 className="h5 mb-0">{group.name}</h3>
+                      </div>
+                      <div className="card-body">
+                        {/* Progress Bar */}
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between mb-1">
+                            <span>Progress</span>
+                            <span>{group.progress}%</span>
+                          </div>
+                          <div className="progress" style={{ height: '20px' }}>
+                            <div
+                                className="progress-bar bg-success"
+                                role="progressbar"
+                                style={{ width: `${group.progress}%` }}
+                                aria-valuenow={group.progress}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                            >
+                              {group.progress > 5 ? `${group.progress}%` : ''}
                             </div>
                           </div>
                         </div>
-                    ))}
+
+                        {/* Students List */}
+                        <div className="mb-3">
+                          <h5>Students ({group.id_students?.length || 0}):</h5>
+                          {studentsLoading ? (
+                              <div className="text-center py-2">
+                                <div className="spinner-border spinner-border-sm" role="status">
+                                  <span className="visually-hidden">Loading...</span>
+                                </div>
+                              </div>
+                          ) : studentsError ? (
+                              <div className="alert alert-danger py-2">{studentsError}</div>
+                          ) : (
+                              <ul className="list-group">
+                                {group.id_students?.map(studentId => {
+                                  const student = studentsData[studentId];
+                                  return student ? (
+                                      <li
+                                          key={studentId}
+                                          className="list-group-item list-group-item-action"
+                                          onClick={() => navigate(`/employee-dashboard/${studentId}`)}
+                                          style={{ cursor: 'pointer' }}
+                                      >
+                                        {student.name} {student.lastname}
+                                      </li>
+                                  ) : (
+                                      <li key={studentId} className="list-group-item text-muted">
+                                        Unknown student
+                                      </li>
+                                  );
+                                })}
+                              </ul>
+                          )}
+                        </div>
+
+                        {/* Group Info */}
+                        <div className="mb-2">
+                          <span className="d-block text-muted small">Tasks Completed:</span>
+                          <strong>{group.completedTasks} / {group.totalTasks}</strong>
+                        </div>
+                        <div className="mb-2">
+                          <span className="d-block text-muted small">Project:</span>
+                          <strong>{group.projectName || 'No project assigned'}</strong>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </>
-            ) : (
-                <div className="alert alert-info">
-                  No groups assigned to this tutor
-                </div>
-            )}
+              ))}
+            </div>
           </div>
         </div>
       </div>

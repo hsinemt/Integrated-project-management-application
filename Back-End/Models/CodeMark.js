@@ -1,69 +1,108 @@
 const mongoose = require('mongoose');
 
-const CodeMarkSchema = new mongoose.Schema({
-    studentId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Student',
-        required: true
-    },
-    projectId: {
+const codeMarkSchema = new mongoose.Schema({
+    project: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Project',
         required: true
     },
-    taskId: {
+    student: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'tasks',
-        required: false
+        ref: 'User',
+        required: true
     },
-    code: {
+    submissionId: {
         type: String,
         required: true
     },
-    language: {
+    fileUrl: {
         type: String,
         required: true
     },
-    assessment: {
-        criteria: {
-            correctness: {
-                score: { type: Number, min: 0, max: 4 },
-                feedback: String
-            },
-            efficiency: {
-                score: { type: Number, min: 0, max: 4 },
-                feedback: String
-            },
-            readability: {
-                score: { type: Number, min: 0, max: 4 },
-                feedback: String
-            },
-            documentation: {
-                score: { type: Number, min: 0, max: 4 },
-                feedback: String
-            },
-            bestPractices: {
-                score: { type: Number, min: 0, max: 4 },
-                feedback: String
+    fileName: {
+        type: String,
+        required: true
+    },
+    fileType: {
+        type: String,
+        default: 'unknown'
+    },
+    fileLanguage: {
+        type: String,
+        default: 'unknown'
+    },
+    analysisSource: {
+        type: String,
+        enum: ['sonarcloud', 'localAnalyzer', 'defaultFallback', 'unknown'],
+        default: 'unknown'
+    },
+    sonarResults: {
+        type: Object,
+        default: {}
+    },
+    sonarProjectKey: {
+        type: String
+    },
+    score: {
+        type: Number,
+        required: true,
+        min: 0,
+        max: 100
+    },
+    detailedScores: {
+        type: Object,
+        default: {
+            correctnessScore: 0,
+            securityScore: 0,
+            maintainabilityScore: 0,
+            documentationScore: 0,
+            cleanCodeScore: 0,
+            simplicityScore: 0,
+            rawMetrics: {
+                bugs: 0,
+                vulnerabilities: 0,
+                codeSmells: 0,
+                duplicatedLinesDensity: 0,
+                complexity: 0,
+                commentLinesDensity: 0,
+                totalLines: 0,
+                reliabilityRating: 1,
+                securityRating: 1,
+                maintainabilityRating: 1
             }
+        }
+    },
+    feedback: {
+        type: String,
+        default: ''
+    },
+    status: {
+        type: String,
+        enum: ['Processing', 'Pending', 'Reviewed', 'Failed'],
+        default: 'Pending'
+    },
+    tutorReview: {
+        reviewed: {
+            type: Boolean,
+            default: false
         },
-        overallFeedback: String,
         score: {
             type: Number,
             min: 0,
-            max: 20
-        }
-    },
-    tutorReview: {
-        approved: {
-            type: Boolean,
+            max: 100,
             default: null
         },
-        comments: String,
-        adjustedScore: {
-            type: Number,
-            min: 0,
-            max: 20
+        feedback: {
+            type: String,
+            default: ''
+        },
+        tutor: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
+        reviewDate: {
+            type: Date
         }
     },
     createdAt: {
@@ -74,6 +113,6 @@ const CodeMarkSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model('CodeMark', CodeMarkSchema);
+module.exports = mongoose.model('CodeMark', codeMarkSchema);

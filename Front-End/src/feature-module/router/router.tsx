@@ -87,11 +87,22 @@ const ALLRoutes: React.FC = () => {
                 }
               />
 
+              {/* Task details route */}
+              <Route
+                path="/task-details/:taskId"
+                element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    {publicRoutes.find(route => route.path === '/task-details/:taskId')?.element}
+                  </Suspense>
+                }
+              />
+
               {/* Other public routes */}
               {publicRoutes
                 .filter(route => 
                   !['/super-admin/dashboard', '/super-admin/users', '/deals-dashboard', 
-                    '/project-details/:id', '/motivations/:projectId', '/task-board', '/projects']
+                    '/project-details/:id', '/motivations/:projectId', '/task-board', '/projects',
+                    '/task-details/:taskId']
                     .includes(route.path)
                 )
                 .map((route, idx) => (

@@ -18,7 +18,9 @@ const groupRouter = require('./Routes/groupRoutes');
 const authRoutes = require('./Routes/authRoutes');
 const choixRoutes = require('./Routes/choixRoutes');
 const tutorRoutes = require('./Routes/tutorRoutes');
-//const codeReviewRouter = require('./Routes/codeReviewRoutes');
+const codeFileRoutes = require('./Routes/codeFileRoutes');
+const activityRoutes = require('./Routes/activityRoutes');
+const codeReviewRouter = require('./Routes/codeReviewRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -40,6 +42,7 @@ require('./Models/Group');
 require('./Models/Project');
 require('./Models/tasks');
 require('./Models/CodeMark');
+require('./Models/Activity');
 
 // Passport configuration
 require('./config/passportConfig');
@@ -57,10 +60,75 @@ if (!fs.existsSync(uploadsDir)) {
 // Middleware setup
 // Serve static files from the uploads directory
 app.use('/uploads', express.static(uploadsDir));
+app.post('/test-upload', (req, res) => {
+    const upload = multer({ dest: 'uploads/' }).single('file');
+
+    upload(req, res, function(err) {
+        try {
+            if (err) {
+                console.error('Upload error:', err);
+                return res.status(400).json({ error: err.message });
+            }
+
+            console.log('File received:', req.file);
+            return res.status(200).json({
+                success: true,
+                message: 'File received successfully',
+                file: req.file ? req.file.filename : 'No file'
+            });
+        } catch (error) {
+            console.error('Unexpected error:', error);
+            return res.status(500).json({ error: 'Server error' });
+        }
+    });
+});
+
+app.get('/diagnostic/scores', async (req, res) => {
+    try {
+        const CodeMark = require('./Models/CodeMark');
+
+        // Get the 10 most recent submissions
+        const recentScores = await CodeMark.find({})
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .select('submissionId score fileType fileLanguage analysisSource status');
+
+        // Calculate score distribution
+        const allScores = await CodeMark.find({}).select('score');
+        const scoreDistribution = {};
+
+        allScores.forEach(item => {
+            const score = item.score;
+            scoreDistribution[score] = (scoreDistribution[score] || 0) + 1;
+        });
+
+        // Sort by score
+        const sortedDistribution = Object.entries(scoreDistribution)
+            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+            .reduce((obj, [key, value]) => {
+                obj[key] = value;
+                return obj;
+            }, {});
+
+        res.json({
+            success: true,
+            recentSubmissions: recentScores,
+            totalSubmissions: allScores.length,
+            scoreDistribution: sortedDistribution,
+            message: "This is a diagnostic endpoint to check score distribution"
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error fetching diagnostic data",
+            error: error.message
+        });
+    }
+});
 
 // Configure body parser
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb', extended: true, parameterLimit: 50000 }));
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true, parameterLimit: 50000 }));
 app.use(cookieParser());
 
 app.use(cors({
@@ -111,7 +179,9 @@ app.use('/auth', authRoutes);
 app.use('/api/tasks', taskRouter);
 app.use('/choix', choixRoutes);
 app.use('/tutor', tutorRoutes);
-//app.use('/api/code-review', codeReviewRouter);
+app.use('/api', codeFileRoutes);
+app.use('/api', activityRoutes);
+app.use('/api/code-review', codeReviewRouter);
 
 // AI and NLP routes
 app.use('/nlp', nlpController);
@@ -132,20 +202,28 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
+app.use(function(req, res, next) {
+    res.setTimeout(300000); // 5 minutes
+    next();
+});
+
+// Then modify your server creation to include timeout:
 const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
         console.error(`Port ${PORT} is already in use. Please:
-        1. Stop the other process using this port, or
-        2. Use a different port by setting the PORT environment variable.`);
+    1. Stop the other process using this port, or
+    2. Use a different port by setting the PORT environment variable.`);
         process.exit(1);
     } else {
         console.error('Server error:', err);
         process.exit(1);
     }
 });
+
+// Set server timeout
+server.timeout = 300000; // 5 minutes
 
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
