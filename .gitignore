@@ -49,6 +49,15 @@ ehthumbs.db
 [Dd]esktop.ini
 $RECYCLE.BIN/
 
+# Ignore temp directory and all its contents
+Back-End/temp/
+**/temp/
+
+# Specifically ignore sonar-scanner files
+**/sonar-scanner*/
+**/sonar-scanner-download/
+
+
 # Ignore testing and coverage directories
 coverage/
 .nyc_output/

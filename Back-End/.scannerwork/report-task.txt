@@ -1,0 +1,7 @@
+organization=hsinemt
+projectKey=680fe1bb5efec8d1a9bba2da_6814fff69e9856de0c73f626_681663c76aec482af62d3810
+serverUrl=https://sonarcloud.io
+serverVersion=8.0.0.62923
+dashboardUrl=https://sonarcloud.io/dashboard?id=680fe1bb5efec8d1a9bba2da_6814fff69e9856de0c73f626_681663c76aec482af62d3810
+ceTaskId=AZaXde093j8rOmAgUCIi
+ceTaskUrl=https://sonarcloud.io/api/ce/task?id=AZaXde093j8rOmAgUCIi
