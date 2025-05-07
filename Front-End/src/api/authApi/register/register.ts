@@ -30,7 +30,6 @@ export const registerUser = async (userData: any) => {
             role: 'student',
             speciality: userData.speciality || ''
         });
-
         if (response.data.success) {
             localStorage.setItem("token", response.data.token);
             localStorage.setItem("userEmail", userData.email);

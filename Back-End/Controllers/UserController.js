@@ -29,10 +29,10 @@ try {
 
     faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
     faceDetectionEnabled = true;
-    //console.log('✅ Face detection modules loaded successfully');
+    console.log('✅ Face detection modules loaded successfully');
 } catch (error) {
     console.error('⚠️ Face detection modules not available:', error.message);
-    //console.log('⚠️ Registration will proceed without face detection');
+    console.log('⚠️ Registration will proceed without face detection');
     faceDetectionEnabled = false;
 }
 
@@ -59,7 +59,7 @@ async function verifyRecaptcha(token) {
 
 async function loadModels() {
     if (!faceDetectionEnabled) {
-        //console.log('⚠️ Skipping model loading - face detection disabled');
+        console.log('⚠️ Skipping model loading - face detection disabled');
         return;
     }
 
@@ -67,11 +67,11 @@ async function loadModels() {
         await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
         await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
         await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
-        //console.log('✅ Face detection models loaded successfully');
+        console.log('✅ Face detection models loaded successfully');
     } catch (error) {
         console.error('❌ Error loading face detection models:', error);
         faceDetectionEnabled = false;
-        //console.log('⚠️ Face detection has been disabled due to model loading errors');
+        console.log('⚠️ Face detection has been disabled due to model loading errors');
     }
 }
 
@@ -92,7 +92,7 @@ function isSupportedImageType(imageData) {
     }
 
     const fileType = match[1];
-    //console.log("📂 Type d'image détecté :", fileType);
+    console.log("📂 Type d'image détecté :", fileType);
     return ['jpeg', 'png'].includes(fileType);
 }
 
@@ -100,29 +100,29 @@ function isSupportedImageType(imageData) {
 async function extractFaceDescriptor(imageData) {
     // If face detection is disabled, return null (registration will continue without it)
     if (!faceDetectionEnabled) {
-        //console.log('⚠️ Face detection bypassed - returning null descriptor');
+        console.log('⚠️ Face detection bypassed - returning null descriptor');
         return null;
     }
 
     try {
-        //console.log("🔍 Vérification du format de l'image...");
+        console.log("🔍 Vérification du format de l'image...");
         if (!isSupportedImageType(imageData)) {
-            //console.log("⚠️ Format d'image non supporté - skipping face detection");
+            console.log("⚠️ Format d'image non supporté - skipping face detection");
             return null;
         }
 
-       // console.log("📤 Conversion de l'image en buffer...");
+        console.log("📤 Conversion de l'image en buffer...");
         const buffer = Buffer.from(imageData.split(',')[1], 'base64');
         const tempImagePath = path.join(process.cwd(), 'temp', `temp_${Date.now()}.jpg`);
 
         // Ensure temp directory exists
         fs.mkdirSync(path.dirname(tempImagePath), { recursive: true });
         fs.writeFileSync(tempImagePath, buffer);
-        //console.log("📸 Image enregistrée temporairement:", tempImagePath);
+        console.log("📸 Image enregistrée temporairement:", tempImagePath);
 
-        //console.log("📥 Chargement de l'image avec canvas...");
+        console.log("📥 Chargement de l'image avec canvas...");
         const img = await loadImage(tempImagePath);
-        //console.log("✅ Image chargée dans canvas :", img.width, "x", img.height);
+        console.log("✅ Image chargée dans canvas :", img.width, "x", img.height);
 
         const c = createCanvas(img.width, img.height);
         const ctx = c.getContext('2d');
@@ -142,13 +142,13 @@ async function extractFaceDescriptor(imageData) {
             console.error("Error removing temp file:", e);
         }
 
-        //console.log("📸 Nombre de visages détectés :", detections.length);
+        console.log("📸 Nombre de visages détectés :", detections.length);
         if (detections.length === 0) {
             //console.log("⚠️ Aucun visage détecté!");
             return null;
         }
 
-        //console.log("✅ Visage détecté :", detections[0].descriptor.length, "dimensions");
+        console.log("✅ Visage détecté :", detections[0].descriptor.length, "dimensions");
         return Array.from(detections[0].descriptor);
     } catch (error) {
         console.error("🚨 Erreur lors de l'extraction du descripteur facial :", error);
@@ -237,7 +237,7 @@ const signup = async (req, res) => {
                     if (faceDescriptor) {
                         //console.log("✅ Face descriptor extracted successfully:", faceDescriptor.length, "dimensions");
                     } else {
-                        // console.log("⚠️ No face detected or face detection skipped - proceeding without facial recognition");
+                       // console.log("⚠️ No face detected or face detection skipped - proceeding without facial recognition");
                     }
                 } else {
                     //console.error(`❌ Avatar file not found: ${imagePath}`);
@@ -268,7 +268,6 @@ const signup = async (req, res) => {
         const user = new UserModel(userData);
         user.password = await bcrypt.hash(password, 10);
         await user.save();
-        //console.log("User saved to database successfully");
 
         const token = jwt.sign({id: user._id}, process.env.JWT_SECRET, {expiresIn: '1h'});
         res.cookie('token', token, {
@@ -315,9 +314,9 @@ const signup = async (req, res) => {
                 success: false,
                 error: err.message
             });
+
     }
 };
-
 const isUserEmailAvailable = async (req, res) => {
     try {
         const { email } = req.query;
@@ -342,7 +341,7 @@ const isUserEmailAvailable = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: "Erreur serveur" });
     }
-};
+  };
 
 const verifyOtp = async (req, res) => {
     const { email, otp } = req.body;
@@ -368,43 +367,43 @@ const verifyOtp = async (req, res) => {
     } catch (error) {
         console.error('Erreur dans la vérification OTP:', error);
         res.status(500).json({ message: "Erreur serveur." });
-    }
+    } 
 };
 
 
 
-const login = async (req, res) => {
+  const login = async (req, res) => {
     try {
-        const { email, password, captchaToken, otp  } = req.body;
+      const { email, password, captchaToken, otp } = req.body;
 
-        // Vérification du reCAPTCHA
-        const isCaptchaValid = await verifyRecaptcha(captchaToken);
-        if (!isCaptchaValid) {
-            return res.status(400).json({ message: "Échec de la validation reCAPTCHA" });
+      // Vérification du reCAPTCHA
+      const isCaptchaValid = await verifyRecaptcha(captchaToken);
+      if (!isCaptchaValid) {
+        return res.status(400).json({ message: "Échec de la validation reCAPTCHA" });
+      }
+
+      // Recherche de l'utilisateur dans la base de données
+      const user = await UserModel.findOne({ email });
+      if (!user) return res.status(400).json({ message: "Mauvais email" });
+
+      // Vérification du mot de passe
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) return res.status(400).json({ message: "Mot de passe incorrect" });
+
+      // Vérification de la 2FA si activée
+      if (user.twoFactorAuth) {
+        if (!otp) return res.status(400).json({ message: "Le code OTP est requis pour la 2FA" });
+
+        // Verify the OTP
+        if (user.verifyOtp !== otp || user.verifyOtpExpirationAt < Date.now()) {
+          return res.status(400).json({ message: "OTP invalide ou expiré" });
         }
 
-        // Recherche de l'utilisateur dans la base de données
-        const user = await UserModel.findOne({ email });
-        if (!user) return res.status(400).json({ message: "Mauvais email" });
-
-        // Vérification du mot de passe
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Mot de passe incorrect" });
-
-        // Vérification de la 2FA si activée
-        if (user.twoFactorAuth) {
-            if (!otp) return res.status(400).json({ message: "Le code OTP est requis pour la 2FA" });
-
-            // Verify the OTP
-            if (user.verifyOtp !== otp || user.verifyOtpExpirationAt < Date.now()) {
-                return res.status(400).json({ message: "OTP invalide ou expiré" });
-            }
-
-            // Clear the OTP after successful verification
-            user.verifyOtp = '';
-            user.verifyOtpExpirationAt = 0;
-            await user.save();
-        }
+        // Clear the OTP after successful verification
+        user.verifyOtp = '';
+        user.verifyOtpExpirationAt = 0;
+        await user.save();
+      }
 
         // Création du token JWT
         const token = jwt.sign(
@@ -421,17 +420,19 @@ const login = async (req, res) => {
 
         const redirectTo = "/index"; // Redirection vers la page après la connexion
 
-        res.json({
-            token,
-            role: user.role,
-            user: { id: user._id, email: user.email, role: user.role, avatar: user.avatar },
-            redirectTo
-        });
+      // Envoi du token dans la réponse JSON pour le stocker dans localStorage côté client
+      res.json({
+        token, // Le token est envoyé pour être stocké dans localStorage
+        role: user.role,
+        user: { id: user._id, email: user.email, role: user.role, avatar: user.avatar },
+        redirectTo,
+        storeInLocalStorage: true // Indication explicite pour le client
+      });
 
     } catch (error) {
-        res.status(500).json({ message: "Erreur serveur" });
+      res.status(500).json({ message: "Erreur serveur" });
     }
-};
+  };
 
 
 //send the verification code
@@ -802,9 +803,18 @@ const getProfile = async (req, res) => {
 };
 const logout = (req, res) => {
     try {
-        res.clearCookie("token"); // Suppression du token s'il est stocké en cookie
-        res.setHeader("Authorization", ""); // Suppression du token des headers
-        return res.status(200).json({ message: "Déconnexion réussie" });
+        // Suppression du token s'il est stocké en cookie
+        res.clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+        });
+
+        // Indication au client de supprimer le token du localStorage
+        return res.status(200).json({
+            message: "Déconnexion réussie",
+            clearLocalStorage: true // Instruction pour le client
+        });
     } catch (error) {
         return res.status(500).json({ message: "Erreur serveur" });
     }
@@ -832,14 +842,14 @@ const sendVerifyOtp1 = async (req, res) => {
             to: user.email,
             subject: 'Code de vérification',
             text: `Votre code OTP est ${otp}. Valide pendant 10 minutes.`
-        };
+    };
 
         await transporter.sendMail(mailOption);
 
         res.json({
             success: true,
             message: `Code OTP envoyé à ${user.email}`
-        });
+    });
     } catch (err) {
         console.error("Erreur OTP:", err);
         res.status(500).json({
@@ -1137,6 +1147,84 @@ const loginWithFace = async (req, res) => {
         });
     }
 };
+const updateSdent = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+
+        const avatar = `/uploads/${req.file.filename}`;
+        console.log("Avatar URL:", avatar);
+        console.log("Authenticated User ID:", req.user.id);
+
+        // First verify the user exists
+        const userExists = await User.findById(req.user.id);
+        if (!userExists) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Initialize face descriptor as null
+        let faceDescriptor = null;
+
+        // Process face detection for the uploaded avatar
+        try {
+            const imageBuffer = fs.readFileSync(path.join(process.cwd(), avatar.startsWith('/') ? avatar.substring(1) : avatar));
+            const imageData = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+            //console.log("📷 Image converted to Base64 :", imageData.substring(0, 50) + "...");
+
+            // Extract face descriptor
+            faceDescriptor = await extractFaceDescriptor(imageData);
+
+            if (faceDescriptor) {
+                //console.log("✅ Face descriptor extracted successfully:", faceDescriptor.length, "dimensions");
+            } else {
+                //console.log("⚠️ No face detected or face detection skipped - proceeding without facial recognition");
+            }
+        } catch (imageError) {
+            console.error("⚠️ Error processing image for face descriptor:", imageError);
+            // Continue with update even if face detection fails
+        }
+
+        // Prepare update data
+        const updateData = { avatar };
+        if (faceDescriptor) {
+            updateData.faceDescriptor = faceDescriptor;
+            console.log("Adding face descriptor to update data");
+        }
+
+        // Update with explicit $set and proper error handling
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: updateData },
+            {
+                new: true,
+                runValidators: true,
+                context: 'query'
+            }
+        ).select('-password'); // Exclude sensitive data
+
+        console.log("Updated user document:", updatedUser);
+
+        if (!updatedUser) {
+            return res.status(500).json({ message: "Failed to update user" });
+        }
+
+        return res.json({
+            success: true,
+            message: "Avatar uploaded and user updated successfully",
+            avatar,
+            user: updatedUser
+        });
+
+    } catch (error) {
+        console.error("Full upload error:", error);
+        return res.status(500).json({
+            message: "Error in avatar upload process",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
 
 module.exports = {
     signup,
@@ -1157,5 +1245,6 @@ module.exports = {
     sendVerifyOtp1,
     updateUser,
     deleteUser,
-    updateUserAvatar
+    updateUserAvatar,
+    updateSdent
 };

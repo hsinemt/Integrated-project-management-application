@@ -17,6 +17,7 @@ const Register = () => {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(initialRegisterFormData);
+
   const [message, setMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -252,7 +253,7 @@ const Register = () => {
 
                         <div className="mb-3">
                           <label className="form-label">Speciality</label>
-                          <Select 
+                          <Select
                             options={specialties.map(specialty => ({ value: specialty, label: specialty }))}
                             onChange={handleSpecialityChange}
                             value={formData.speciality ? { value: formData.speciality, label: formData.speciality } : null}
@@ -265,13 +266,13 @@ const Register = () => {
                         <div className="mb-3">
                           <label className="form-label">Profile Photo (Optional)</label>
                           <div className="d-flex align-items-center">
-                            <div 
-                              className="avatar-upload position-relative me-3" 
+                            <div
+                              className="avatar-upload position-relative me-3"
                               onClick={handlePhotoClick}
-                              style={{ 
-                                width: '100px', 
-                                height: '100px', 
-                                borderRadius: '50%', 
+                              style={{
+                                width: '100px',
+                                height: '100px',
+                                borderRadius: '50%',
                                 border: '2px dashed #ccc',
                                 cursor: 'pointer',
                                 overflow: 'hidden',
@@ -282,9 +283,9 @@ const Register = () => {
                               }}
                             >
                               {formData.photoPreview ? (
-                                <img 
-                                  src={formData.photoPreview} 
-                                  alt="Profile Preview" 
+                                <img
+                                  src={formData.photoPreview}
+                                  alt="Profile Preview"
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               ) : (

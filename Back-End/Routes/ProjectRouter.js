@@ -1,13 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const ProjectController = require('../Controllers/ProjectController');
-const CodeReviewController = require('../Controllers/CodeReviewController');
+const CodeAssessmentController = require('../Controllers/CodeReviewController');
 const { validateProject } = require('../Middlewares/ProjectValidation');
-const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware } = require('../Middlewares/UserValidation');
+const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware, authMiddleware } = require('../Middlewares/UserValidation');
 const { uploadProjectLogo } = require('../Config/ProjectUploadConfig');
+
+router.post("/recommend-projects", ProjectController.recommend);
 const { uploadCode } = require('../Config/CodeUploadConfig');
 
-// Project routes
+
 router.post(
     '/create',
     userToken,
@@ -17,6 +19,7 @@ router.post(
     ProjectController.createProject
 );
 
+
 router.put(
     '/update/:id',
     userToken,
@@ -25,6 +28,7 @@ router.put(
     validateProject,
     ProjectController.updateProject
 );
+
 
 router.get('/getAllProjects', userToken, ProjectController.getAllProjects);
 router.get('/getProjectById/:id', userToken, isStudentMiddleware, ProjectController.getProjectById);
@@ -39,5 +43,7 @@ router.get('/:projectId/assessments', userToken, isManagerOrTutorMiddleware, Cod
 router.put('/assessment/:assessmentId/review', userToken, isManagerOrTutorMiddleware, CodeReviewController.tutorReview);
 router.get('/assessment/:assessmentId', userToken, CodeReviewController.getAssessmentById);
 router.get('/assessment/:assessmentId/status', userToken, CodeReviewController.checkAssessmentStatus);
+router.get('/my-speciality', userToken, ProjectController.getProjectsByUserSpeciality);
+
 
 module.exports = router;

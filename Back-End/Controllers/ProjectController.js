@@ -1,5 +1,8 @@
 const Project = require('../Models/Project');
 const UserModel = require('../Models/User');
+const natural = require('natural');
+const _ = require('lodash');
+const TfIdf = natural.TfIdf;
 
 exports.createProject = async (req, res) => {
     try {
@@ -313,6 +316,132 @@ exports.assignTutorToProject = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to assign tutor to project',
+            error: error.message
+        });
+    }
+};
+
+const recommendProjects = async (studentSkills) => {
+    try {
+        const projects = await Project.find();
+        console.log("Projects fetched:", projects); // Debugging log
+        if (!projects.length) {
+            return [];
+        }
+
+        const tfidf = new TfIdf();
+
+        // Ajouter les mots-clés de chaque projet dans TF-IDF
+        projects.forEach((project, index) => {
+            if (project.keywords && project.keywords.length > 0) {
+                // Normaliser les mots-clés
+                const keywords = project.keywords
+                    .map(keyword => keyword ? keyword.toString().toLowerCase() : "") // Convertir en chaîne et en minuscules
+                    .filter(keyword => keyword.trim()); // Supprimer les chaînes vides
+
+                if (keywords.length > 0) {
+                    tfidf.addDocument(keywords.join(" "));
+                    console.log(`Document ${index} added with keywords:`, keywords); // Fixed template literal
+                }
+            }
+        });
+
+        // Calculer la similarité entre les compétences et les projets
+        const projectScores = projects.map((project, index) => {
+            // Normaliser les compétences des étudiants
+            const normalizedSkills = studentSkills
+                .map(skill => skill ? skill.toString().toLowerCase() : "") // Convertir en chaîne et en minuscules
+                .filter(skill => skill.trim()); // Supprimer les chaînes vides
+
+            console.log("Normalized Skills:", normalizedSkills); // Debugging log
+            console.log("Project Keywords:", project.keywords); // Debugging log
+
+            const score = normalizedSkills.reduce((acc, skill) => {
+                try {
+                    const tfidfScore = tfidf.tfidf(skill, index);
+                    console.log(`Skill: ${skill}, TF-IDF Score: ${tfidfScore}`); // Fixed template literal
+                    return acc + (isNaN(tfidfScore) ? 0 : tfidfScore); // Remplacer NaN par 0
+                } catch (error) {
+                    console.error(`Error calculating TF-IDF for skill: ${skill}`, error); // Fixed template literal
+                    return acc; // Ignorer cette compétence
+                }
+            }, 0);
+
+            console.log("Project Score:", score); // Debugging log
+
+            return { ...project.toObject(), score };
+        });
+
+        // Trier les projets par score et renvoyer les 3 meilleurs
+        const recommendedProjects = _.orderBy(projectScores, "score", "desc").slice(0, 3);
+        return recommendedProjects;
+    } catch (error) {
+        console.error("Erreur lors de la recommandation :", error);
+        return [];
+    }
+};
+
+exports.recommend = async (req, res) => {
+    const { skills } = req.body;
+
+    if (!skills || !Array.isArray(skills)) {
+        return res.status(400).json({ message: "Les compétences sont requises" });
+    }
+
+    try {
+        const recommendedProjects = await recommendProjects(skills);
+        return res.status(200).json(recommendedProjects);
+    } catch (error) {
+        console.error("Erreur serveur :", error);
+        return res.status(500).json({ message: "Erreur serveur" });
+    }
+};
+
+exports.getProjectsByUserSpeciality = async (req, res) => {
+    try {
+        // Récupérer l'ID de l'utilisateur directement depuis req.user (défini par le middleware)
+        const userId = req.user.id;
+        
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentification requise'
+            });
+        }
+
+        // Trouver l'utilisateur dans la base de données
+        const user = await UserModel.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Utilisateur non trouvé'
+            });
+        }
+
+        // Le reste de la fonction reste inchangé
+        if (!user.speciality) {
+            return res.status(400).json({
+                success: false,
+                message: "L'utilisateur n'a pas de spécialité définie"
+            });
+        }
+
+        const projects = await Project.find({ 
+            speciality: user.speciality 
+        }).sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: projects.length,
+            speciality: user.speciality,
+            projects
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Échec de la récupération des projets par spécialité',
             error: error.message
         });
     }

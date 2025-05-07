@@ -3,21 +3,21 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import { all_routes } from "../../router/all_routes";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
-import SkillTags from "./SkillTags"; // Import the new SkillTags component
+import SkillTags from "./SkillTags";
 import Swal from "sweetalert2";
 
 const Profile = () => {
   const route = all_routes;
   const [user, setUser] = useState({
-    _id: "", // Add _id to the user state
+    _id: "",
     name: "",
     lastname: "",
     email: "",
     birthday: "",
     password: "",
-    images: "",
-    skills: [], 
-    role: ""// Add skills to the user state
+    avatar: "",
+    skills: [],
+    role: ""
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -42,19 +42,17 @@ const Profile = () => {
             ? response.data.birthday.split("T")[0]
             : "";
           setUser({
-            _id: response.data._id, // Set the _id property
+            _id: response.data._id,
             name: response.data.name,
             lastname: response.data.lastname,
             email: response.data.email,
             birthday: formattedBirthday,
             password: "",
-            images: response.data.images,
-            skills: response.data.skills || [], 
+            avatar: response.data.avatar,
+            skills: response.data.skills || [],
             role: response.data.role
-            // Add skills from the backend
           });
 
-          // Set the selected skills with the user's current skills
           setSelectedSkills(response.data.skills || []);
         } else {
           console.error("User data is empty");
@@ -81,13 +79,23 @@ const Profile = () => {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return alert("Please select a file first!");
+    if (!selectedFile) {
+      console.log("No file selected for upload");
+      Swal.fire({
+        title: "Error!",
+        text: "Please select a file first!",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+      return;
+    }
 
     const formData = new FormData();
     formData.append("image", selectedFile);
 
     try {
       const token = localStorage.getItem("token");
+      console.log("Uploading file with token:", token ? `${token.substring(0, 20)}...` : "No token");
       const response = await axios.post("http://localhost:9777/user/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -95,12 +103,28 @@ const Profile = () => {
         },
       });
 
-      if (response.data.imageUrl) {
-        setUser({ ...user, images: response.data.imageUrl });
+      console.log("Upload response:", response.data);
+
+      // Check for successful HTTP status (200) instead of imageUrl
+      if (response.status === 200) {
+        console.log("Image uploaded successfully, updating avatar:", response.data);
+        setUser({ ...user, avatar: response.data.avatar || user.avatar }); // Fallback to current avatar if no new avatar
         setPreviewImage(null);
+        Swal.fire({
+          title: "Success!",
+          text: "Profile picture updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
       }
-    } catch (error) {
-      console.error("Error uploading file:", error);
+    } catch (error: any) {
+      console.error("Error uploading file:", error.response?.data || error.message);
+      Swal.fire({
+        title: "Error!",
+        text: `Failed to upload profile picture: ${error.response?.data?.message || error.message}`,
+        icon: "error",
+        confirmButtonText: "OK",
+      });
     }
   };
 
@@ -111,23 +135,33 @@ const Profile = () => {
         console.error("No token found");
         return;
       }
-  
+
       const response = await axios.put(
         "http://localhost:9777/user/update-skills",
-        { skills: selectedSkills }, // ✅ Only send skills (no userId)
+        { skills: selectedSkills },
         { headers: { Authorization: `${token}` } }
       );
-  
+
       if (response.data.success) {
         setUser((prevUser) => ({
           ...prevUser,
           skills: response.data.updatedSkills,
         }));
-        Swal.fire("Success!", "Skills updated!", "success");
+        Swal.fire({
+          title: "Success!",
+          text: "Skills updated successfully!",
+          icon: "success",
+          confirmButtonText: "OK",
+        });
       }
     } catch (error) {
       console.error("Error saving skills:", error);
-      Swal.fire("Error!", "Failed to update skills.", "error");
+      Swal.fire({
+        title: "Error!",
+        text: "Failed to update skills.",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
     }
   };
 
@@ -139,15 +173,13 @@ const Profile = () => {
         return;
       }
 
-      // Prepare the payload with updated user data
       const payload = {
         name: user.name,
         lastname: user.lastname,
         birthday: user.birthday,
-        password: user.password, // Only send the password if it's not empty
+        password: user.password,
       };
 
-      // Log the payload being sent
       console.log("Sending payload:", payload);
 
       const response = await axios.put(
@@ -156,7 +188,6 @@ const Profile = () => {
         { headers: { Authorization: `${token}` } }
       );
 
-      // Log the response from the backend
       console.log("Backend response:", response.data);
 
       if (response.data.success) {
@@ -166,7 +197,6 @@ const Profile = () => {
           icon: "success",
           confirmButtonText: "OK",
         });
-        
       }
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -176,7 +206,6 @@ const Profile = () => {
         icon: "error",
         confirmButtonText: "OK",
       });
-      
     }
   };
 
@@ -202,9 +231,9 @@ const Profile = () => {
                     height="100"
                     alt="Preview"
                   />
-                ) : user.images ? (
+                ) : user.avatar ? (
                   <img
-                    src={`http://localhost:9777${user.images}`}
+                    src={`http://localhost:9777${user.avatar}`}
                     className="img-fluid rounded-circle"
                     width="100"
                     height="100"
@@ -228,8 +257,8 @@ const Profile = () => {
 
             <form
               onSubmit={(e) => {
-                e.preventDefault(); // Prevent the default form submission
-                handleSaveProfile(); // Call the handleSaveProfile function
+                e.preventDefault();
+                handleSaveProfile();
               }}
             >
               <div className="border-bottom mb-3">
@@ -284,22 +313,22 @@ const Profile = () => {
                     />
                   </div>
                   <div className="col-md-12">
-                  {user.role === 'student' && (
-          <>
-            <label className="form-label">Skills</label>
-            <SkillTags
-              selectedSkills={selectedSkills}
-              onChange={(skills) => setSelectedSkills(skills)}
-            />
-            <button
-              type="button"
-              onClick={handleSaveSkills}
-              className="btn btn-primary mt-3"
-            >
-              Save Skills
-            </button>
-          </>
-        )}
+                    {user.role === 'student' && (
+                      <>
+                        <label className="form-label">Skills</label>
+                        <SkillTags
+                          selectedSkills={selectedSkills}
+                          onChange={(skills) => setSelectedSkills(skills)}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveSkills}
+                          className="btn btn-primary mt-3"
+                        >
+                          Save Skills
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

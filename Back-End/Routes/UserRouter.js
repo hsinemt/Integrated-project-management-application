@@ -16,7 +16,8 @@ const {
     isUserEmailAvailable,
     loginWithFace,
     updateUser,
-    deleteUser
+    deleteUser,
+    updateSdent
 } = require('../Controllers/UserController');
 
 const User = require("../Models/User");
@@ -30,7 +31,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require('fs');
 
-// Configure multer for file uploads with improved error handling
+// Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         try {
@@ -56,7 +57,7 @@ const storage = multer.diskStorage({
     },
 });
 
-// Add file filter for images with improved error handling
+// Add file filter for images
 const fileFilter = (req, file, cb) => {
     try {
         // Accept only image files
@@ -76,8 +77,7 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Configure multer with error handling and reasonable limits
-const upload = multer({
+const upload = multer({ 
     storage,
     fileFilter,
     limits: {
@@ -133,10 +133,7 @@ const handleFileUpload = (req, res, next) => {
     });
 };
 
-// Create router
 const router = express.Router();
-
-// Authentication routes
 router.post('/signup', signupValidation, signup);
 router.post('/login', login);
 router.post('/loginWithFace', loginWithFace);
@@ -152,7 +149,7 @@ router.post('/signupWithPhoto', (req, res, next) => {
         signup(req, res);
     });
 });
-
+router.post("/upload", authMiddleware, upload.single("image"),updateSdent);
 // Email verification routes
 router.post('/sendVerifyOtp', userToken, sendVerifyOtp);
 router.post('/verifyAccount', userToken, verifyEmail);
@@ -186,6 +183,7 @@ router.post('/addStudentWithPhoto', userToken, (req, res, next) => {
                 req.body.skills = JSON.parse(req.body.skills);
             } catch (e) {
                 console.error('Error parsing skills:', e);
+
                 req.body.skills = [];
             }
         }
@@ -193,8 +191,6 @@ router.post('/addStudentWithPhoto', userToken, (req, res, next) => {
         addStudent(req, res);
     });
 });
-
-// User retrieval and update routes
 router.get('/getUsers', getAllUsers);
 router.put('/update-skills', userToken, updateStudentSkills);
 router.get('/profile', authMiddleware, getProfile);
@@ -204,8 +200,9 @@ router.get('/check-email', isUserEmailAvailable);
 // Password reset routes
 router.post('/reset-password', sendResetPasswordOTP);
 router.post('/reset/:token', resetPassword);
-
-// Admin routes for user management
+router.post("/logout", logout);
+router.post("/send-2fa-otp1", sendVerifyOtp1);
+router.get('/check-email', isUserEmailAvailable);
 router.put('/update/:id', userToken, isAdmin, updateUser);
 router.delete('/delete/:id', userToken, isAdmin, deleteUser);
 
@@ -261,5 +258,75 @@ router.use((err, req, res, next) => {
         message: err.message || 'An unexpected error occurred'
     });
 });
+
+            // Get the current user to find and remove old avatar if exists
+            User.findById(userId)
+                .then(currentUser => {
+                    if (currentUser && currentUser.avatar && currentUser.avatar.startsWith('/uploads/')) {
+                        const oldAvatarPath = path.join(__dirname, '..', currentUser.avatar);
+                        if (fs.existsSync(oldAvatarPath)) {
+                            fs.unlinkSync(oldAvatarPath);
+                            console.log('Removed old avatar file');
+                        }
+                    }
+router.put('/update-profile/:userId', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { name, lastname, birthday, password } = req.body;
+
+                    // Continue with the update
+                    updateUser(req, res);
+                })
+                .catch(error => {
+                    console.error('Error finding user for avatar update:', error);
+                    // Continue with update even if we can't remove old avatar
+                    updateUser(req, res);
+                });
+        } else {
+            // No file uploaded or no ID, just continue with update
+            updateUser(req, res);
+        }
+    });
+});
+      const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { name, lastname, birthday, password: hashedPassword },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+// Error handler middleware
+router.use((err, req, res, next) => {
+    console.error('Router error:', err);
+
+    // If we have an uploaded file but encountered an error, clean it up
+    if (req.file && req.file.path) {
+        try {
+            fs.unlinkSync(req.file.path);
+            console.log('Cleaned up file after error');
+        } catch (unlinkError) {
+            console.error('Failed to clean up file:', unlinkError);
+        }
+    }
+
+    res.status(500).json({
+        success: false,
+        message: err.message || 'An unexpected error occurred'
+    });
+});
+const bcrypt = require('bcrypt');
+// OR
+router.get('/profilegroupe', authMiddleware, getStudentProfile);
+// OR// For ES Modules
+// router.post('/generate', validateKeywords, ProjectController.generateITSubject.bind(ProjectController));
+// router.post('/generate-and-create', validateKeywords, ProjectController.createProjectFromGenerated.bind(ProjectController));
+// General image upload endpoint moved to UploadRouter.js
+
 
 module.exports = router;

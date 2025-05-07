@@ -1,13 +1,14 @@
-// components/TaskBoard.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import dragula from 'dragula';
 import 'dragula/dist/dragula.css';
 import Modal from 'react-modal';
 import styles from "./page.module.css";
+import TaskCard from './TaskCard';
 import TaskColumn from './TaskColumn';
 import Webcam from 'react-webcam';
+import io from 'socket.io-client';
 
 Modal.setAppElement('#root');
 
@@ -20,6 +21,7 @@ interface Task {
     état: string;
     image: string;
     estimatedTime: string;
+    git?: string;
     assignedTo: {
         name: string;
         lastname: string;
@@ -31,8 +33,20 @@ interface Project {
     tasks: Task[];
 }
 
+interface Message {
+    _id: string;
+    group: string;
+    sender: {
+        _id: string;
+        name: string;
+        lastname: string;
+        role: string;
+    };
+    content: string;
+    timestamp: string;
+}
 
-
+const socket = io('http://localhost:9777', { autoConnect: false });
 
 const getEstimatedTimeFromGemini = async (task: { description: string; priority: string }): Promise<string> => {
     try {
@@ -54,24 +68,15 @@ const getEstimatedTimeFromGemini = async (task: { description: string; priority:
 
         console.log('Gemini API response:', response.data);
 
-        // Extract the response content text
         const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        // Define a regex pattern to match durations (e.g., "3 hours", "2 days", "45 minutes")
         const durationPattern = /\b(\d+)\s*(hours?|minutes?|days?)\b/i;
-
-        // Find the duration match using regex
         const match = responseText?.match(durationPattern);
-
-        // If a match is found, return the duration, otherwise return 'Unknown'
         return match ? match[0] : 'Unknown';
     } catch (error) {
         console.error('Error calling Gemini API:', error);
         return 'Unknown';
     }
 };
-
-
 
 const TaskBoard = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -85,79 +90,276 @@ const TaskBoard = () => {
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
     const [verificationStatus, setVerificationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isChatExpanded, setIsChatExpanded] = useState(true);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [newMessage, setNewMessage] = useState<string>('');
+    const [groupId, setGroupId] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [chatError, setChatError] = useState<string | null>(null);
     const webcamRef = useRef<Webcam>(null);
-
     const toDoTasksRef = useRef<HTMLDivElement>(null);
     const inProgressTasksRef = useRef<HTMLDivElement>(null);
     const inReviewTasksRef = useRef<HTMLDivElement>(null);
     const completedTasksRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const navigate = useNavigate();
+
+    const handleGitBranchUpdate = (taskId: string, gitBranch: string) => {
+        setTasks(prevTasks => 
+            prevTasks.map(task => 
+                task._id === taskId ? { ...task, git: gitBranch } : task
+            )
+        );
+    };
+
+    const fetchMessagesWithBearer = async (groupId: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            console.log('Fetching messages with Bearer token:', token ? `Bearer ${token.substring(0, 20)}...` : 'No token');
+            if (!token) {
+                throw new Error('No token available');
+            }
+            const response = await axios.get(`http://localhost:9777/messages/group/${groupId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            console.log('Fetched messages:', response.data.messages);
+            setMessages(response.data.messages);
+            setChatError(null);
+        } catch (error: any) {
+            console.error('Error fetching messages:', error.response?.data || error.message);
+            const errorMessage = error.response?.status === 401
+                ? 'Session expirée. Veuillez vous reconnecter.'
+                : error.message === 'No token available'
+                ? 'Veuillez vous connecter pour accéder au chat.'
+                : `Impossible de charger les messages: ${error.message}`;
+            setChatError(errorMessage);
+        }
+    };
+
+    const fetchUserAndGroupForSocket = async (token: string) => {
+        try {
+            console.log('Fetching user and group for Socket.IO with Bearer token:', `Bearer ${token.substring(0, 20)}...`);
+            const response = await axios.get('http://localhost:9777/user/profilegroupe', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            console.log('User and group response for Socket.IO:', response.data);
+
+            const fetchedGroupId = response.data.group?._id;
+            const fetchedUserId = response.data.user?._id;
+            setGroupId(fetchedGroupId);
+            setUserId(fetchedUserId);
+
+            if (fetchedUserId && fetchedGroupId) {
+                socket.auth = { userId: fetchedUserId };
+                socket.connect();
+                console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', fetchedUserId);
+                socket.emit('joinGroup', { groupId: fetchedGroupId, userId: fetchedUserId });
+            } else {
+                console.error('Missing userId or groupId for Socket.IO:', { fetchedUserId, fetchedGroupId });
+                setChatError('Erreur: Impossible de rejoindre le groupe. Données manquantes.');
+            }
+
+            return { userId: fetchedUserId, groupId: fetchedGroupId };
+        } catch (error: any) {
+            console.error('Error fetching user and group for Socket.IO:', error.response?.data || error.message);
+            throw error;
+        }
+    };
+
+    const fetchTasksAndProject = async (token: string) => {
+        try {
+            console.log('Fetching tasks with token:', token.substring(0, 20) + '...');
+            const response = await axios.get('http://localhost:9777/user/profilegroupe', {
+                headers: {
+                    Authorization: token,
+                },
+            });
+
+            console.log('Tasks and project response:', response.data);
+
+            const tasksWithEstimatedTime = await Promise.all(response.data.tasks.map(async (task: Task) => {
+                const estimatedTime = await getEstimatedTimeFromGemini(task);
+                return {
+                    ...task,
+                    estimatedTime,
+                };
+            }));
+
+            setTasks(tasksWithEstimatedTime);
+            if (response.data.projects && response.data.projects.length > 0) {
+                setProjectName(response.data.projects[0].title);
+            }
+        } catch (error: any) {
+            console.error('Error fetching tasks or project:', error.response?.data || error.message);
+            throw error;
+        }
+    };
+
     useEffect(() => {
-        const fetchTasks = async () => {
+        const initializeData = async () => {
             try {
                 const token = localStorage.getItem('token');
-
                 if (!token) {
                     console.error('No token found in localStorage');
                     setLoading(false);
                     return;
                 }
 
-                // Make the API request using the token from localStorage
-                const response = await axios.get('http://localhost:9777/user/profilegroupe', {
-                    headers: {
-                        Authorization: `${token}`, // Use the token from localStorage
-                    },
-                });
-                const tasksWithEstimatedTime = await Promise.all(response.data.tasks.map(async (task: Task) => {
-                    const estimatedTime = await getEstimatedTimeFromGemini(task);
-                    return {
-                        ...task,
-                        estimatedTime,
-                    };
-                }));
+                await fetchTasksAndProject(token);
 
-                setTasks(tasksWithEstimatedTime);
-                if (response.data.projects && response.data.projects.length > 0) {
-                    setProjectName(response.data.projects[0].title);
+                try {
+                    await fetchUserAndGroupForSocket(token);
+                } catch (socketError: any) {
+                    if (socketError.response?.status === 401) {
+                        const storedUserId = localStorage.getItem('userId');
+                        const storedRole = localStorage.getItem('role');
+                        if (storedUserId && storedRole) {
+                            setUserId(storedUserId);
+                            try {
+                                const groupResponse = await axios.get(`http://localhost:9777/group/by-user/${storedUserId}`);
+                                console.log('Fetched groups:', groupResponse.data);
+                                if (groupResponse.data.success && groupResponse.data.groups.length > 0) {
+                                    const fetchedGroupId = groupResponse.data.groups[0]._id;
+                                    setGroupId(fetchedGroupId);
+                                    socket.auth = { userId: storedUserId };
+                                    socket.connect();
+                                    console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', storedUserId);
+                                    socket.emit('joinGroup', { groupId: fetchedGroupId, userId: storedUserId });
+                                } else {
+                                    setChatError('Aucun groupe trouvé pour cet utilisateur.');
+                                }
+                            } catch (groupError: any) {
+                                console.error('Error fetching groups:', groupError.response?.data || groupError.message);
+                                setChatError('Erreur lors de la récupération des groupes: ' + (groupError.response?.data?.message || groupError.message));
+                            }
+                        } else {
+                            setChatError('Session expirée. Veuillez vous reconnecter.');
+                            setTimeout(() => {
+                                navigate('/login');
+                            }, 2000);
+                        }
+                    } else {
+                        setChatError(`Erreur lors du chargement des données du groupe: ${socketError.message}`);
+                    }
                 }
+
                 setLoading(false);
-            } catch (error) {
-                console.error('Error fetching tasks:', error);
+            } catch (error: any) {
+                console.error('Error initializing data:', error.response?.data || error.message);
+                if (error.response?.status === 401) {
+                    setChatError('Session expirée. Veuillez vous reconnecter.');
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 2000);
+                } else {
+                    setChatError(`Erreur lors du chargement des données: ${error.message}`);
+                }
                 setLoading(false);
             }
         };
 
-        fetchTasks();
-    }, []);
+        initializeData();
+
+        socket.on('receiveMessage', (message: Message) => {
+            console.log('Received message:', message);
+            setMessages((prev) => [...prev, message]);
+        });
+
+        socket.on('error', (error: { message: string }) => {
+            console.error('Socket.IO error:', error.message);
+            setChatError(`Socket.IO error: ${error.message}`);
+        });
+
+        socket.on('connect', () => {
+            console.log('Socket.IO connected');
+            setChatError(null);
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Socket.IO disconnected');
+            setChatError('Socket.IO déconnecté. Veuillez vérifier la connexion au serveur.');
+        });
+
+        return () => {
+            socket.off('receiveMessage');
+            socket.off('error');
+            socket.off('connect');
+            socket.off('disconnect');
+            socket.disconnect();
+        };
+    }, [navigate]);
+
+    useEffect(() => {
+        if (groupId) {
+            fetchMessagesWithBearer(groupId);
+        }
+    }, [groupId]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     useEffect(() => {
         const containers = [
             toDoTasksRef.current,
             inProgressTasksRef.current,
             inReviewTasksRef.current,
-            completedTasksRef.current,
         ].filter((container) => container !== null) as HTMLDivElement[];
 
-        const drake = dragula(containers);
+        console.log('Dragula containers:', containers);
+
+        const drake = dragula(containers, {
+            moves: (el, source, handle, sibling) => {
+                console.log('Dragula moves:', { el, source, handle, sibling });
+                return source !== completedTasksRef.current;
+            },
+            accepts: (el, target, source, sibling) => {
+                console.log('Dragula accepts:', { el, target, source, sibling });
+                return target !== completedTasksRef.current;
+            }
+        });
 
         drake.on('drop', (el, target) => {
+            console.log('Dragula drop:', { el, target });
             const taskId = el.getAttribute('data-task-id');
             const newEtat = target.getAttribute('data-etat');
 
             if (taskId && newEtat) {
+                console.log('Updating task status:', { taskId, newEtat });
                 setUpdatedTasks((prev) => new Map(prev).set(taskId, newEtat));
             }
         });
 
         return () => {
+            console.log('Cleaning up dragula');
             drake.destroy();
         };
     }, [tasks]);
 
+    useEffect(() => {
+        console.log('Chat state updated, isChatOpen:', isChatOpen, 'chatError:', chatError, 'newMessage:', newMessage, 'groupId:', groupId, 'userId:', userId);
+        if (isChatOpen && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isChatOpen, chatError, newMessage, groupId, userId]);
+
     const saveTaskStatusChanges = async () => {
         try {
+            const token = localStorage.getItem('token');
+            console.log('Saving task status with token:', token ? token.substring(0, 20) + '...' : 'No token');
             const statusUpdates = Array.from(updatedTasks.entries()).map(([taskId, newEtat]) =>
-                axios.put(`http://localhost:9777/api/tasks/tasks/${taskId}/status`, { etat: newEtat })
+                axios.put(`http://localhost:9777/api/tasks/tasks/${taskId}/status`, { etat: newEtat }, {
+                    headers: {
+                        Authorization: token,
+                    },
+                })
             );
             await Promise.all(statusUpdates);
             window.location.reload();
@@ -171,6 +373,8 @@ const TaskBoard = () => {
         if (file) {
             const formData = new FormData();
             formData.append('image', file);
+            const token = localStorage.getItem('token');
+            console.log('Uploading image with token:', token ? token.substring(0, 20) + '...' : 'No token');
 
             try {
                 const response = await axios.put(
@@ -179,6 +383,7 @@ const TaskBoard = () => {
                     {
                         headers: {
                             'Content-Type': 'multipart/form-data',
+                            Authorization: token,
                         },
                     }
                 );
@@ -226,7 +431,6 @@ const TaskBoard = () => {
                 return;
             }
 
-            // Capture image from webcam
             const imageSrc = webcamRef.current.getScreenshot();
             if (!imageSrc) {
                 setVerificationStatus('error');
@@ -237,13 +441,16 @@ const TaskBoard = () => {
             setVerificationStatus('loading');
             setVerificationMessage('Verifying your face...');
 
-            // Call the loginWithFace API endpoint
+            const token = localStorage.getItem('token');
+            console.log('Verifying face with token:', token ? token.substring(0, 20) + '...' : 'No token');
+
             const response = await axios.post(
                 'http://localhost:9777/user/loginWithFace',
                 { imageData: imageSrc },
                 {
                     headers: {
                         'Content-Type': 'application/json',
+                        Authorization: token,
                     },
                 }
             );
@@ -251,7 +458,6 @@ const TaskBoard = () => {
             if (response.data.success) {
                 setVerificationStatus('success');
                 setVerificationMessage('Face verification successful! Quiz passed.');
-                // Wait 3 seconds before closing the camera modal
                 setTimeout(() => {
                     closeCamera();
                 }, 3000);
@@ -264,6 +470,57 @@ const TaskBoard = () => {
             setVerificationStatus('error');
             setVerificationMessage('Error during verification. Please try again.');
         }
+    };
+
+    const toggleChat = () => {
+        console.log('Toggling chat, current isChatOpen:', isChatOpen);
+        setIsChatOpen(!isChatOpen);
+        if (!isChatOpen) {
+            setIsChatExpanded(true);
+        }
+    };
+
+    const toggleChatExpand = () => {
+        console.log('Toggling chat expand, current isChatExpanded:', isChatExpanded);
+        setIsChatExpanded(!isChatExpanded);
+    };
+
+    const sendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newMessage.trim() && groupId && userId) {
+            console.log('Sending message:', { groupId, userId, content: newMessage });
+            socket.emit('sendMessage', {
+                groupId,
+                userId,
+                content: newMessage,
+            });
+            setNewMessage('');
+        } else {
+            console.log('Cannot send message:', { newMessage, groupId, userId });
+            setChatError('Erreur: Impossible d\'envoyer le message. Vérifiez votre connexion ou reconnectez-vous.');
+        }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        console.log('Input changed, new value:', e.target.value);
+        setNewMessage(e.target.value);
+    };
+
+    const handleInputClick = () => {
+        console.log('Input clicked');
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
+    };
+
+    const handleReconnect = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        console.error('Image failed to load:', e.currentTarget.src);
+        e.currentTarget.src = '/assets/img/fallback-avatar.jpg';
     };
 
     if (loading) {
@@ -281,6 +538,8 @@ const TaskBoard = () => {
         (task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             task.description.toLowerCase().includes(searchQuery.toLowerCase()))
     );
+
+    console.log('Rendering chat button, isChatOpen:', isChatOpen, 'isChatExpanded:', isChatExpanded);
 
     return (
         <>
@@ -310,16 +569,45 @@ const TaskBoard = () => {
                             <div className="d-flex align-items-center flex-wrap row-gap-3">
                                 <div className="avatar-list-stacked avatar-group-sm me-3">
                                     <span className="avatar avatar-rounded">
-                                        <img className="border border-white" src="assets/img/profiles/avatar-19.jpg" alt="img" />
+                                        <img
+                                            className="border border-white"
+                                            src="/assets/img/profiles/avatar-19.jpg"
+                                            alt="Avatar"
+                                            onError={handleImageError}
+                                        />
                                     </span>
                                     <span className="avatar avatar-rounded">
-                                        <img className="border border-white" src="assets/img/profiles/avatar-29.jpg" alt="img" />
+                                        <img
+                                            className="border border-white"
+                                            src="/assets/img/profiles/avatar-29.jpg"
+                                            alt="Avatar"
+                                            onError={handleImageError}
+                                        />
                                     </span>
                                     <span className="avatar avatar-rounded">
-                                        <img className="border border-white" src="assets/img/profiles/avatar-16.jpg" alt="img" />
+                                        <img
+                                            className="border border-white"
+                                            src="/assets/img/profiles/avatar-16.jpg"
+                                            alt="Avatar"
+                                            onError={handleImageError}
+                                        />
                                     </span>
                                     <span className="avatar avatar-rounded bg-primary fs-12">1+</span>
                                 </div>
+                                <button
+                                    onClick={toggleChat}
+                                    className="btn btn-primary d-flex align-items-center justify-content-center me-3"
+                                    style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '50%',
+                                        padding: '0',
+                                        zIndex: 1000,
+                                    }}
+                                    title="Ouvrir la discussion"
+                                >
+                                    <i className="ti ti-message-circle" style={{ fontSize: '20px' }}></i>
+                                </button>
                                 <div className="d-flex align-items-center me-3">
                                     <p className="mb-0 me-3 pe-3 border-end fs-14">
                                         Total Task : <span className="text-dark">{totalTasks}</span>
@@ -334,17 +622,19 @@ const TaskBoard = () => {
                                         Completed : <span className="text-dark">{completedTasks}</span>
                                     </p>
                                 </div>
-                                <div className="input-icon-start position-relative">
-                                    <span className="input-icon-addon">
-                                        <i className="ti ti-search" />
-                                    </span>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        placeholder="Search Project"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
+                                <div className="d-flex align-items-center">
+                                    <div className="input-icon-start position-relative me-2">
+                                        <span className="input-icon-addon">
+                                            <i className="ti ti-search" />
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            placeholder="Search Project"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -382,6 +672,7 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={toDoTasksRef}
+                                            onGitBranchUpdate={handleGitBranchUpdate}
                                         />
                                         <TaskColumn
                                             etat="In Progress"
@@ -403,14 +694,13 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={completedTasksRef}
+                                            isCompletedColumn={true}
+                                            openCamera={openCamera}
                                         />
                                     </div>
                                 </div>
                             </div>
-                            <div className="d-flex justify-content-between mt-3">
-                                <button className="btn btn-success" onClick={openCamera}>
-                                    <i className="ti ti-camera"></i> Verify to Pass Quiz
-                                </button>
+                            <div className="d-flex justify-content-end mt-3">
                                 <button className="btn btn-primary" onClick={saveTaskStatusChanges}>Save</button>
                             </div>
                         </div>
@@ -497,6 +787,188 @@ const TaskBoard = () => {
                     </button>
                 </div>
             </Modal>
+
+            {isChatOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: isChatExpanded ? '300px' : '50px',
+                        backgroundColor: '#fff',
+                        boxShadow: '-2px 0 5px rgba(0,0,0,0.2)',
+                        zIndex: 2000,
+                        transition: 'width 0.3s ease-in-out',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    <div
+                        style={{
+                            padding: '10px',
+                            backgroundColor: '#f97316',
+                            color: '#fff',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                        }}
+                    >
+                        {isChatExpanded && <h3 style={{ fontSize: '16px', margin: 0, color: '#fff' }}>Discussion avec le groupe</h3>}
+                        <button
+                            onClick={toggleChatExpand}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
+                            }}
+                            title={isChatExpanded ? 'Réduire' : 'Agrandir'}
+                        >
+                            <i className={`ti ${isChatExpanded ? 'ti-chevron-right' : 'ti-chevron-left'}`} style={{ fontSize: '20px' }}></i>
+                        </button>
+                    </div>
+                    {isChatExpanded && (
+                        <>
+                            <div
+                                style={{
+                                    flex: 1,
+                                    padding: '10px',
+                                    overflowY: 'auto',
+                                    backgroundColor: '#fff',
+                                }}
+                            >
+                                {chatError ? (
+                                    <div style={{ color: '#dc2626', textAlign: 'center', fontSize: '14px' }}>
+                                        {chatError}
+                                        <div>
+                                            <button
+                                                onClick={() => {
+                                                    setChatError(null);
+                                                    if (groupId) {
+                                                        fetchMessagesWithBearer(groupId);
+                                                    }
+                                                }}
+                                                style={{
+                                                    marginTop: '10px',
+                                                    padding: '5px 10px',
+                                                    backgroundColor: '#f97316',
+                                                    color: '#fff',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                Réessayer
+                                            </button>
+                                            {chatError.includes('Session expirée') && (
+                                                <button
+                                                    onClick={handleReconnect}
+                                                    style={{
+                                                        marginTop: '10px',
+                                                        marginLeft: '10px',
+                                                        padding: '5px 10px',
+                                                        backgroundColor: '#dc2626',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    Reconnexion
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : messages.length === 0 ? (
+                                    <div style={{ color: '#6b7280', textAlign: 'center', fontSize: '14px' }}>
+                                        Aucun message pour le moment.
+                                    </div>
+                                ) : (
+                                    messages.map((message) => (
+                                        <div
+                                            key={message._id}
+                                            style={{
+                                                marginBottom: '10px',
+                                                textAlign: message.sender._id === userId ? 'right' : 'left',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    display: 'inline-block',
+                                                    padding: '8px',
+                                                    borderRadius: '6px',
+                                                    backgroundColor:
+                                                        message.sender._id === userId ? '#f97316' : '#e5e7eb',
+                                                    color: message.sender._id === userId ? '#fff' : '#111827',
+                                                    fontSize: '14px',
+                                                    maxWidth: '80%',
+                                                }}
+                                            >
+                                                <p style={{ fontWeight: 'bold', fontSize: '12px', margin: '0 0 4px 0', color: message.sender._id === userId ? '#fff' : '#111827' }}>
+                                                    {message.sender.name} {message.sender.lastname} ({message.sender.role})
+                                                </p>
+                                                <p style={{ margin: 0 }}>{message.content}</p>
+                                                <p style={{ fontSize: '10px', color: message.sender._id === userId ? '#fff' : '#6b7280', marginTop: '4px' }}>
+                                                    {new Date(message.timestamp).toLocaleTimeString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <form
+                                onSubmit={sendMessage}
+                                style={{
+                                    padding: '10px',
+                                    borderTop: '1px solid #e5e7eb',
+                                    backgroundColor: '#fff',
+                                }}
+                            >
+                                <div style={{ display: 'flex' }}>
+                                    <input
+                                        ref={inputRef}
+                                        type="text"
+                                        value={newMessage}
+                                        onChange={handleInputChange}
+                                        onClick={handleInputClick}
+                                        style={{
+                                            flex: 1,
+                                            padding: '8px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '4px 0 0 4px',
+                                            fontSize: '14px',
+                                            outline: 'none',
+                                            pointerEvents: 'auto',
+                                            cursor: 'text',
+                                            backgroundColor: '#fff',
+                                            zIndex: 2500,
+                                        }}
+                                        placeholder="Tapez votre message..."
+                                        disabled={!!chatError}
+                                    />
+                                    <button
+                                        type="submit"
+                                        style={{
+                                            padding: '8px 12px',
+                                            backgroundColor: '#f97316',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '0 4px 4px 0',
+                                            cursor: 'pointer',
+                                            fontSize: '14px',
+                                        }}
+                                        disabled={!!chatError}
+                                    >
+                                        Envoyer
+                                    </button>
+                                </div>
+                            </form>
+                        </>
+                    )}
+                </div>
+            )}
         </>
     );
 };
