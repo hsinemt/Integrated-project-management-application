@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ProjectController = require('../Controllers/ProjectController');
-const CodeAssessmentController = require('../Controllers/CodeReviewController');
+const CodeReviewController = require('../Controllers/CodeReviewController');
 const { validateProject } = require('../Middlewares/ProjectValidation');
 const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware, authMiddleware } = require('../Middlewares/UserValidation');
 const { uploadProjectLogo } = require('../Config/ProjectUploadConfig');

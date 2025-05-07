@@ -21,7 +21,7 @@ const choixRoutes = require('./Routes/choixRoutes');
 const tutorRoutes = require('./Routes/tutorRoutes');
 const codeFileRoutes = require('./Routes/codeFileRoutes');
 const activityRoutes = require('./Routes/activityRoutes');
-const codeReviewRouter = require('./Routes/codeReviewRoutes');
+const codeReviewRouter = require('./Routes/codeFileRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -143,7 +143,7 @@ io.on('connection', (socket) => {
 });
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'Uploads');
+//const uploadsDir = path.join(__dirname, 'Uploads');
 if (!fs.existsSync(uploadsDir)) {
   console.log('Creating uploads directory:', uploadsDir);
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -221,7 +221,7 @@ app.get('/diagnostic/scores', async (req, res) => {
 // Configure body parser
 app.use(bodyParser.json({ limit: '10mb', extended: true, parameterLimit: 50000 }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true, parameterLimit: 50000 }));
-app.use('/uploads', express.static(uploadsDir));
+//app.use('/uploads', express.static(uploadsDir));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
@@ -304,8 +304,7 @@ app.use(function(req, res, next) {
     next();
 });
 
-// Then modify your server creation to include timeout:
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
@@ -318,6 +317,21 @@ const server = app.listen(PORT, () => {
         process.exit(1);
     }
 });
+
+// Then modify your server creation to include timeout:
+// const server = app.listen(PORT, () => {
+//     console.log(`Server is running on port ${PORT}`);
+// }).on('error', (err) => {
+//     if (err.code === 'EADDRINUSE') {
+//         console.error(`Port ${PORT} is already in use. Please:
+//     1. Stop the other process using this port, or
+//     2. Use a different port by setting the PORT environment variable.`);
+//         process.exit(1);
+//     } else {
+//         console.error('Server error:', err);
+//         process.exit(1);
+//     }
+// });
 
 // Set server timeout
 server.timeout = 300000; // 5 minutes

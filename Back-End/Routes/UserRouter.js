@@ -205,7 +205,34 @@ router.post("/send-2fa-otp1", sendVerifyOtp1);
 router.get('/check-email', isUserEmailAvailable);
 router.put('/update/:id', userToken, isAdmin, updateUser);
 router.delete('/delete/:id', userToken, isAdmin, deleteUser);
+router.put('/update-profile/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { name, lastname, birthday, password } = req.body;
 
+        const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { name, lastname, birthday, password: hashedPassword },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            updatedUser,
+        });
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ message: 'Error updating profile', error });
+    }
+});
 // Update with photo
 router.put('/update-with-photo/:id', userToken, isAdmin, (req, res, next) => {
     handleFileUpload(req, res, () => {
@@ -258,49 +285,6 @@ router.use((err, req, res, next) => {
         message: err.message || 'An unexpected error occurred'
     });
 });
-
-            // Get the current user to find and remove old avatar if exists
-            User.findById(userId)
-                .then(currentUser => {
-                    if (currentUser && currentUser.avatar && currentUser.avatar.startsWith('/uploads/')) {
-                        const oldAvatarPath = path.join(__dirname, '..', currentUser.avatar);
-                        if (fs.existsSync(oldAvatarPath)) {
-                            fs.unlinkSync(oldAvatarPath);
-                            console.log('Removed old avatar file');
-                        }
-                    }
-router.put('/update-profile/:userId', async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { name, lastname, birthday, password } = req.body;
-
-                    // Continue with the update
-                    updateUser(req, res);
-                })
-                .catch(error => {
-                    console.error('Error finding user for avatar update:', error);
-                    // Continue with update even if we can't remove old avatar
-                    updateUser(req, res);
-                });
-        } else {
-            // No file uploaded or no ID, just continue with update
-            updateUser(req, res);
-        }
-    });
-});
-      const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
-
-
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { name, lastname, birthday, password: hashedPassword },
-        { new: true }
-      );
-
-      if (!updatedUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
 // Error handler middleware
 router.use((err, req, res, next) => {
     console.error('Router error:', err);

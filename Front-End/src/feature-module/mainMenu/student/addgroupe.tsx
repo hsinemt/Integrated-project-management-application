@@ -229,8 +229,8 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       <Card>
         <Card.Header as="h3" className="d-flex justify-content-between align-items-center">
           Créer un groupe
-          <Button variant="secondary" onClick={() => navigate("/index")}>
-            Retour
+          <Button variant="secondary" onClick={() => navigate("/projects-grid")}>
+            Back
           </Button>
         </Card.Header>
         <Card.Body>
