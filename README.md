@@ -1,7 +1,7 @@
 # Project README 
 
 ## Project Structure
-```
+``` 
 /Config        - Configuration files
 /Controllers   - Handles business logic
 /Middlewares   - Custom middleware functions
