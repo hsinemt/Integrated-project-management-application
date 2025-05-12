@@ -9,19 +9,9 @@ const ZipFile = require('../Models/ZipFile');
 const CodeMark = require('../Models/CodeMark');
 const sonarCloudService = require('./RobustSonarCloudService');
 
-/**
- * Service for analyzing zip project submissions
- */
+
 class ZipProjectAnalyzer {
-    /**
-     * Upload a zip file without analysis
-     * @param {string} zipFilePath - Path to the uploaded zip file
-     * @param {string} projectId - Project ID
-     * @param {string} userId - User ID
-     * @param {string} originalFilename - Original filename of the zip
-     * @param {string} taskId - Task ID (optional)
-     * @returns {Object} Submission details
-     */
+
     async uploadZipFile(zipFilePath, projectId, userId, originalFilename, taskId = null) {
         // Generate a unique submission ID
         const submissionId = new mongoose.Types.ObjectId().toString();
@@ -98,8 +88,7 @@ class ZipProjectAnalyzer {
             zipSubmission.updatedAt = new Date();
             await zipSubmission.save();
 
-            // Use the provided userId if available, otherwise use the submission's student
-            // ENSURE it's a string either way
+
             const userIdForAnalysis = providedUserId
                 ? String(providedUserId)
                 : String(zipSubmission.student);
@@ -321,9 +310,7 @@ class ZipProjectAnalyzer {
             throw error;
         }
     }
-    /**
-     * Extract a zip file to the specified directory
-     */
+
     async extractZipFile(zipFilePath, extractionPath) {
         try {
             // Ensure extraction directory exists
@@ -341,13 +328,7 @@ class ZipProjectAnalyzer {
         }
     }
 
-    /**
-     * Scan a directory recursively to get information about all files
-     * @param {string} dirPath - Path to the directory to scan
-     * @param {string} basePath - Base path for relative paths
-     * @param {string} projectId - Project ID for looking up tasks
-     * @returns {Array} List of file information objects
-     */
+
     async scanDirectory(dirPath, basePath = '', projectId = null) {
         const fileInfoList = [];
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
@@ -400,13 +381,7 @@ class ZipProjectAnalyzer {
         return fileInfoList;
     }
 
-    /**
-     * Parse file path and name to determine student and task associations
-     * @param {string} relativePath - Relative path of the file
-     * @param {string} fileName - Name of the file
-     * @param {Array} projectTasks - List of tasks for the project
-     * @returns {Object} Object with student and task IDs
-     */
+
     parseFilePathForAssociations(relativePath, fileName, projectTasks) {
         let student = null;
         let task = null;
@@ -480,9 +455,7 @@ class ZipProjectAnalyzer {
     }
 
 
-    /**
-     * Analyze individual files within the zip
-     */
+
     async analyzeIndividualFiles(zipSubmission, fileInfoList, projectId, userId) {
         console.log(`[${zipSubmission.submissionId}] Analyzing individual files...`);
 
@@ -558,9 +531,7 @@ class ZipProjectAnalyzer {
         console.log(`[${zipSubmission.submissionId}] Individual file analysis complete`);
     }
 
-    /**
-     * Generate feedback based on analysis results
-     */
+
     generateFeedback(analysisResult) {
         const { score, detailedScores, analysisSource } = analysisResult;
 
@@ -592,9 +563,7 @@ class ZipProjectAnalyzer {
         return feedback;
     }
 
-    /**
-     * Helper function to determine file type from extension
-     */
+
     getFileType(extension) {
         const webExtensions = ['.html', '.css', '.js', '.jsx', '.ts', '.tsx'];
         const backendExtensions = ['.php', '.py', '.rb', '.java', '.c', '.cpp', '.cs', '.go'];
@@ -615,9 +584,7 @@ class ZipProjectAnalyzer {
         return 'Unknown';
     }
 
-    /**
-     * Helper function to determine programming language from extension
-     */
+
     getLanguage(extension) {
         const languageMap = {
             '.html': 'HTML',

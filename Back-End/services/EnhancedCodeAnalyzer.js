@@ -1,39 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
-/**
- * Enhanced local code analyzer with more sophisticated metrics
- */
+
 class EnhancedCodeAnalyzer {
-    /**
-     * Analyze a submitted code file
-     */
+
     async analyzeCode(filePath, submissionId, userId, projectId) {
         try {
-            console.log(`Starting enhanced code analysis for submission ${submissionId}`);
-
-            // Get file extension to determine language
             const fileExt = path.extname(filePath).toLowerCase();
             const fileType = this.getFileType(fileExt);
             const language = this.getLanguage(fileExt);
 
-            console.log(`File type: ${fileType}, Language: ${language}`);
-
-            // Read the file content directly
             const fileContent = fs.readFileSync(filePath, 'utf8');
 
-            // Generate a project key
             const projectKey = `${userId}_${projectId}_${submissionId}`;
 
-            // Language-specific analysis
             const metrics = this.analyzeFileContent(fileContent, fileExt);
 
-            // Calculate score based on metrics and file type
             const score = this.calculateScore(metrics, fileType);
 
-            console.log(`Enhanced analysis completed with score: ${score}`);
 
-            // Calculate detailed scores
             const detailedScores = this.calculateDetailedScores(metrics, score, fileType);
 
             return {
@@ -49,12 +34,10 @@ class EnhancedCodeAnalyzer {
         } catch (error) {
             console.error('Error in enhanced code analysis:', error);
 
-            // Generate random score between 45-65 (less than perfect but not terrible)
             const randomScore = 45 + Math.floor(Math.random() * 21);
             const fileExt = path.extname(filePath).toLowerCase();
             const fileType = this.getFileType(fileExt);
 
-            // Generate some semi-reasonable metrics
             const metrics = this.generateDefaultMetrics(fileType);
 
             return {
@@ -70,9 +53,6 @@ class EnhancedCodeAnalyzer {
         }
     }
 
-    /**
-     * Determine file type from extension
-     */
     getFileType(extension) {
         const webExtensions = ['.html', '.css', '.js', '.jsx', '.ts', '.tsx'];
         const backendExtensions = ['.php', '.py', '.rb', '.java', '.c', '.cpp', '.cs', '.go'];
@@ -89,9 +69,6 @@ class EnhancedCodeAnalyzer {
         return 'Unknown';
     }
 
-    /**
-     * Determine programming language from extension
-     */
     getLanguage(extension) {
         const languageMap = {
             '.html': 'HTML',
@@ -124,9 +101,7 @@ class EnhancedCodeAnalyzer {
         return languageMap[extension] || 'Unknown';
     }
 
-    /**
-     * Analyze file content with language-specific rules
-     */
+
     analyzeFileContent(content, fileExt) {
         // Basic metrics
         const lines = content.split('\n');
@@ -139,7 +114,6 @@ class EnhancedCodeAnalyzer {
         let complexity = 0;
         let duplications = 0;
 
-        // Detect language
         const isJavaScript = ['.js', '.jsx'].includes(fileExt);
         const isTypeScript = ['.ts', '.tsx'].includes(fileExt);
         const isHTML = fileExt === '.html';
@@ -149,7 +123,6 @@ class EnhancedCodeAnalyzer {
         const isCSharp = fileExt === '.cs';
         const isPHP = fileExt === '.php';
 
-        // Define comment patterns for different languages
         let lineCommentPattern = '//';
         let blockCommentStartPattern = '/*';
         let blockCommentEndPattern = '*/';
@@ -164,36 +137,29 @@ class EnhancedCodeAnalyzer {
             blockCommentEndPattern = '-->';
         } else if (isPHP) {
             lineCommentPattern = '//';
-            // PHP also supports # for line comments
+
         }
 
-        // Track if we're inside a block comment
         let inBlockComment = false;
 
-        // Count unfinished code blocks (to detect nesting complexity)
         let openBraces = 0;
         let previousLines = [];
 
-        // Analyze each line
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const trimmed = line.trim();
 
-            // Skip empty lines
             if (trimmed === '') continue;
 
-            // Check for duplicated code (simple approach - exact line matching)
             if (trimmed.length > 10 && previousLines.includes(trimmed)) {
                 duplications++;
             }
 
-            // Remember this line for duplication checking (keep last 100 lines)
             if (previousLines.length >= 100) {
                 previousLines.shift();
             }
             previousLines.push(trimmed);
 
-            // Count comments
             if (inBlockComment) {
                 commentLines++;
                 if (trimmed.includes(blockCommentEndPattern)) {
@@ -207,65 +173,64 @@ class EnhancedCodeAnalyzer {
             } else if (lineCommentPattern && trimmed.startsWith(lineCommentPattern)) {
                 commentLines++;
             }
-            // For HTML/XML, count comments like <!-- -->
+
             else if (isHTML && trimmed.includes('<!--')) {
                 commentLines++;
             }
-            // For JS/TS specifically detect JSDoc comments
+
             else if ((isJavaScript || isTypeScript) && trimmed.startsWith('*')) {
                 commentLines++;
             }
             else {
-                // Language-specific issue detection
+
                 if (isJavaScript || isTypeScript) {
-                    // JavaScript/TypeScript specific issues
+
                     if (trimmed.includes('console.log')) {
                         codeSmells++;
                     }
 
                     if (trimmed.includes('var ')) {
-                        codeSmells++; // Use let/const instead
+                        codeSmells++;
                     }
 
                     if (trimmed.includes('==') && !trimmed.includes('===')) {
-                        bugs++; // Use strict equality
+                        bugs++;
                     }
 
                     if (trimmed.includes('!=') && !trimmed.includes('!==')) {
-                        bugs++; // Use strict inequality
+                        bugs++;
                     }
 
                     if (trimmed.includes('eval(')) {
-                        vulnerabilities++; // Don't use eval
+                        vulnerabilities++;
                     }
 
                     if (trimmed.includes('Object.assign') && !trimmed.includes('...')) {
                         codeSmells++; // Prefer spread operator
                     }
 
-                    // Security vulnerabilities in browser code
+
                     if (trimmed.includes('innerHTML') ||
                         trimmed.includes('document.write') ||
                         trimmed.includes('fromCharCode')) {
                         vulnerabilities++;
                     }
                 } else if (isPython) {
-                    // Python specific issues
+
                     if (trimmed.includes('exec(') || trimmed.includes('eval(')) {
                         vulnerabilities++;
                     }
 
                     if (trimmed.includes('print(')) {
-                        codeSmells++; // Use logging instead
+                        codeSmells++;
                     }
 
                     if (trimmed.includes('except:') && !trimmed.includes('except ')) {
-                        bugs++; // Avoid bare except
+                        bugs++;
                     }
                 } else if (isJava || isCSharp) {
-                    // Java/C# issues
                     if (trimmed.contains("catch (Exception ")) {
-                        bugs++; // Too generic exception catching
+                        bugs++;
                     }
 
                     if (trimmed.includes("System.out.println") ||
@@ -273,22 +238,19 @@ class EnhancedCodeAnalyzer {
                         codeSmells++;
                     }
                 } else if (isPHP) {
-                    // PHP issues
                     if (trimmed.includes('echo ')) {
                         codeSmells++;
                     }
 
                     if (trimmed.includes('mysql_') && !trimmed.includes('mysqli_')) {
-                        vulnerabilities++; // Old mysql functions
+                        vulnerabilities++;
                     }
                 }
 
-                // General issues for all languages
                 if (trimmed.includes('TODO') || trimmed.includes('FIXME')) {
                     codeSmells++;
                 }
 
-                // Count open/close braces for complexity
                 if (trimmed.includes('{')) {
                     openBraces += (trimmed.match(/{/g) || []).length;
                 }
@@ -296,7 +258,6 @@ class EnhancedCodeAnalyzer {
                     openBraces -= (trimmed.match(/}/g) || []).length;
                 }
 
-                // Add to complexity for control structures
                 if (trimmed.includes('if ') ||
                     trimmed.includes('else ') ||
                     trimmed.includes('for ') ||
@@ -308,16 +269,15 @@ class EnhancedCodeAnalyzer {
             }
         }
 
-        // Penalize deeply nested code (high open brace count)
+
         if (openBraces > 3) {
             codeSmells += openBraces - 3;
         }
 
-        // Calculate metrics
+
         const duplicatedLinesDensity = totalLines > 0 ? (duplications / totalLines) * 100 : 0;
         const commentDensity = totalLines > 0 ? (commentLines / totalLines) * 100 : 0;
 
-        // Calculate ratings (1=A best, 5=E worst)
         const reliabilityRating = this.calculateRating(bugs);
         const securityRating = this.calculateRating(vulnerabilities);
         const maintainabilityRating = this.calculateMaintainabilityRating(codeSmells, totalLines);
@@ -326,7 +286,7 @@ class EnhancedCodeAnalyzer {
             bugs: bugs.toString(),
             vulnerabilities: vulnerabilities.toString(),
             code_smells: codeSmells.toString(),
-            coverage: '0', // We don't calculate test coverage
+            coverage: '0',
             duplicated_lines_density: duplicatedLinesDensity.toFixed(2),
             reliability_rating: reliabilityRating.toString(),
             security_rating: securityRating.toString(),
@@ -337,9 +297,6 @@ class EnhancedCodeAnalyzer {
         };
     }
 
-    /**
-     * Calculate rating based on issue count (1=A best, 5=E worst)
-     */
     calculateRating(issueCount) {
         if (issueCount === 0) return 1;
         if (issueCount <= 2) return 2;
@@ -348,9 +305,6 @@ class EnhancedCodeAnalyzer {
         return 5;
     }
 
-    /**
-     * Calculate maintainability rating based on code smells relative to code size
-     */
     calculateMaintainabilityRating(codeSmells, totalLines) {
         if (totalLines === 0) return 1;
 
@@ -363,9 +317,6 @@ class EnhancedCodeAnalyzer {
         return 5;
     }
 
-    /**
-     * Generate default metrics based on file type
-     */
     generateDefaultMetrics(fileType) {
         // Add some randomness to default metrics based on file type
         let baseBugs, baseVulns, baseSmells;
@@ -397,7 +348,6 @@ class EnhancedCodeAnalyzer {
                 baseSmells = 7;
         }
 
-        // Add randomness
         const defBugs = Math.max(0, baseBugs + Math.floor(Math.random() * 3) - 1);
         const defVulns = Math.max(0, baseVulns + Math.floor(Math.random() * 3) - 1);
         const defSmells = Math.max(0, baseSmells + Math.floor(Math.random() * 6) - 3);
@@ -406,7 +356,7 @@ class EnhancedCodeAnalyzer {
         const defComment = Math.random() * 25;
         const defLines = 100 + Math.floor(Math.random() * 400);
 
-        // Ratings based on these values
+
         const reliabilityRating = this.calculateRating(defBugs);
         const securityRating = this.calculateRating(defVulns);
         const maintainabilityRating = this.calculateMaintainabilityRating(defSmells, defLines);
@@ -426,13 +376,10 @@ class EnhancedCodeAnalyzer {
         };
     }
 
-    /**
-     * Calculate score based on metrics and file type
-     */
+
     calculateScore(metrics, fileType) {
         console.log(`Calculating score for ${fileType} file with metrics:`, JSON.stringify(metrics, null, 2));
 
-        // Different file types have different scoring criteria
         const fileTypeWeights = {
             'Web': {
                 bugs: 4,
@@ -476,10 +423,10 @@ class EnhancedCodeAnalyzer {
             }
         };
 
-        // Get weights for this file type (or use Unknown if not found)
+
         const weights = fileTypeWeights[fileType] || fileTypeWeights['Unknown'];
 
-        // Start with a base score that varies by file type
+
         let baseScore;
         switch (fileType) {
             case 'Web': baseScore = 70; break;
@@ -489,51 +436,46 @@ class EnhancedCodeAnalyzer {
             default: baseScore = 70;
         }
 
-        // Add a small random starting variation
-        let score = baseScore + (Math.random() * 10) - 5; // ±5 variation
+        let score = baseScore + (Math.random() * 10) - 5;
 
-        // Parse metrics
+
         const bugs = parseInt(metrics.bugs) || 0;
         const vulnerabilities = parseInt(metrics.vulnerabilities) || 0;
         const codeSmells = parseInt(metrics.code_smells) || 0;
         const commentDensity = parseFloat(metrics.comment_lines_density) || 0;
         const duplicatedLinesDensity = parseFloat(metrics.duplicated_lines_density) || 0;
         const complexity = parseInt(metrics.complexity) || 0;
-        const totalLines = parseInt(metrics.ncloc) || 1; // Avoid division by zero
+        const totalLines = parseInt(metrics.ncloc) || 1;
 
-        // Apply deductions based on issues
+
         score -= bugs * weights.bugs;
         score -= vulnerabilities * weights.vulnerabilities;
-        score -= Math.min(25, codeSmells * weights.codeSmells); // Cap at 25 point deduction
+        score -= Math.min(25, codeSmells * weights.codeSmells);
 
-        // Apply complexity penalty relative to code size
+
         const complexityRatio = complexity / totalLines;
         score -= Math.min(15, complexityRatio * 100 * weights.complexity);
 
-        // Apply duplication penalty
+
         score -= Math.min(20, duplicatedLinesDensity * weights.duplicatedLinesDensity);
 
-        // Add bonus for good documentation (if between 10-40%)
+
         if (commentDensity >= 10 && commentDensity <= 40) {
             score += (commentDensity - 10) * weights.commentDensity;
         } else if (commentDensity > 40) {
-            // Penalty for excessive comments
+
             score -= (commentDensity - 40) * (weights.commentDensity / 2);
         } else {
-            // Penalty for too few comments
+
             score -= (10 - commentDensity) * weights.commentDensity;
         }
 
-        // Add a small random final variation
-        score += (Math.random() * 6) - 3; // ±3 variation
 
-        // Ensure score is between 0 and 100
+        score += (Math.random() * 6) - 3;
+
         return Math.max(0, Math.min(100, Math.round(score)));
     }
 
-    /**
-     * Calculate detailed scores for the UI
-     */
     calculateDetailedScores(metrics, totalScore, fileType) {
         // Parse metrics
         const bugs = parseInt(metrics.bugs) || 0;
@@ -544,7 +486,6 @@ class EnhancedCodeAnalyzer {
         const complexity = parseInt(metrics.complexity) || 0;
         const totalLines = parseInt(metrics.ncloc) || 0;
 
-        // Different file types have different component weights
         const fileTypeWeights = {
             'Web': {
                 correctness: 0.25,
@@ -588,41 +529,41 @@ class EnhancedCodeAnalyzer {
             }
         };
 
-        // Get weights for this file type
+
         const weights = fileTypeWeights[fileType] || fileTypeWeights['Unknown'];
 
-        // Calculate component scores - these should roughly add up to totalScore
+
         const correctnessScore = Math.round(totalScore * weights.correctness * (1 - bugs*0.1));
         const securityScore = Math.round(totalScore * weights.security * (1 - vulnerabilities*0.1));
         const maintainabilityScore = Math.round(totalScore * weights.maintainability * (1 - Math.min(0.5, codeSmells*0.02)));
 
         let documentationScore = 0;
         if (commentDensity >= 10 && commentDensity <= 40) {
-            // Optimal comment density range
+
             documentationScore = Math.round(totalScore * weights.documentation * ((commentDensity - 10) / 30 + 0.5));
         } else {
-            // Less than ideal comment density
+
             documentationScore = Math.round(totalScore * weights.documentation * 0.5);
         }
 
         const cleanCodeScore = Math.round(totalScore * weights.cleanCode * (1 - duplication*0.03));
 
-        // Calculate simplicity based on complexity ratio
+
         const complexityRatio = totalLines > 0 ? complexity / totalLines : 0;
         const simplicityScore = Math.round(totalScore * weights.simplicity * (1 - Math.min(0.8, complexityRatio*5)));
 
-        // Ensure we add up close to the total score (within ±2)
+
         const currentTotal = correctnessScore + securityScore + maintainabilityScore +
             documentationScore + cleanCodeScore + simplicityScore;
 
         let adjustedCorrectnessScore = correctnessScore;
 
-        // If there's a discrepancy, adjust the largest component
+
         if (Math.abs(totalScore - currentTotal) <= 5) {
             adjustedCorrectnessScore += (totalScore - currentTotal);
         }
 
-        // Create detailed scores object
+
         const detailedScores = {
             correctnessScore: Math.max(0, adjustedCorrectnessScore),
             securityScore: Math.max(0, securityScore),

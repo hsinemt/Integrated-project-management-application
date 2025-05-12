@@ -7,14 +7,7 @@ const User = require('../Models/User');
 const CodeMark = require('../Models/CodeMark');
 const zipProjectAnalyzer = require('../services/ZipProjectAnalyzer');
 
-/**
- * Controller for handling zip project submissions and analysis
- */
 
-/**
- * Upload a zip file without analysis
- * Can be associated with a specific task if taskId is provided
- */
 exports.uploadZipFile = async (req, res) => {
     try {
         const { projectId } = req.params;
@@ -63,19 +56,18 @@ exports.uploadZipFile = async (req, res) => {
             });
         }
 
-        // Get file path
+
         const filePath = req.file.path;
 
-        // Upload the zip file without analysis
+
         const result = await zipProjectAnalyzer.uploadZipFile(
             filePath,
             projectId,
             userId,
             req.file.originalname,
-            taskId // Pass the taskId parameter
+            taskId
         );
 
-        // Send response to client
         res.status(200).json({
             success: true,
             message: 'Zip file uploaded successfully',
@@ -97,26 +89,18 @@ exports.uploadZipFile = async (req, res) => {
     }
 };
 
-/**
- * Analyze a previously uploaded zip file
- */
-/**
- * Analyze a previously uploaded zip file
- */
-/**
- * Analyze a previously uploaded zip file
- */
+
 exports.analyzeZipFile = async (req, res) => {
     try {
         const { submissionId } = req.params;
         const userId = req.user.id;
 
-        // Extract the userId from request body and ensure it's a string
+
         const analyzerUserId = req.body.userId
             ? String(req.body.userId)
-            : String(userId);  // Fall back to authenticated user ID
+            : String(userId);
 
-        // Log for debugging
+
         console.log("analyzeZipFile called with userId from body:", analyzerUserId);
         console.log(`Original submissionId from request: "${submissionId}"`);
 
@@ -127,7 +111,7 @@ exports.analyzeZipFile = async (req, res) => {
             });
         }
 
-        // Check if user is a tutor
+
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -136,7 +120,7 @@ exports.analyzeZipFile = async (req, res) => {
             });
         }
 
-        // Only tutors can trigger analysis
+
         if (user.role !== 'tutor') {
             return res.status(403).json({
                 success: false,
@@ -144,40 +128,31 @@ exports.analyzeZipFile = async (req, res) => {
             });
         }
 
-        // Send initial response to client to prevent timeout
         res.status(202).json({
             success: true,
             message: 'Analysis started. This may take some time.',
             submissionId: submissionId
         });
 
-        // Analyze the zip file asynchronously
+
         try {
             console.log(`Starting analysis for submission ${submissionId}...`);
 
-            // Improved matching strategy:
-            // 1. Try exact match first
             let zipSubmission = await ZipFile.findOne({ submissionId: submissionId });
 
-            // 2. If no exact match, try matching by MongoDB ObjectId
             if (!zipSubmission && mongoose.Types.ObjectId.isValid(submissionId)) {
                 zipSubmission = await ZipFile.findById(submissionId);
             }
 
-            // 3. If still no match, try a more flexible partial match
             if (!zipSubmission) {
-                // Get all submissions - this is more expensive but will be a fallback
                 const allSubmissions = await ZipFile.find().sort({ createdAt: -1 }).limit(50);
 
-                // Find the closest match based on string similarity
-                // First, try submissions that start with same pattern (first 6 chars)
                 zipSubmission = allSubmissions.find(
                     sub => sub.submissionId.startsWith(submissionId.substring(0, 6))
                 );
 
-                // If still no match, check recently created submissions
+
                 if (!zipSubmission && allSubmissions.length > 0) {
-                    // Just use the most recent submission as a last resort
                     zipSubmission = allSubmissions[0];
                     console.log(`Using most recent submission as fallback: ${zipSubmission.submissionId}`);
                 }
@@ -186,11 +161,11 @@ exports.analyzeZipFile = async (req, res) => {
             if (zipSubmission) {
                 console.log(`Found matching submission with ID: ${zipSubmission.submissionId}`);
 
-                // Use the zip project analyzer service with the correct ID AND userId
+
                 await zipProjectAnalyzer.analyzeZipFile(zipSubmission.submissionId, analyzerUserId);
                 console.log(`Analysis completed for submission ${zipSubmission.submissionId}`);
             } else {
-                // No matching submission found
+
                 console.error(`No matching submission found for ID: ${submissionId}`);
                 throw new Error(`Zip submission with ID or similar to ${submissionId} not found`);
             }
@@ -201,7 +176,7 @@ exports.analyzeZipFile = async (req, res) => {
     } catch (error) {
         console.error('Error analyzing zip file:', error);
 
-        // If response has not been sent yet, send error response
+
         if (!res.headersSent) {
             res.status(500).json({
                 success: false,
@@ -211,9 +186,7 @@ exports.analyzeZipFile = async (req, res) => {
         }
     }
 };
-/**
- * Submit and analyze a zip file (legacy endpoint for backward compatibility)
- */
+
 exports.submitZipProject = async (req, res) => {
     let zipSubmission = null;
 
@@ -228,7 +201,7 @@ exports.submitZipProject = async (req, res) => {
             });
         }
 
-        // Check if file was uploaded
+
         if (!req.file) {
             return res.status(400).json({
                 success: false,
@@ -236,7 +209,6 @@ exports.submitZipProject = async (req, res) => {
             });
         }
 
-        // Verify file is a zip
         const fileExt = path.extname(req.file.originalname).toLowerCase();
         if (fileExt !== '.zip') {
             return res.status(400).json({
@@ -245,7 +217,6 @@ exports.submitZipProject = async (req, res) => {
             });
         }
 
-        // Get project information
         const project = await Project.findById(projectId);
         if (!project) {
             return res.status(404).json({
@@ -254,7 +225,6 @@ exports.submitZipProject = async (req, res) => {
             });
         }
 
-        // Get user information
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -263,10 +233,8 @@ exports.submitZipProject = async (req, res) => {
             });
         }
 
-        // Get file path
         const filePath = req.file.path;
 
-        // Send initial response to client to prevent timeout
         res.status(202).json({
             success: true,
             message: 'Zip file submitted successfully. Analysis in progress.',
@@ -277,11 +245,11 @@ exports.submitZipProject = async (req, res) => {
             }
         });
 
-        // Process the zip file asynchronously
+
         try {
             console.log(`Starting zip file processing for ${req.file.originalname}...`);
 
-            // Use the zip project analyzer service
+
             const result = await zipProjectAnalyzer.processZipSubmission(
                 filePath,
                 projectId,
@@ -295,13 +263,13 @@ exports.submitZipProject = async (req, res) => {
         } catch (analysisError) {
             console.error('Error during zip file processing:', analysisError);
 
-            // If we already have a submission record, update it with error status
+
             if (zipSubmission) {
                 zipSubmission.status = 'Failed';
                 zipSubmission.updatedAt = new Date();
                 await zipSubmission.save();
 
-                // Create a CodeMark record for the failed analysis
+
                 const codeMark = new CodeMark({
                     project: projectId,
                     student: userId,
@@ -324,7 +292,6 @@ exports.submitZipProject = async (req, res) => {
     } catch (error) {
         console.error('Error submitting zip project:', error);
 
-        // If response has not been sent yet, send error response
         if (!res.headersSent) {
             res.status(500).json({
                 success: false,
@@ -335,14 +302,11 @@ exports.submitZipProject = async (req, res) => {
     }
 };
 
-/**
- * Get all zip project submissions for a specific project
- * Can be filtered by taskId if provided in query params
- */
+
 exports.getProjectZipSubmissions = async (req, res) => {
     try {
         const { projectId } = req.params;
-        const { taskId } = req.query; // Get taskId from query params
+        const { taskId } = req.query;
 
         if (!projectId) {
             return res.status(400).json({
@@ -351,15 +315,15 @@ exports.getProjectZipSubmissions = async (req, res) => {
             });
         }
 
-        // Build query object
+
         const query = { project: projectId };
 
-        // Add taskId to query if provided
+
         if (taskId) {
             query.taskId = taskId;
         }
 
-        // Find zip submissions for the project, filtered by taskId if provided
+
         const submissions = await ZipFile.find(query)
             .populate('student', 'name lastname email')
             .sort({ createdAt: -1 });
@@ -378,9 +342,7 @@ exports.getProjectZipSubmissions = async (req, res) => {
     }
 };
 
-/**
- * Get zip submission details by ID
- */
+
 exports.getZipSubmissionById = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -392,7 +354,6 @@ exports.getZipSubmissionById = async (req, res) => {
             });
         }
 
-        // Find the submission with populated references
         const submission = await ZipFile.findById(submissionId)
             .populate('student', 'name lastname email')
             .populate('project', 'title description')
@@ -416,7 +377,6 @@ exports.getZipSubmissionById = async (req, res) => {
             });
         }
 
-        // Find the corresponding analysis in CodeMark collection
         const analysis = await CodeMark.findOne({ 
             submissionId: submission.submissionId,
             fileType: 'zip'
@@ -444,9 +404,7 @@ exports.getZipSubmissionById = async (req, res) => {
     }
 };
 
-/**
- * Get file details from a zip submission
- */
+
 exports.getZipSubmissionFiles = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -499,9 +457,7 @@ exports.getZipSubmissionFiles = async (req, res) => {
     }
 };
 
-/**
- * Check zip submission status
- */
+
 exports.checkZipSubmissionStatus = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -513,7 +469,7 @@ exports.checkZipSubmissionStatus = async (req, res) => {
             });
         }
 
-        // Find the submission with more detailed information
+
         const submission = await ZipFile.findOne({
             $or: [
                 { submissionId: submissionId },
@@ -533,11 +489,11 @@ exports.checkZipSubmissionStatus = async (req, res) => {
         const filesWithTasks = submission.files.filter(file => file.task).length;
         const analyzedFiles = submission.files.filter(file => file.analysisResult).length;
 
-        // Find the corresponding analysis in CodeMark collection with detailed information
+
         const analysis = await CodeMark.findOne({
             submissionId: submission.submissionId,
             fileType: 'zip'
-        }).select('+sonarResults'); // Include the sonarResults field which might be excluded by default
+        }).select('+sonarResults');
 
         // Prepare the response data
         const responseData = {
@@ -577,9 +533,7 @@ exports.checkZipSubmissionStatus = async (req, res) => {
     }
 };
 
-/**
- * Add tutor review to a zip submission
- */
+
 exports.tutorReviewZipSubmission = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -600,7 +554,7 @@ exports.tutorReviewZipSubmission = async (req, res) => {
             });
         }
 
-        // Find the submission
+
         const submission = await ZipFile.findById(submissionId);
         if (!submission) {
             return res.status(404).json({
@@ -609,7 +563,6 @@ exports.tutorReviewZipSubmission = async (req, res) => {
             });
         }
 
-        // Find the corresponding analysis in CodeMark collection
         const analysis = await CodeMark.findOne({ 
             submissionId: submission.submissionId,
             fileType: 'zip'
@@ -622,7 +575,7 @@ exports.tutorReviewZipSubmission = async (req, res) => {
             });
         }
 
-        // Update the CodeMark record with tutor review
+
         analysis.tutorReview = {
             reviewed: true,
             score: score,
@@ -635,7 +588,7 @@ exports.tutorReviewZipSubmission = async (req, res) => {
 
         await analysis.save();
 
-        // Update the submission status
+
         submission.status = 'Reviewed';
         submission.updatedAt = new Date();
         await submission.save();
@@ -655,9 +608,7 @@ exports.tutorReviewZipSubmission = async (req, res) => {
     }
 };
 
-/**
- * Download a zip file by submission ID
- */
+
 exports.downloadZipFile = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -678,10 +629,8 @@ exports.downloadZipFile = async (req, res) => {
             });
         }
 
-        // Get the file path from the extractedPath or fileUrl
         const filePath = submission.extractedPath || submission.fileUrl;
 
-        // Check if the file exists on the server
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({
                 success: false,
@@ -689,11 +638,9 @@ exports.downloadZipFile = async (req, res) => {
             });
         }
 
-        // Set appropriate headers
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${submission.fileName}"`);
 
-        // Stream the file to the response
         const fileStream = fs.createReadStream(filePath);
         fileStream.pipe(res);
     } catch (error) {
@@ -706,9 +653,7 @@ exports.downloadZipFile = async (req, res) => {
     }
 };
 
-/**
- * Delete a zip file submission by ID
- */
+
 exports.deleteZipFile = async (req, res) => {
     try {
         const { submissionId } = req.params;
@@ -721,7 +666,7 @@ exports.deleteZipFile = async (req, res) => {
             });
         }
 
-        // Find the submission
+
         const submission = await ZipFile.findById(submissionId);
         if (!submission) {
             return res.status(404).json({
@@ -730,8 +675,7 @@ exports.deleteZipFile = async (req, res) => {
             });
         }
 
-        // Check if the user is authorized to delete this file
-        // Only the student who uploaded the file or a tutor can delete it
+
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -740,7 +684,6 @@ exports.deleteZipFile = async (req, res) => {
             });
         }
 
-        // Check if the user is the owner of the file or a tutor
         if (submission.student.toString() !== userId && user.role !== 'tutor') {
             return res.status(403).json({
                 success: false,
@@ -748,23 +691,22 @@ exports.deleteZipFile = async (req, res) => {
             });
         }
 
-        // Delete the physical file if it exists
         if (submission.fileUrl && fs.existsSync(submission.fileUrl)) {
             fs.unlinkSync(submission.fileUrl);
         }
 
-        // Delete the extracted directory if it exists
+
         if (submission.extractedPath && fs.existsSync(submission.extractedPath)) {
             fs.rmSync(submission.extractedPath, { recursive: true, force: true });
         }
 
-        // Delete any associated CodeMark records
+
         await CodeMark.deleteMany({ 
             submissionId: submission.submissionId,
             fileType: 'zip'
         });
 
-        // Delete the submission record from the database
+
         await ZipFile.findByIdAndDelete(submissionId);
 
         res.status(200).json({

@@ -1,15 +1,12 @@
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
-// Import the robust SonarCloud service
 const codeAnalysisService = require('../Services/RobustSonarCloudService');
 const CodeMark = require('../Models/CodeMark');
 const Project = require('../Models/Project');
 const User = require('../Models/User');
 
-/**
- * Controller for handling code assessments and reviews
- */
+
 exports.submitCode = async (req, res) => {
     let codeAssessment = null;
 
@@ -24,7 +21,6 @@ exports.submitCode = async (req, res) => {
             });
         }
 
-        // Check if file was uploaded
         if (!req.file) {
             return res.status(400).json({
                 success: false,
@@ -32,7 +28,6 @@ exports.submitCode = async (req, res) => {
             });
         }
 
-        // Get project information
         const project = await Project.findById(projectId);
         if (!project) {
             return res.status(404).json({
@@ -41,7 +36,6 @@ exports.submitCode = async (req, res) => {
             });
         }
 
-        // Get user information
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -50,21 +44,16 @@ exports.submitCode = async (req, res) => {
             });
         }
 
-        // Generate a unique submission ID
         const submissionId = new mongoose.Types.ObjectId().toString();
 
-        // Get file path
         const filePath = req.file.path;
 
-        // Get file extension and type
         const fileExt = path.extname(req.file.originalname).toLowerCase();
         const fileType = getFileType(fileExt);
 
-        // Log file information for debugging
-        console.log(`File information: ${req.file.originalname} (${fileType}, ${fileExt})`);
 
-        // Create initial assessment record before analysis
-        // This helps avoid ECONNRESET by responding early
+
+
         codeAssessment = new CodeMark({
             project: projectId,
             student: userId,
@@ -88,10 +77,10 @@ exports.submitCode = async (req, res) => {
             updatedAt: new Date()
         });
 
-        // Save initial record
+
         await codeAssessment.save();
 
-        // Send initial response to client to prevent timeout
+
         res.status(202).json({
             success: true,
             message: 'Code submitted successfully. Analysis in progress.',
@@ -102,7 +91,6 @@ exports.submitCode = async (req, res) => {
             }
         });
 
-        // Set a timeout to update status if analysis takes too long
         const timeoutId = setTimeout(async () => {
             try {
                 const assessment = await CodeMark.findById(codeAssessment._id);
@@ -217,9 +205,7 @@ exports.submitCode = async (req, res) => {
     }
 };
 
-/**
- * Helper function to determine file type from extension
- */
+
 function getFileType(extension) {
     const webExtensions = ['.html', '.css', '.js', '.jsx', '.ts', '.tsx'];
     const backendExtensions = ['.php', '.py', '.rb', '.java', '.c', '.cpp', '.cs', '.go'];
@@ -236,9 +222,7 @@ function getFileType(extension) {
     return 'Unknown';
 }
 
-/**
- * Helper function to determine programming language from extension
- */
+
 function getLanguage(extension) {
     const languageMap = {
         '.html': 'HTML',
@@ -271,9 +255,7 @@ function getLanguage(extension) {
     return languageMap[extension] || 'Unknown';
 }
 
-/**
- * Get all assessments for a specific project
- */
+
 exports.getProjectAssessments = async (req, res) => {
     try {
         const { projectId } = req.params;
@@ -304,9 +286,7 @@ exports.getProjectAssessments = async (req, res) => {
     }
 };
 
-/**
- * Add tutor review to a code assessment
- */
+
 exports.tutorReview = async (req, res) => {
     try {
         const { assessmentId } = req.params;
@@ -364,9 +344,7 @@ exports.tutorReview = async (req, res) => {
     }
 };
 
-/**
- * Get assessment details by ID
- */
+
 exports.getAssessmentById = async (req, res) => {
     try {
         const { assessmentId } = req.params;
@@ -403,9 +381,7 @@ exports.getAssessmentById = async (req, res) => {
     }
 };
 
-/**
- * Check assessment status
- */
+
 exports.checkAssessmentStatus = async (req, res) => {
     try {
         const { assessmentId } = req.params;
