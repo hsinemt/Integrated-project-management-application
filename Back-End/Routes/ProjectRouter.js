@@ -4,7 +4,7 @@ const ProjectController = require('../Controllers/ProjectController');
 const CodeReviewController = require('../Controllers/CodeReviewController');
 const { validateProject } = require('../Middlewares/ProjectValidation');
 const { userToken, isAdminMiddleware, isManagerOrTutorMiddleware, isStudentMiddleware, authMiddleware } = require('../Middlewares/UserValidation');
-const { uploadProjectLogo } = require('../Config/ProjectUploadConfig');
+const { uploadProjectAvatar } = require('../Config/ProjectUploadConfig');
 
 router.post("/recommend-projects", ProjectController.recommend);
 const { uploadCode } = require('../Config/CodeUploadConfig');
@@ -14,7 +14,7 @@ router.post(
     '/create',
     userToken,
     isManagerOrTutorMiddleware,
-    uploadProjectLogo,
+    uploadProjectAvatar,
     validateProject,
     ProjectController.createProject
 );
@@ -24,7 +24,7 @@ router.put(
     '/update/:id',
     userToken,
     isManagerOrTutorMiddleware,
-    uploadProjectLogo,
+    uploadProjectAvatar,
     validateProject,
     ProjectController.updateProject
 );
@@ -43,7 +43,8 @@ router.get('/:projectId/assessments', userToken, isManagerOrTutorMiddleware, Cod
 router.put('/assessment/:assessmentId/review', userToken, isManagerOrTutorMiddleware, CodeReviewController.tutorReview);
 router.get('/assessment/:assessmentId', userToken, CodeReviewController.getAssessmentById);
 router.get('/assessment/:assessmentId/status', userToken, CodeReviewController.checkAssessmentStatus);
-router.get('/my-speciality', userToken, ProjectController.getProjectsByUserSpeciality);
+router.get('/getProjectsByUserSpeciality', userToken, ProjectController.getProjectsByUserSpeciality);
+
 
 
 module.exports = router;

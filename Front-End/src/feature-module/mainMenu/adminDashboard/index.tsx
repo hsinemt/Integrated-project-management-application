@@ -11,16 +11,117 @@ import ProjectModals from "../../../core/modals/projectModal";
 import RequestModals from "../../../core/modals/requestModal";
 import TodoModal from "../../../core/modals/todoModal";
 import CollapseHeader from "../../../core/common/collapse-header/collapse-header";
+import { fetchUsers } from "../../../api/getUsers/getAllUsers";
+import { getProjectsCount, getAllProjects, ProjectType } from "../../../api/projectsApi/project/projectApi";
+import { getTasksByProjectId, TaskType } from "../../../api/projectsApi/task/taskApi";
 
 const AdminDashboard = () => {
   const routes = all_routes;
 
   const [isTodo, setIsTodo] = useState([false, false, false]);
-
   const [date, setDate] = useState(new Date());
 
-  //New Chart
-  const [empDepartment] = useState<any>({
+  // State variables for dashboard data
+  const [users, setUsers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectType[]>([]);
+  const [tasks, setTasks] = useState<TaskType[]>([]);
+  const [loading, setLoading] = useState({
+    users: true,
+    projects: true,
+    tasks: true
+  });
+  const [error, setError] = useState({
+    users: null,
+    projects: null,
+    tasks: null
+  });
+
+  // Statistics
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalProjects: 0,
+    totalStudents: 0,
+    totalTasks: 0,
+    projectsBySpecialty: {} as Record<string, number>
+  });
+
+  // Fetch data when component mounts
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch users
+        setLoading(prev => ({ ...prev, users: true }));
+        const usersData = await fetchUsers();
+        setUsers(usersData);
+        setLoading(prev => ({ ...prev, users: false }));
+
+        // Calculate user statistics
+        const totalUsers = usersData.length;
+        const totalStudents = usersData.filter(user => user.role === 'student').length;
+
+        // Fetch projects
+        setLoading(prev => ({ ...prev, projects: true }));
+        const projectsData = await getAllProjects();
+        setProjects(projectsData);
+        setLoading(prev => ({ ...prev, projects: false }));
+
+        // Calculate project statistics
+        const totalProjects = projectsData.length;
+
+        // Group projects by specialty
+        const projectsBySpecialty = projectsData.reduce((acc, project) => {
+          const specialty = project.speciality || 'Other';
+          acc[specialty] = (acc[specialty] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        // Fetch tasks for all projects
+        setLoading(prev => ({ ...prev, tasks: true }));
+        let allTasks: TaskType[] = [];
+
+        for (const project of projectsData) {
+          if (project._id) {
+            try {
+              const projectTasks = await getTasksByProjectId(project._id);
+              allTasks = [...allTasks, ...projectTasks];
+            } catch (error) {
+              console.error(`Error fetching tasks for project ${project._id}:`, error);
+            }
+          }
+        }
+
+        setTasks(allTasks);
+        setLoading(prev => ({ ...prev, tasks: false }));
+
+        // Update all statistics
+        setStats({
+          totalUsers,
+          totalProjects,
+          totalStudents,
+          totalTasks: allTasks.length,
+          projectsBySpecialty
+        });
+
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        setError({
+          users: error as any,
+          projects: error as any,
+          tasks: error as any
+        });
+        setLoading({
+          users: false,
+          projects: false,
+          tasks: false
+        });
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Projects by Specialty Chart
+  const [projectsBySpecialtyChart, setProjectsBySpecialtyChart] = useState<any>({
     chart: {
       height: 235,
       type: 'bar',
@@ -61,11 +162,11 @@ const AdminDashboard = () => {
       enabled: false
     },
     series: [{
-      data: [80, 110, 80, 20, 60, 100],
-      name: 'Employee'
+      data: [0, 0, 0, 0, 0, 0],
+      name: 'Projects'
     }],
     xaxis: {
-      categories: ['UI/UX', 'Development', 'Management', 'HR', 'Testing', 'Marketing'],
+      categories: ['Twin', 'SAE', 'AI', 'ERP/BI', 'NIDS', 'Other'],
       labels: {
         style: {
           colors: '#111827',
@@ -73,7 +174,23 @@ const AdminDashboard = () => {
         }
       }
     }
-  })
+  });
+
+  // Update chart when projects data changes
+  useEffect(() => {
+    if (Object.keys(stats.projectsBySpecialty).length > 0) {
+      const specialties = ['Twin', 'SAE', 'AI', 'ERP/BI', 'NIDS', 'Other'];
+      const data = specialties.map(specialty => stats.projectsBySpecialty[specialty] || 0);
+
+      setProjectsBySpecialtyChart((prev: any) => ({
+        ...prev,
+        series: [{
+          data,
+          name: 'Projects'
+        }]
+      }));
+    }
+  }, [stats.projectsBySpecialty]);
 
   const [salesIncome] = useState<any>({
     chart: {
@@ -383,13 +500,17 @@ const AdminDashboard = () => {
                           Attendance
                         </h6>
                         <h3 className="mb-3">
-                          92/99{" "}
+                          {loading.users ? (
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          ) : (
+                            stats.totalUsers
+                          )}{" "}
                           <span className="fs-12 fw-medium text-success">
                           <i className="fa-solid fa-caret-up me-1" />
                           +2.1%
                         </span>
                         </h3>
-                        <Link to="attendance-employee.html" className="link-default">
+                        <Link to={routes.usersDashboard} className="link-default">
                           View Details
                         </Link>
                       </div>
@@ -405,13 +526,17 @@ const AdminDashboard = () => {
                           Total Project's
                         </h6>
                         <h3 className="mb-3">
-                          90/94{" "}
+                          {loading.projects ? (
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          ) : (
+                            stats.totalProjects
+                          )}{" "}
                           <span className="fs-12 fw-medium text-danger">
                           <i className="fa-solid fa-caret-down me-1" />
                           -2.1%
                         </span>
                         </h3>
-                        <Link to="projects.html" className="link-default">
+                        <Link to={routes.project} className="link-default">
                           View All
                         </Link>
                       </div>
@@ -424,16 +549,20 @@ const AdminDashboard = () => {
                         <i className="ti ti-users-group fs-16" />
                       </span>
                         <h6 className="fs-13 fw-medium text-default mb-1">
-                          Total Clients
+                          Total Students
                         </h6>
                         <h3 className="mb-3">
-                          69/86{" "}
+                          {loading.users ? (
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          ) : (
+                            stats.totalStudents
+                          )}{" "}
                           <span className="fs-12 fw-medium text-danger">
                           <i className="fa-solid fa-caret-down me-1" />
                           -11.2%
                         </span>
                         </h3>
-                        <Link to="clients.html" className="link-default">
+                        <Link to="/super-admin/students" className="link-default">
                           View All
                         </Link>
                       </div>
@@ -449,13 +578,17 @@ const AdminDashboard = () => {
                           Total Tasks
                         </h6>
                         <h3 className="mb-3">
-                          25/28{" "}
+                          {loading.tasks ? (
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          ) : (
+                            stats.totalTasks
+                          )}{" "}
                           <span className="fs-12 fw-medium text-success">
-                          <i className="fa-solid fa-caret-down me-1" />
+                          <i className="fa-solid fa-caret-up me-1" />
                           +11.2%
                         </span>
                         </h3>
-                        <Link to="tasks.html" className="link-default">
+                        <Link to={routes.taskboard} className="link-default">
                           View All
                         </Link>
                       </div>
@@ -552,11 +685,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
               {/* /Widget Info */}
-              {/* Employees By Department */}
+              {/* Projects by Specialty */}
               <div className="col-xxl-4 d-flex">
                 <div className="card flex-fill">
                   <div className="card-header pb-2 d-flex align-items-center justify-content-between flex-wrap">
-                    <h5 className="mb-2">Employees By Department</h5>
+                    <h5 className="mb-2">Projects by Specialty</h5>
                     <div className="dropdown mb-2">
                       <Link to="#"
                             className="btn btn-white border btn-sm d-inline-flex align-items-center"
@@ -591,23 +724,29 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   <div className="card-body">
-                    <ReactApexChart
-                        id="emp-department"
-                        options={empDepartment}
-                        series={empDepartment.series}
-                        type="bar"
-                        height={220}
-                    />
+                    {loading.projects ? (
+                      <div className="d-flex justify-content-center align-items-center" style={{ height: '220px' }}>
+                        <div className="spinner-border" role="status">
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <ReactApexChart
+                          id="projects-specialty"
+                          options={projectsBySpecialtyChart}
+                          series={projectsBySpecialtyChart.series}
+                          type="bar"
+                          height={220}
+                      />
+                    )}
                     <p className="fs-13">
                       <i className="ti ti-circle-filled me-2 fs-8 text-primary" />
-                      No of Employees increased by{" "}
-                      <span className="text-success fw-bold">+20%</span> from last
-                      Week
+                      Project distribution by specialty across the platform
                     </p>
                   </div>
                 </div>
               </div>
-              {/* /Employees By Department */}
+              {/* /Projects by Specialty */}
             </div>
             <div className="row">
               {/* Total Employee */}
@@ -3036,4 +3175,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-

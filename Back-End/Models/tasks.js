@@ -2,16 +2,41 @@ const mongoose = require('mongoose');
 
 // Define the status history subdocument schema
 const statusHistorySchema = new mongoose.Schema({
-  status: {
-    type: String,
-    enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
-    required: true
-  },
-  changedAt: {
-    type: Date,
-    default: Date.now
-  }
-}, { _id: false }); // We don't need IDs for subdocuments
+    status: {
+        type: String,
+        enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
+        required: true
+    },
+    changedAt: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
+
+// Define the question subdocument schema
+const questionSchema = new mongoose.Schema({
+    text: { type: String, required: true },
+    options: { type: [String], required: true },
+    correctAnswer: { type: Number, required: true }
+}, { _id: true });
+
+// Progress analysis sub-schema
+const progressAnalysisSchema = new mongoose.Schema({
+    scoreProgress: {
+        type: Number,
+        min: 0,
+        max: 20
+    },
+    details: {
+        timeManagement: Number,
+        statusEvolution: Number,
+        speedBonus: Number,
+        isLate: Boolean,
+        completionDays: Number,
+        statusTransitions: Number,
+        lastUpdate: Date
+    }
+}, { _id: false });
 
 // Main task schema
 const taskSchema = new mongoose.Schema({
@@ -37,9 +62,9 @@ const taskSchema = new mongoose.Schema({
         enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
         default: 'To Do',
     },
-    statusHistory: [statusHistorySchema], // Array of status history records
+    statusHistory: [statusHistorySchema],
     noteGit: {
-        type: String,
+        type: Number,
         required: false
     },
     image: {
@@ -57,11 +82,14 @@ const taskSchema = new mongoose.Schema({
     },
     group: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Groupes', // Reference to the Groupe model
+        ref: 'Groupes',
         required: true,
     },
-    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Assignation d'un étudiant
-    // Keep the original fields for backward compatibility
+    assignedTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
     code: {
         type: String,
         required: false,
@@ -74,11 +102,24 @@ const taskSchema = new mongoose.Schema({
         type: String,
         required: false,
     },
-    // New field for referencing code files by ID
     codeFiles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CodeFile'
-    }]
+    }],
+    quizScore: {
+        type: Number,
+        required: false,
+        default: null
+    },
+    quizId: {
+        type: String,
+        required: false
+    },
+    quizTheme: String,
+    quizQuestions: [questionSchema],
+    progressAnalysis: progressAnalysisSchema
+}, {
+    timestamps: true  // Correct placement as schema option
 });
 
 module.exports = mongoose.model('Task', taskSchema);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { setDataLayout } from "../../data/redux/themeSettingSlice";
@@ -8,7 +8,6 @@ import { all_routes } from "../../../feature-module/router/all_routes";
 import { HorizontalSidebarData } from '../../data/json/horizontalSidebar';
 import axios from 'axios';
 import Modal from 'react-modal';
-import styles from './Header.module.css'; // Make sure to create this CSS module file
 
 Modal.setAppElement('#root');
 
@@ -20,11 +19,16 @@ const Header = () => {
   const Location = useLocation();
   const mobileSidebar = useSelector((state: any) => state.sidebarSlice.mobileSidebar);
 
+  // Refs for handling dropdown clicks
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
   const [subOpen, setSubopen] = useState<any>("");
   const [subsidebar, setSubsidebar] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  // New state to manage profile dropdown visibility
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [user, setUser] = useState({
     _id: "",
     name: "",
@@ -70,6 +74,23 @@ const Header = () => {
     };
 
     fetchProfile();
+
+    // Add click event listener to handle clicks outside the dropdown
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+          profileDropdownRef.current &&
+          !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    // Clean up the event listener on component unmount
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const toggleSidebar = (title: any) => {
@@ -116,6 +137,13 @@ const Header = () => {
         setIsFullscreen(false);
       }
     }
+  };
+
+  // Toggle profile dropdown visibility
+  const toggleProfileDropdown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProfileDropdownOpen(!profileDropdownOpen);
   };
 
   const handleLogout = async () => {
@@ -372,49 +400,67 @@ const Header = () => {
                     </div>
                   </div>
                 </div>
-                <div className="dropdown profile-dropdown">
-                  <Link to="#" className="dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
-                <span className="avatar avatar-lg me-2 avatar-rounded">
-  {user.avatar ? (
-      <img
-          src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
-          alt="Profile"
-          className="img-fluid rounded-circle"
-          onError={(e) => {
-            e.currentTarget.src = "https://via.placeholder.com/150";
-          }}
-      />
-  ) : (
-      <img
-          src="https://via.placeholder.com/150"
-          alt="Profile"
-          className="img-fluid rounded-circle"
-      />
-  )}
-</span>
-                  </Link>
-                  <div className="dropdown-menu shadow-none">
+
+                {/* Profile Dropdown - Modified for React state control */}
+                <div className="dropdown profile-dropdown" ref={profileDropdownRef}>
+                  <div
+                      className="dropdown-toggle d-flex align-items-center cursor-pointer"
+                      onClick={toggleProfileDropdown}
+                      style={{ cursor: 'pointer' }}
+                  >
+                    <span className="avatar avatar-lg me-2 avatar-rounded">
+                      {user.avatar ? (
+                          <img
+                              src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
+                              alt="Profile"
+                              className="img-fluid rounded-circle"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://via.placeholder.com/150";
+                              }}
+                          />
+                      ) : (
+                          <img
+                              src="https://via.placeholder.com/150"
+                              alt="Profile"
+                              className="img-fluid rounded-circle"
+                          />
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Use React state to control visibility instead of Bootstrap */}
+                  <div
+                      className={`dropdown-menu shadow-none ${profileDropdownOpen ? 'show' : ''}`}
+                      style={{
+                        display: profileDropdownOpen ? 'block' : 'none',
+                        position: 'absolute',
+                        inset: '0px auto auto 0px',
+                        margin: '0px',
+                        transform: 'translate(0px, 40px)',
+                        zIndex: 1000
+                      }}
+                  >
                     <div className="card mb-0">
                       <div className="card-header">
                         <div className="d-flex align-items-center">
-                      <span className="avatar avatar-lg me-2 avatar-rounded">
-  {user.avatar ? (
-      <img
-          src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
-          alt="Profile"
-          className="img-fluid rounded-circle"
-          onError={(e) => {
-            e.currentTarget.src = "https://via.placeholder.com/150";
-          }}
-      />
-  ) : (
-      <img
-          src="https://via.placeholder.com/150"
-          alt="Profile"
-          className="img-fluid rounded-circle"
-      />
-  )}
-</span>
+                          <span className="avatar avatar-lg me-2 avatar-rounded">
+                            {user.avatar ? (
+                                <img
+                                    src={user.avatar.startsWith("/uploads") ? `http://localhost:9777${user.avatar}` : user.avatar}
+                                    alt="Profile"
+                                    className="img-fluid rounded-circle"
+                                    onError={(e) => {
+                                      e.currentTarget.src = "https://via.placeholder.com/150";
+                                    }}
+                                />
+                            ) : (
+                                <img
+                                    src="https://via.placeholder.com/150"
+                                    alt="Profile"
+                                    className="img-fluid rounded-circle"
+                                />
+                            )}
+                          </span>
                           <div>
                             <h5 className="mb-0">{user.name || "User"}</h5>
                             <p className="fs-12 fw-medium mb-0">{user.email || "user@example.com"}</p>
@@ -422,10 +468,18 @@ const Header = () => {
                         </div>
                       </div>
                       <div className="card-body">
-                        <Link className="dropdown-item d-inline-flex align-items-center p-0 py-2" to={routes.profile}>
+                        <Link
+                            className="dropdown-item d-inline-flex align-items-center p-0 py-2"
+                            to={routes.profile}
+                            onClick={() => setProfileDropdownOpen(false)}
+                        >
                           <i className="ti ti-user-circle me-1"></i>My Profile
                         </Link>
-                        <Link className="dropdown-item d-inline-flex align-items-center p-0 py-2" to={routes.bussinessSettings}>
+                        <Link
+                            className="dropdown-item d-inline-flex align-items-center p-0 py-2"
+                            to={routes.bussinessSettings}
+                            onClick={() => setProfileDropdownOpen(false)}
+                        >
                           <i className="ti ti-settings me-1"></i>Settings
                         </Link>
                         <button
@@ -458,8 +512,6 @@ const Header = () => {
             </div>
           </div>
         </div>
-
-
       </div>
   );
 };

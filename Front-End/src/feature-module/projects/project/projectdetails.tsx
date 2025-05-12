@@ -33,8 +33,8 @@ const ProjectDetails = () => {
     const [editActiveTab, setEditActiveTab] = useState<string>("basic-info");
     const [editFormData, setEditFormData] = useState<ProjectType | null>(null);
     const [editKeywords, setEditKeywords] = useState<string[]>([]);
-    const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
-    const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
+    const [editSelectedAvatar, setEditSelectedAvatar] = useState<File | null>(null);
+    const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
     const [editLoading, setEditLoading] = useState<boolean>(false);
 
 
@@ -182,10 +182,10 @@ const ProjectDetails = () => {
         setEditKeywords(project.keywords || []);
         setEditActiveTab("basic-info");
 
-        if (project.projectLogo) {
-            setEditLogoPreview(`http://localhost:9777${project.projectLogo}`);
+        if (project.projectAvatar) {
+            setEditAvatarPreview(`http://localhost:9777${project.projectAvatar}`);
         } else {
-            setEditLogoPreview(null);
+            setEditAvatarPreview(null);
         }
     };
 
@@ -203,22 +203,27 @@ const ProjectDetails = () => {
         });
     };
 
-    const handleEditLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setEditSelectedLogo(file);
+            setEditSelectedAvatar(file);
             const previewUrl = URL.createObjectURL(file);
-            setEditLogoPreview(previewUrl);
+            setEditAvatarPreview(previewUrl);
         }
     };
 
-    const clearEditLogo = () => {
-        setEditSelectedLogo(null);
-        if (editLogoPreview && !project?.projectLogo) {
-            URL.revokeObjectURL(editLogoPreview);
-            setEditLogoPreview(null);
-        } else if (project?.projectLogo) {
-            setEditLogoPreview(project.projectLogo);
+    const clearEditAvatar = () => {
+        setEditSelectedAvatar(null);
+        if (editAvatarPreview && !project?.projectAvatar) {
+            URL.revokeObjectURL(editAvatarPreview);
+            setEditAvatarPreview(null);
+        } else if (project?.projectAvatar) {
+            // Ensure the path is correctly formatted for the server
+            const avatarPath = project.projectAvatar.includes('/project-avatars/') 
+                ? project.projectAvatar  // Keep as is if it already has the correct path
+                : project.projectAvatar.replace('/uploads/', '/uploads/projects/');  // Fix path if needed
+
+            setEditAvatarPreview(`http://localhost:9777${avatarPath}`);
         }
     };
 
@@ -242,7 +247,7 @@ const ProjectDetails = () => {
                 keywords: editKeywords,
             };
 
-            const response = await updateProject(project._id, submissionData, editSelectedLogo || undefined);
+            const response = await updateProject(project._id, submissionData, editSelectedAvatar || undefined);
 
             if (response.success) {
                 setProject(response.data || editFormData);
@@ -496,7 +501,7 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
 
-                                    {localStorage.getItem("role") === "manager" || localStorage.getItem("role") === "admin" && (
+                                    {localStorage.getItem("role") === "manager"  && (
                                         <div className="mb-4">
                                             <h5 className="mb-3">Assign Tutor</h5>
                                             <div className="bg-light p-3 rounded">
@@ -607,13 +612,16 @@ const ProjectDetails = () => {
                                     <div className="bg-light rounded p-3 mb-3">
                                         <div className="d-flex align-items-center">
                                             <Link to="#" className="flex-shrink-0 me-2">
-                                                {project.projectLogo ? (
+                                                {project.projectAvatar ? (
                                                     <img
-                                                        src={`http://localhost:9777${project.projectLogo}`}
+                                                        src={`http://localhost:9777${project.projectAvatar.includes('/project-avatars/') 
+                                                            ? project.projectAvatar 
+                                                            : project.projectAvatar.replace('/uploads/', '/uploads/projects/')}`}
                                                         alt={project.title}
                                                         style={{ width: "60px", height: "60px", borderRadius: "50%" }} // Added borderRadius for fully rounded logo
                                                         className="rounded"
                                                         onError={(e) => {
+                                                            console.error(`Failed to load image: ${project.projectAvatar}`);
                                                             const target = e.target as HTMLImageElement;
                                                             target.onerror = null;
                                                             target.src = "assets/img/social/project-01.svg";
@@ -967,9 +975,9 @@ const ProjectDetails = () => {
                                                     <div className="col-md-12">
                                                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                                                             <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                                                                {editLogoPreview ? (
+                                                                {editAvatarPreview ? (
                                                                     <img
-                                                                        src={editLogoPreview}
+                                                                        src={editAvatarPreview}
                                                                         alt="Project Logo"
                                                                         className="img-fluid rounded-circle" // Already rounded-circle
                                                                         style={{
@@ -999,13 +1007,13 @@ const ProjectDetails = () => {
                                                                             type="file"
                                                                             className="form-control image-sign"
                                                                             accept="image/*"
-                                                                            onChange={handleEditLogoChange}
+                                                                            onChange={handleEditAvatarChange}
                                                                         />
                                                                     </div>
                                                                     <button
                                                                         type="button"
                                                                         className="btn btn-light btn-sm"
-                                                                        onClick={clearEditLogo}
+                                                                        onClick={clearEditAvatar}
                                                                     >
                                                                         Cancel
                                                                     </button>

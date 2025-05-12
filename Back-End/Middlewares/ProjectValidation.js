@@ -26,7 +26,7 @@ const projectSchema = Joi.object({
 
     difficulty: Joi.string().valid('Easy', 'Medium', 'Hard', 'Very Hard').default('Medium'),
     status: Joi.string().valid('Not Started', 'In Progress', 'On Hold', 'Completed', 'Cancelled').default('Not Started'),
-    projectLogo: Joi.string().allow('', null),
+    projectAvatar: Joi.string().allow('', null),
     speciality: Joi.string().valid('Twin', 'ERP/BI', 'AI', 'SAE', 'SE', 'SIM', 'NIDS', 'SLEAM', 'GAMIX', 'WIN', 'IoSyS', 'ArcTic').trim(),
 
     createdAt: Joi.date(),

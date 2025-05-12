@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from 'react'
-import {Link, useNavigate} from 'react-router-dom'
+import React, { useEffect, useState, useRef, ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { all_routes } from '../../router/all_routes'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import CommonSelect from '../../../core/common/commonSelect'
@@ -18,9 +18,10 @@ import {
   ApiResponse,
   getProjectsCount,
   generateProjectFromPrompt,
-  createProjectFromPrompt, updateProject
+  createProjectFromPrompt, 
+  updateProject,
+  getProjectsByUserSpeciality
 } from '../../../api/projectsApi/project/projectApi'
-
 
 import { getTaskCountsByProjectId, TaskCountsType } from "../../../api/projectsApi/task/taskApi"
 import { getGroupsByProjectId, GroupType } from '../../../api/projectsApi/group/groupApi'
@@ -32,9 +33,252 @@ declare global {
         getInstance(element: Element): { show(): void; hide(): void } | null;
         new(element: Element): { show(): void; hide(): void };
       };
+      Dropdown: {
+        getInstance(element: Element): { show(): void; hide(): void; toggle(): void } | null;
+        new(element: Element): { show(): void; hide(): void; toggle(): void };
+      };
     };
   }
 }
+
+// Types for custom dropdown
+interface CustomDropdownProps {
+  children: ReactNode;
+  menuItems: ReactNode[];
+}
+
+// Custom dropdown component that doesn't rely on Bootstrap JS
+const CustomDropdown: React.FC<CustomDropdownProps> = ({ children, menuItems }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const toggleDropdown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsOpen(!isOpen);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  return (
+      <div className="dropdown" ref={dropdownRef}>
+        <button
+            type="button"
+            className="btn btn-icon"
+            onClick={toggleDropdown}
+        >
+          {children}
+        </button>
+
+        {isOpen && (
+            <ul className="dropdown-menu dropdown-menu-end p-3 show" style={{
+              position: 'absolute',
+              inset: '0px 0px auto auto',
+              margin: '0px',
+              transform: 'translate3d(-16px, 40px, 0px)',
+              zIndex: 1000
+            }}>
+              {menuItems.map((item, index) => (
+                  <li key={index} onClick={() => setIsOpen(false)}>
+                    {item}
+                  </li>
+              ))}
+            </ul>
+        )}
+      </div>
+  );
+};
+
+// Project Card Props
+interface ProjectCardProps {
+  project: ProjectType;
+  projectTaskCounts: {[key: string]: TaskCountsType};
+  loadingTaskCounts: boolean;
+  projectGroupMembers: {[key: string]: number};
+  loadingGroupMembers: boolean;
+  handleEditClick: (project: ProjectType) => void;
+  getCreatorName: (project: ProjectType) => string;
+  getSpecialityBadgeClass: (speciality: string | undefined) => string;
+  renderProjectAvatar: (project: ProjectType) => React.ReactNode;
+  userRole: string | null;
+}
+
+// Project Card Component
+const ProjectCard: React.FC<ProjectCardProps> = ({
+                                                   project,
+                                                   projectTaskCounts,
+                                                   loadingTaskCounts,
+                                                   projectGroupMembers,
+                                                   loadingGroupMembers,
+                                                   handleEditClick,
+                                                   getCreatorName,
+                                                   getSpecialityBadgeClass,
+                                                   renderProjectAvatar,
+                                                   userRole
+                                                 }) => {
+  return (
+      <div className="card">
+        <div className="card-body">
+          <div className="d-flex align-items-center justify-content-between mb-2">
+            <div className="d-flex align-items-center">
+              <div className="avatar avatar-md avatar-rounded me-2">
+                {renderProjectAvatar(project)}
+              </div>
+              <h6 className="mb-0">
+                <Link to={`/project-details/${project._id}`} state={{ project }}>{project.title}</Link>
+              </h6>
+            </div>
+
+            {/* Custom dropdown that doesn't rely on Bootstrap JS - only visible for admin and manager */}
+            {(userRole === 'admin' || userRole === 'manager') && (
+              <CustomDropdown
+                  menuItems={[
+                    <Link
+                        to="#"
+                        className="dropdown-item rounded-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#edit_project"
+                        onClick={() => handleEditClick(project)}
+                    >
+                      <i className="ti ti-edit me-2" />
+                      Edit
+                    </Link>,
+                    <Link
+                        to="#"
+                        className="dropdown-item rounded-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#delete_modal"
+                        data-project-id={project._id}
+                    >
+                      <i className="ti ti-trash me-1" />
+                      Delete
+                    </Link>
+                  ]}
+              >
+                <i className="ti ti-dots-vertical" />
+              </CustomDropdown>
+            )}
+          </div>
+
+          <div className="mb-2">
+          <span className={`badge ${getSpecialityBadgeClass(project.speciality)} me-1`}>
+            {project.speciality}
+          </span>
+          </div>
+
+          <div className="mb-3 pb-3 border-bottom">
+            <p className="text-truncate line-clamb-3 mb-0">
+              {project.description}
+            </p>
+          </div>
+
+          <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+            <div className="d-flex align-items-center file-name-icon">
+              <Link
+                  to="#"
+                  className="avatar avatar-sm avatar-rounded flex-shrink-0"
+              >
+                <ImageWithBasePath
+                    src="assets/img/users/user-39.jpg"
+                    className="img-fluid"
+                    // alt="img"
+                />
+              </Link>
+              <div className="ms-2">
+                <h6 className="fw-normal fs-12">
+                  <Link to="#">{getCreatorName(project)}</Link>
+                </h6>
+                <span className="fs-12 fw-normal ">{project.creator?.role}</span>
+              </div>
+            </div>
+            <div className="d-flex align-items-center">
+              <div>
+                <span className="fs-12 fw-normal ">Deadline</span>
+                <p className="mb-0 fs-12">14 Jan 2024</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+            <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
+              <i className="ti ti-checklist text-success fs-16" />
+            </span>
+              <p>
+                <small>Tasks : </small>
+                {project._id && projectTaskCounts[project._id] ? (
+                    <>
+                  <span className="text-dark">
+                    {projectTaskCounts[project._id].completed}
+                  </span>
+                      /{projectTaskCounts[project._id].total}
+                    </>
+                ) : loadingTaskCounts ? (
+                    <span className="text-muted">Loading...</span>
+                ) : (
+                    <span className="text-muted">0/0</span>
+                )}
+              </p>
+            </div>
+
+            {/* Group members display */}
+            <div className="avatar-list-stacked avatar-group-sm">
+              {project._id && projectGroupMembers[project._id] > 0 ? (
+                  // If there are group members, show individual circles for each member
+                  <>
+                    {Array.from({ length: Math.min(projectGroupMembers[project._id], 4) }).map((_, index) => (
+                        <span
+                            key={`${project._id}-member-${index}`}
+                            className="avatar avatar-rounded"
+                            title="Group member"
+                        >
+                    <ImageWithBasePath
+                        className="border border-white"
+                        src={`assets/img/profiles/avatar-0${index + 2}.jpg`}
+                        alt="Group member"
+                    />
+                  </span>
+                    ))}
+                    {/* Show a "+X" circle if there are more than 4 members */}
+                    {projectGroupMembers[project._id] > 4 && (
+                        <Link
+                            className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
+                            to={`/project-details/${project._id}`}
+                            title={`${projectGroupMembers[project._id] - 4} more members`}
+                        >
+                          +{projectGroupMembers[project._id] - 4}
+                        </Link>
+                    )}
+                  </>
+              ) : loadingGroupMembers ? (
+                  // Show loading indicator
+                  <span className="avatar bg-light avatar-rounded fs-12 fw-medium">
+                <i className="ti ti-loader animate-spin"></i>
+              </span>
+              ) : (
+                  // Show "0" if no members
+                  <span className="avatar bg-light-secondary text-secondary avatar-rounded fs-12 fw-medium">
+                0
+              </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+  );
+};
 
 const Project = () => {
   const navigate = useNavigate();
@@ -51,6 +295,13 @@ const Project = () => {
   const [editActiveTab, setEditActiveTab] = useState<string>('basic-info');
   const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
   const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
+  const [userSpeciality, setUserSpeciality] = useState<string>('');
+  const [noProjectsForSpeciality, setNoProjectsForSpeciality] = useState<boolean>(false);
+  const [viewType, setViewType] = useState<'all' | 'group' | 'assigned'>('all');
+  const [inGroup, setInGroup] = useState<boolean>(false);
+  const [hasAssignedProjects, setHasAssignedProjects] = useState<boolean>(false);
+  const [groupNames, setGroupNames] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(localStorage.getItem('role'));
 
 
   const [projectTaskCounts, setProjectTaskCounts] = useState<{[key: string]: TaskCountsType}>({});
@@ -271,12 +522,50 @@ const Project = () => {
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      const projectsList = await getAllProjects();
+      // Use the userRole state variable that's already defined at component level
+      // Admin, teacher, and tutor users use getAllProjects
+      // For tutors, the backend will automatically filter to show only assigned projects
+      if (userRole === 'admin' || userRole === 'teacher' || userRole === 'tutor') {
+        const projectsList = await getAllProjects();
+        setProjects(projectsList);
 
-      if (projectsList.length > 0) {
+        // For tutors, set a message indicating they're seeing assigned projects
+        if (userRole === 'tutor') {
+          setUserSpeciality('Assigned to you');
+        } else {
+          setUserSpeciality(''); // Clear speciality for admin/teacher users
+        }
+
+        setNoProjectsForSpeciality(false);
+      } else {
+        // Student users see projects based on conditional visibility rules
+        const { 
+          projects: projectsList, 
+          speciality, 
+          viewType, 
+          inGroup, 
+          hasAssignedProjects, 
+          groupNames 
+        } = await getProjectsByUserSpeciality();
+
+        // Set the user's speciality
+        setUserSpeciality(speciality);
+
+        // Set view type information for displaying the appropriate indicator
+        setViewType(viewType);
+        setInGroup(inGroup || false);
+        setHasAssignedProjects(hasAssignedProjects || false);
+        setGroupNames(groupNames || []);
+
+        // Check if there are any projects for the user's speciality
+        if (projectsList.length === 0) {
+          setNoProjectsForSpeciality(true);
+        } else {
+          setNoProjectsForSpeciality(false);
+        }
+
+        setProjects(projectsList);
       }
-
-      setProjects(projectsList);
     } catch (error: unknown) {
       console.error('Error fetching projects:', error);
       alert(error instanceof Error ? error.message : 'Failed to load projects');
@@ -310,8 +599,13 @@ const Project = () => {
     setEditKeywords(project.keywords || []);
     setEditActiveTab('basic-info');
 
-    if (project.projectLogo) {
-      setEditLogoPreview(project.projectLogo);
+    if (project.projectAvatar) {
+      // Ensure the path is correctly formatted for the server
+      const avatarPath = project.projectAvatar.includes('/project-avatars/') 
+        ? project.projectAvatar  // Keep as is if it already has the correct path
+        : project.projectAvatar.replace('/uploads/', '/uploads/projects/');  // Fix path if needed
+
+      setEditLogoPreview(`http://localhost:9777${avatarPath}`);
     } else {
       setEditLogoPreview(null);
     }
@@ -337,11 +631,16 @@ const Project = () => {
 
   const clearEditLogo = () => {
     setEditSelectedLogo(null);
-    if (editLogoPreview && !projectToEdit?.projectLogo) {
+    if (editLogoPreview && !projectToEdit?.projectAvatar) {
       URL.revokeObjectURL(editLogoPreview);
       setEditLogoPreview(null);
-    } else if (projectToEdit?.projectLogo) {
-      setEditLogoPreview(projectToEdit.projectLogo);
+    } else if (projectToEdit?.projectAvatar) {
+      // Ensure the path is correctly formatted for the server
+      const avatarPath = projectToEdit.projectAvatar.includes('/project-avatars/') 
+        ? projectToEdit.projectAvatar  // Keep as is if it already has the correct path
+        : projectToEdit.projectAvatar.replace('/uploads/', '/uploads/projects/');  // Fix path if needed
+
+      setEditLogoPreview(`http://localhost:9777${avatarPath}`);
     }
   };
 
@@ -514,6 +813,59 @@ const Project = () => {
       default:
         return 'bg-light-primary text-primary';
     }
+  };
+
+  const renderProjectAvatar = (project: ProjectType) => {
+    // First check for projectAvatar
+    if (project.projectAvatar) {
+      try {
+        // Check if it's a JSON string containing generated avatar info
+        if (project.projectAvatar.startsWith('{') && project.projectAvatar.includes('type')) {
+          const avatarInfo = JSON.parse(project.projectAvatar);
+
+          if (avatarInfo.type === 'generated') {
+            // Render generated avatar with initials and background color
+            return (
+                <div className={`avatar-initial rounded-circle bg-${avatarInfo.bgColor}`}
+                     style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 'bold' }}>
+                  <span className="text-white">{avatarInfo.initials}</span>
+                </div>
+            );
+          }
+        }
+
+        // For file-based avatars, use the path directly without manipulating it
+        if (project.projectAvatar.startsWith('/uploads/')) {
+          return (
+              <img
+                  src={project.projectAvatar} // Use the path directly without prepending the server URL
+                  alt={project.title}
+                  className="img-fluid rounded-circle"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    console.error(`Failed to load image: ${project.projectAvatar}`);
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = `/assets/img/specialities/${project.speciality || 'default'}.png`;
+                  }}
+              />
+          );
+        }
+      } catch (error) {
+        console.error('Error parsing project avatar:', error);
+      }
+    }
+
+    // Fallback to initials
+    const initials = getProjectInitials(project.title);
+    const bgColorClass = getAvatarBgColor(project.title);
+
+    return (
+        <div className={`avatar-initial rounded-circle ${bgColorClass}`}
+             style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 'bold' }}>
+          <span className="text-white">{initials}</span>
+        </div>
+    );
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -723,6 +1075,28 @@ const Project = () => {
     }
   };
 
+  // Add CSS for custom dropdown styling
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .avatar-initial {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        font-weight: bold;
+        color: white;
+        font-size: 1rem;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
       <>
         <>
@@ -793,29 +1167,20 @@ const Project = () => {
                       </ul>
                     </div>
                   </div>
-                  {/* Hide Add Project button for Student role */}
-                  {localStorage.getItem('role') !== 'student' && (
-                    <div className="mb-2">
-                      <Link
-                          to="#"
-                          data-bs-toggle="modal" data-inert={true}
-                          data-bs-target="#add_project"
-                          className="btn btn-primary d-flex align-items-center"
-                      >
-                        <i className="ti ti-circle-plus me-2" />
-                        Add Project
-                      </Link>
-                    </div>
+                  {/* Hide Add Project button for Student and Tutor roles */}
+                  {(localStorage.getItem('role') !== 'student' && localStorage.getItem('role') !== 'tutor') && (
+                      <div className="mb-2">
+                        <Link
+                            to="#"
+                            data-bs-toggle="modal" data-inert={true}
+                            data-bs-target="#add_project"
+                            className="btn btn-primary d-flex align-items-center"
+                        >
+                          <i className="ti ti-circle-plus me-2" />
+                          Add Project
+                        </Link>
+                      </div>
                   )}
-                  <div className="me-2 mb-2">
-                    <Link
-                        to="/add-group"
-                        className="btn btn-white d-inline-flex align-items-center"
-                    >
-                      <i className="ti ti-plus me-1" />
-                      Add Group
-                    </Link>
-                  </div>
                   <div className="ms-2 head-icons">
                     <CollapseHeader />
                   </div>
@@ -825,7 +1190,18 @@ const Project = () => {
               <div className="card">
                 <div className="card-body p-3">
                   <div className="d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-                    <h5>Projects Grid</h5>
+                    <div>
+                      <h5>Projects Grid</h5>
+                      {userSpeciality && (
+                        <div className="text-muted small">
+                          {userSpeciality === 'Assigned to you' ? (
+                            <>Showing projects <span className="badge bg-primary">Assigned to you</span> as a tutor</>
+                          ) : (
+                            <>Showing projects for your speciality: <span className="badge bg-info">{userSpeciality}</span></>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="d-flex align-items-center flex-wrap row-gap-3">
                       <div className="dropdown me-2">
                         <Link
@@ -917,6 +1293,55 @@ const Project = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Project View Indicator */}
+              {userRole === 'student' && (
+                <div className="row mb-3">
+                  <div className="col-12">
+                    <div className={`alert ${viewType === 'group' ? 'alert-info' : 'alert-light'} d-flex align-items-center`}>
+                      <i className={`ti ${viewType === 'group' ? 'ti-info-circle' : 'ti-eye'} me-2 fs-20`}></i>
+                      <div>
+                        {viewType === 'group' ? (
+                          <>
+                            <strong>Viewing your group's assigned projects only.</strong>
+                            <div className="small mt-1">
+                              {groupNames && groupNames.length > 0 ? (
+                                <>You are a member of: {groupNames.join(', ')}</>
+                              ) : (
+                                <>You are assigned to a group with a project</>
+                              )}
+                            </div>
+                            <div className="small mt-1 text-muted">
+                              When your group has assigned projects, you'll only see those projects here.
+                            </div>
+                          </>
+                        ) : inGroup ? (
+                          <>
+                            <strong>Viewing all available projects for your speciality: {userSpeciality}</strong>
+                            <div className="small mt-1">
+                              Your group doesn't have any assigned projects yet.
+                            </div>
+                            <div className="small mt-1 text-muted">
+                              Once your group gets assigned to a project, you'll only see that project here.
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <strong>Viewing all available projects for your speciality: {userSpeciality}</strong>
+                            <div className="small mt-1">
+                              You are not a member of any group yet.
+                            </div>
+                            <div className="small mt-1 text-muted">
+                              Join a group to work on projects together with other students.
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Project Grid */}
               <div className="row">
                 {loading ? (
@@ -930,183 +1355,30 @@ const Project = () => {
                     <div className="col-12 text-center py-5">
                       <div className="alert alert-info">
                         <i className="ti ti-info-circle me-2"></i>
-                        No projects found. Create your first project by clicking the "Add Project" button.
+                        {noProjectsForSpeciality && userSpeciality ? (
+                          <>No projects available for your speciality: <strong>{userSpeciality}</strong></>
+                        ) : userSpeciality === 'Assigned to you' ? (
+                          <>No projects have been assigned to you as a tutor yet.</>
+                        ) : (
+                          <>No projects found. Create your first project by clicking the "Add Project" button.</>
+                        )}
                       </div>
                     </div>
                 ) : (
                     projects.slice(0, visibleProjects).map((project) => (
                         <div className="col-xxl-3 col-lg-4 col-md-6" key={project._id}>
-                          <div className="card">
-                            <div className="card-body">
-                              <div className="d-flex align-items-center justify-content-between mb-2">
-                                <div className="d-flex align-items-center">
-                                  <div className="avatar avatar-md avatar-rounded me-2">
-                                    {project.projectLogo ? (
-                                        <img
-                                            src={`http://localhost:9777${project.projectLogo}`} // Use absolute URL
-                                            alt={project.title}
-                                            className="img-fluid"
-                                            onError={(e) => {
-                                              const target = e.target as HTMLImageElement;
-                                              target.onerror = null;
-                                              target.src = `/assets/img/specialities/${project.speciality || 'default'}.png`;
-                                            }}
-                                        />
-                                    ) : (
-                                        <img
-                                            src={`/assets/img/specialities/${project.speciality || 'default'}.png`}
-                                            alt={project.title}
-                                            className="img-fluid"
-                                        />
-                                    )}
-                                  </div>
-                                  <h6 className="mb-0">
-                                    <Link to={`/project-details/${project._id}`} state={{ project }}>{project.title}</Link>
-                                  </h6>
-                                </div>
-                                <div className="dropdown">
-                                  <Link
-                                      to="#"
-                                      className="d-inline-flex align-items-center"
-                                      data-bs-toggle="dropdown"
-                                      aria-expanded="false"
-                                  >
-                                    <i className="ti ti-dots-vertical" />
-                                  </Link>
-                                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                                    <li>
-                                      <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                          data-bs-toggle="modal"
-                                          data-inert={true}
-                                          data-bs-target="#edit_project"
-                                          onClick={() => handleEditClick(project)}
-                                      >
-                                        <i className="ti ti-edit me-2" />
-                                        Edit
-                                      </Link>
-                                    </li>
-                                    <li>
-                                      <Link
-                                          to="#"
-                                          className="dropdown-item rounded-1"
-                                          data-bs-toggle="modal" data-inert={true}
-                                          data-bs-target="#delete_modal"
-                                          data-project-id={project._id}
-                                      >
-                                        <i className="ti ti-trash me-1" />
-                                        Delete
-                                      </Link>
-                                    </li>
-                                  </ul>
-                                </div>
-                              </div>
-                              <div className="mb-2">
-                                <span className={`badge ${getSpecialityBadgeClass(project.speciality)} me-1`}>
-                                  {project.speciality}
-                                </span>
-                                {/*<span className="badge bg-light-secondary text-secondary">*/}
-                                {/*  {project.difficulty}*/}
-                                {/*</span>*/}
-                              </div>
-                              <div className="mb-3 pb-3 border-bottom">
-                                <p className="text-truncate line-clamb-3 mb-0">
-                                  {project.description}
-                                </p>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                                <div className="d-flex align-items-center file-name-icon">
-                                  <Link
-                                      to="#"
-                                      className="avatar avatar-sm avatar-rounded flex-shrink-0"
-                                  >
-                                    <ImageWithBasePath
-                                        src="assets/img/users/user-39.jpg"
-                                        className="img-fluid"
-                                        alt="img"
-                                    />
-                                  </Link>
-                                  <div className="ms-2">
-                                    <h6 className="fw-normal fs-12">
-                                      <Link to="#">{getCreatorName(project)}</Link>
-                                    </h6>
-                                    <span className="fs-12 fw-normal ">{project.creator?.role}</span>
-                                  </div>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                  <div>
-                                    <span className="fs-12 fw-normal ">Deadline</span>
-                                    <p className="mb-0 fs-12">14 Jan 2024</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <div className="d-flex align-items-center">
-                                  <span className="avatar avatar-sm avatar-rounded bg-success-transparent flex-shrink-0 me-2">
-                                    <i className="ti ti-checklist text-success fs-16" />
-                                  </span>
-                                  <p>
-                                    <small>Tasks : </small>
-                                    {project._id && projectTaskCounts[project._id] ? (
-                                        <>
-                                        <span className="text-dark">
-                                          {projectTaskCounts[project._id].completed}
-                                        </span>
-                                          /{projectTaskCounts[project._id].total}
-                                        </>
-                                    ) : loadingTaskCounts ? (
-                                        <span className="text-muted">Loading...</span>
-                                    ) : (
-                                        <span className="text-muted">0/0</span>
-                                    )}
-                                  </p>
-                                </div>
-
-                                {/* Group members display */}
-                                <div className="avatar-list-stacked avatar-group-sm">
-                                  {project._id && projectGroupMembers[project._id] > 0 ? (
-                                      // If there are group members, show individual circles for each member
-                                      <>
-                                        {Array.from({ length: Math.min(projectGroupMembers[project._id], 4) }).map((_, index) => (
-                                            <span
-                                                key={`${project._id}-member-${index}`}
-                                                className="avatar avatar-rounded"
-                                                title="Group member"
-                                            >
-                                          <ImageWithBasePath
-                                              className="border border-white"
-                                              src={`assets/img/profiles/avatar-0${index + 2}.jpg`}
-                                              alt="Group member"
-                                          />
-                                        </span>
-                                        ))}
-                                        {/* Show a "+X" circle if there are more than 4 members */}
-                                        {projectGroupMembers[project._id] > 4 && (
-                                            <Link
-                                                className="avatar bg-primary avatar-rounded text-fixed-white fs-12 fw-medium"
-                                                to={`/project-details/${project._id}`}
-                                                title={`${projectGroupMembers[project._id] - 4} more members`}
-                                            >
-                                              +{projectGroupMembers[project._id] - 4}
-                                            </Link>
-                                        )}
-                                      </>
-                                  ) : loadingGroupMembers ? (
-                                      // Show loading indicator
-                                      <span className="avatar bg-light avatar-rounded fs-12 fw-medium">
-                                      <i className="ti ti-loader animate-spin"></i>
-                                    </span>
-                                  ) : (
-                                      // Show "0" if no members
-                                      <span className="avatar bg-light-secondary text-secondary avatar-rounded fs-12 fw-medium">
-                                      0
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <ProjectCard
+                              project={project}
+                              projectTaskCounts={projectTaskCounts}
+                              loadingTaskCounts={loadingTaskCounts}
+                              projectGroupMembers={projectGroupMembers}
+                              loadingGroupMembers={loadingGroupMembers}
+                              handleEditClick={handleEditClick}
+                              getCreatorName={getCreatorName}
+                              getSpecialityBadgeClass={getSpecialityBadgeClass}
+                              renderProjectAvatar={renderProjectAvatar}
+                              userRole={userRole}
+                          />
                         </div>
                     ))
                 )}
@@ -1217,9 +1489,9 @@ const Project = () => {
                   <div className="modal-content">
                     <div className="modal-body">
                       <div className="text-center p-3">
-          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
-            <i className="ti ti-check fs-24" />
-          </span>
+                        <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+                          <i className="ti ti-check fs-24" />
+                        </span>
                         <h5 className="mb-2">Project Added Successfully</h5>
                         <p className="mb-3">
                           Project has been added with ID:{" "}
@@ -1259,18 +1531,17 @@ const Project = () => {
 
             </div>
             <div className="footer d-sm-flex align-items-center justify-content-between border-top bg-white p-3">
-              <p className="mb-0">2014 - 2025 © SmartHR.</p>
+              <p className="mb-0">2024 - 2025 © Projexus.</p>
               <p>
                 Designed &amp; Developed By{" "}
                 <Link to="#" className="text-primary">
-                  Dreams
+                  Hunters
                 </Link>
               </p>
             </div>
           </div>
           {/* /Page Wrapper */}
         </>
-        {/* Add Project */}
         {/* Add Project */}
         <div className="modal fade" id="add_project" role="dialog">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -1399,7 +1670,7 @@ const Project = () => {
                                       <p className="mb-1">Preview:</p>
                                       <img
                                           src={logoPreview}
-                                          alt="Logo Preview"
+                                          // alt="Logo Preview"
                                           className="img-thumbnail"
                                           style={{ maxWidth: '100px', maxHeight: '100px' }}
                                       />
@@ -1424,48 +1695,6 @@ const Project = () => {
                               <small className="text-muted">Maximum 100 characters</small>
                             </div>
                           </div>
-                          {/*<div className="col-md-12">*/}
-                          {/*  <div className="row">*/}
-                          {/*    <div className="col-md-6">*/}
-                          {/*      <div className="mb-3">*/}
-                          {/*        <label className="form-label">Start Date</label>*/}
-                          {/*        <div className="input-icon-end position-relative">*/}
-                          {/*          <DatePicker*/}
-                          {/*              className="form-control datetimepicker"*/}
-                          {/*              format={{*/}
-                          {/*                format: "DD-MM-YYYY",*/}
-                          {/*                type: "mask",*/}
-                          {/*              }}*/}
-                          {/*              getPopupContainer={getModalContainer}*/}
-                          {/*              placeholder="DD-MM-YYYY"*/}
-                          {/*          />*/}
-                          {/*          <span className="input-icon-addon">*/}
-                          {/*    <i className="ti ti-calendar text-gray-7" />*/}
-                          {/*  </span>*/}
-                          {/*        </div>*/}
-                          {/*      </div>*/}
-                          {/*    </div>*/}
-                          {/*    <div className="col-md-6">*/}
-                          {/*      <div className="mb-3">*/}
-                          {/*        <label className="form-label">End Date</label>*/}
-                          {/*        <div className="input-icon-end position-relative">*/}
-                          {/*          <DatePicker*/}
-                          {/*              className="form-control datetimepicker"*/}
-                          {/*              format={{*/}
-                          {/*                format: "DD-MM-YYYY",*/}
-                          {/*                type: "mask",*/}
-                          {/*              }}*/}
-                          {/*              getPopupContainer={getModalContainer}*/}
-                          {/*              placeholder="DD-MM-YYYY"*/}
-                          {/*          />*/}
-                          {/*          <span className="input-icon-addon">*/}
-                          {/*    <i className="ti ti-calendar text-gray-7" />*/}
-                          {/*  </span>*/}
-                          {/*        </div>*/}
-                          {/*      </div>*/}
-                          {/*    </div>*/}
-                          {/*  </div>*/}
-                          {/*</div>*/}
                           <div className="col-md-12">
                             <div className="mb-3">
                               <label className="form-label">Description *</label>
@@ -1990,7 +2219,7 @@ const Project = () => {
                                 {editLogoPreview ? (
                                     <img
                                         src={editLogoPreview}
-                                        alt="Project Logo"
+                                        // alt="Project Logo"
                                         className="img-fluid rounded-circle"
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                     />
@@ -2211,9 +2440,9 @@ const Project = () => {
             <div className="modal-content">
               <div className="modal-body">
                 <div className="text-center p-3">
-          <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
-            <i className="ti ti-check fs-24" />
-          </span>
+                  <span className="avatar avatar-lg avatar-rounded bg-success mb-3">
+                    <i className="ti ti-check fs-24" />
+                  </span>
                   <h5 className="mb-2">Project Added Successfully</h5>
                   <p className="mb-3">
                     Project has been added with ID:{" "}

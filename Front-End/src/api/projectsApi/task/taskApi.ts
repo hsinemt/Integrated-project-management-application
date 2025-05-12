@@ -500,3 +500,30 @@ export const getProjectCodeAssessments = async (projectId: string): Promise<Sona
         throw error.response ? error.response.data : {message: 'Failed to get project code assessments, please try again later.'};
     }
 };
+
+// Function to get tasks assigned to the current user
+export const getTasksAssignedToCurrentUser = async (): Promise<TaskType[]> => {
+    try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+
+        if (!userId) {
+            throw new Error('User ID not found in localStorage');
+        }
+
+        const response = await axios.get<TasksResponse>(
+            `${API_URL}/project/by-student/${userId}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                withCredentials: true
+            }
+        );
+
+        return response.data.tasks || [];
+    } catch (error: any) {
+        console.error('Error fetching tasks assigned to current user:', error);
+        throw error.response ? error.response.data : {message: 'Failed to fetch assigned tasks, please try again later.'};
+    }
+};

@@ -3,11 +3,9 @@ import ImageWithBasePath from '../../../core/common/imageWithBasePath'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { all_routes } from '../../router/all_routes'
 import CommonSelect from '../../../core/common/commonSelect'
-// Remove DatePicker import that's causing issues
-// import { DatePicker } from 'antd'
-import CommonTagsInput from '../../../core/common/Taginput'
+
 import CollapseHeader from '../../../core/common/collapse-header/collapse-header'
-// Import bootstrap for modal handling
+
 import * as bootstrap from 'bootstrap'
 import {
     getTaskById,
@@ -26,6 +24,8 @@ import {
     getAnalysisDetails,
     getProjectCodeAssessments
 } from '../../../api/projectsApi/task/taskApi'
+import { getProjectById } from '../../../api/projectsApi/project/projectApi'
+import Editor from '@monaco-editor/react'
 
 // Interface for file activities (local version)
 interface FileActivity {
@@ -36,8 +36,7 @@ interface FileActivity {
     timestamp: string;
     username?: string;
 }
-import { getProjectById } from '../../../api/projectsApi/project/projectApi'
-import Editor from '@monaco-editor/react'
+
 
 // Safe date formatting function with proper TypeScript types
 const formatDate = (dateString: string): string => {
@@ -270,6 +269,13 @@ const TaskDetails: React.FC = () => {
     const [assessments, setAssessments] = useState<SonarAnalysisResult[]>([]);
     const [assessmentsLoading, setAssessmentsLoading] = useState<boolean>(false);
     const [showAnalysisModal, setShowAnalysisModal] = useState<boolean>(false);
+
+    // File upload state variables
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<number>(0);
+    const [isUploading, setIsUploading] = useState<boolean>(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
 
     // Helper function to add a new activity
     const addFileActivity = (type: 'create' | 'update' | 'delete', fileName: string, language: string) => {
@@ -739,6 +745,180 @@ const TaskDetails: React.FC = () => {
         }
     };
 
+    // Function to handle file selection for upload
+    const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (files && files.length > 0) {
+            setUploadedFile(files[0]);
+            setUploadError(null);
+        }
+    };
+
+    // Function to handle file upload
+    const handleFileUpload = async () => {
+        if (!taskId) {
+            setUploadError("Task ID is missing");
+            return;
+        }
+
+        if (!uploadedFile) {
+            setUploadError("Please select a file to upload");
+            return;
+        }
+
+        // Check file size (limit to 10MB)
+        if (uploadedFile.size > 10 * 1024 * 1024) {
+            setUploadError("File size exceeds 10MB limit");
+            return;
+        }
+
+        // Get file extension and determine language
+        const fileName = uploadedFile.name;
+        const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+
+        // Map file extensions to languages
+        const extensionToLanguage: {[key: string]: string} = {
+            'js': 'javascript',
+            'ts': 'typescript',
+            'html': 'html',
+            'css': 'css',
+            'scss': 'scss',
+            'sass': 'sass',
+            'jsx': 'jsx',
+            'tsx': 'tsx',
+            'xml': 'xml',
+            'json': 'json',
+            'py': 'python',
+            'java': 'java',
+            'cs': 'csharp',
+            'cpp': 'cpp',
+            'c': 'c',
+            'php': 'php',
+            'rb': 'ruby',
+            'go': 'go',
+            'rs': 'rust',
+            'swift': 'swift',
+            'sql': 'sql',
+            'yml': 'yaml',
+            'yaml': 'yaml',
+            'md': 'markdown',
+            'sh': 'bash',
+            'txt': 'plaintext',
+            'zip': 'zip',
+            'rar': 'rar'
+        };
+
+        const language = extensionToLanguage[fileExtension] || 'plaintext';
+
+        setIsUploading(true);
+        setUploadProgress(0);
+        setUploadError(null);
+        setUploadSuccess(false);
+
+        try {
+            // Read the file content
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                try {
+                    const fileContent = e.target?.result as string;
+
+                    // Create a simulated progress update
+                    const progressInterval = setInterval(() => {
+                        setUploadProgress(prev => {
+                            if (prev >= 90) {
+                                clearInterval(progressInterval);
+                                return 90;
+                            }
+                            return prev + 10;
+                        });
+                    }, 300);
+
+                    // Save the file using the existing API
+                    const updatedTask = await saveTaskCodeFile(taskId, {
+                        code: fileContent,
+                        language: language,
+                        fileName: fileName
+                    });
+
+                    // Clear the interval and set progress to 100%
+                    clearInterval(progressInterval);
+                    setUploadProgress(100);
+
+                    // Update the task state with the updated task
+                    setTask(updatedTask);
+
+                    // Force refresh of code files list
+                    if (updatedTask.codeFiles) {
+                        // Create a new array to ensure React detects the change
+                        const newCodeFiles = [...updatedTask.codeFiles];
+                        setCodeFiles(newCodeFiles);
+
+                        // Find and select the new file
+                        const newFile = newCodeFiles.find(file => file.fileName === fileName);
+                        if (newFile) {
+                            setSelectedFile(newFile);
+                            setCode(newFile.code);
+                            setLanguage(newFile.language);
+                        }
+                    } else {
+                        // If for some reason codeFiles isn't in the response, fetch them explicitly
+                        try {
+                            const fetchedFiles = await getTaskCodeFiles(taskId);
+                            setCodeFiles(fetchedFiles);
+
+                            // Find and select the new file
+                            const newFile = fetchedFiles.find(file => file.fileName === fileName);
+                            if (newFile) {
+                                setSelectedFile(newFile);
+                                setCode(newFile.code);
+                                setLanguage(newFile.language);
+                            }
+                        } catch (fetchErr) {
+                            console.error("Error fetching updated code files:", fetchErr);
+                        }
+                    }
+
+                    // Record the file creation activity
+                    addFileActivity('create', fileName, language);
+
+                    setUploadSuccess(true);
+                    setTimeout(() => {
+                        setUploadSuccess(false);
+                    }, 3000);
+
+                    // Reset the file input
+                    setUploadedFile(null);
+
+                    // Close the modal after successful upload
+                    const modal = document.getElementById('upload_file_modal');
+                    if (modal) {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    }
+                } catch (err: any) {
+                    console.error("Error uploading file:", err);
+                    setUploadError(err?.message || "Failed to upload file");
+                } finally {
+                    setIsUploading(false);
+                }
+            };
+
+            reader.onerror = () => {
+                setUploadError("Error reading file");
+                setIsUploading(false);
+            };
+
+            reader.readAsText(uploadedFile);
+        } catch (err: any) {
+            console.error("Error handling file upload:", err);
+            setUploadError(err?.message || "Failed to upload file");
+            setIsUploading(false);
+        }
+    };
+
     const projectChoose = [
         { value: "Select", label: "Select" },
         { value: "Office Management", label: "Office Management" },
@@ -936,13 +1116,25 @@ const TaskDetails: React.FC = () => {
                                                         {/* Add New File Button - Opens modal */}
                                                         <Link
                                                             to="#"
-                                                            className="btn btn-primary btn-xs d-inline-flex align-items-center me-3"
+                                                            className="btn btn-primary btn-xs d-inline-flex align-items-center me-2"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#add_file_modal"
                                                         >
                                                             <i className="ti ti-square-rounded-plus-filled me-1" />
                                                             Create New File
                                                         </Link>
+                                                        {/* Upload File Button - Only visible to students */}
+                                                        {localStorage.getItem('role') === 'student' && (
+                                                            <Link
+                                                                to="#"
+                                                                className="btn btn-info btn-xs d-inline-flex align-items-center me-3"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#upload_file_modal"
+                                                            >
+                                                                <i className="ti ti-upload me-1" />
+                                                                Upload File
+                                                            </Link>
+                                                        )}
                                                         <Link
                                                             to="#"
                                                             className="d-flex align-items-center collapse-arrow"
@@ -2016,6 +2208,123 @@ const TaskDetails: React.FC = () => {
                 </div>
             </div>
             {/* /Analysis Results Modal */}
+
+            {/* Upload File Modal */}
+            <div className="modal fade" id="upload_file_modal">
+                <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h4 className="modal-title">Upload File</h4>
+                            <button
+                                type="button"
+                                className="btn-close custom-btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"
+                            >
+                                <i className="ti ti-x" />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            {uploadError && (
+                                <div className="alert alert-danger">
+                                    <i className="ti ti-alert-circle me-2"></i>
+                                    {uploadError}
+                                </div>
+                            )}
+                            {uploadSuccess && (
+                                <div className="alert alert-success">
+                                    <i className="ti ti-check me-2"></i>
+                                    File uploaded successfully!
+                                </div>
+                            )}
+
+                            <div className="mb-3">
+                                <label className="form-label">Select File to Upload</label>
+                                <input
+                                    type="file"
+                                    className="form-control"
+                                    onChange={handleFileSelection}
+                                    accept=".js,.ts,.html,.css,.scss,.sass,.jsx,.tsx,.xml,.json,.py,.java,.cs,.cpp,.c,.php,.rb,.go,.rs,.swift,.sql,.yml,.yaml,.md,.sh,.txt,.zip,.rar"
+                                    disabled={isUploading}
+                                />
+                                <small className="text-muted">
+                                    Supported file types: JavaScript, TypeScript, HTML, CSS, Python, Java, C#, C++, PHP, and more. Max size: 10MB.
+                                </small>
+                            </div>
+
+                            {uploadedFile && (
+                                <div className="alert alert-info">
+                                    <div className="d-flex align-items-center">
+                                        <i className="ti ti-file me-2 fs-4"></i>
+                                        <div>
+                                            <strong>{uploadedFile.name}</strong>
+                                            <div className="text-muted">{(uploadedFile.size / 1024).toFixed(2)} KB</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {isUploading && (
+                                <div className="mt-3">
+                                    <label className="form-label d-flex justify-content-between">
+                                        <span>Upload Progress</span>
+                                        <span>{uploadProgress}%</span>
+                                    </label>
+                                    <div className="progress">
+                                        <div 
+                                            className="progress-bar progress-bar-striped progress-bar-animated" 
+                                            role="progressbar" 
+                                            style={{ width: `${uploadProgress}%` }}
+                                            aria-valuenow={uploadProgress} 
+                                            aria-valuemin={0} 
+                                            aria-valuemax={100}
+                                        ></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="mt-4 border-top pt-3">
+                                <div className="d-flex align-items-center">
+                                    <i className="ti ti-info-circle text-primary me-2"></i>
+                                    <small>
+                                        Files will be uploaded to the task and can be viewed by all team members. 
+                                        The file content will be analyzed to determine the appropriate language.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                type="button"
+                                className="btn btn-light me-2"
+                                data-bs-dismiss="modal"
+                                disabled={isUploading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleFileUpload}
+                                disabled={!uploadedFile || isUploading}
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <i className="ti ti-loader me-1 spinner"></i>
+                                        Uploading...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="ti ti-upload me-1"></i>
+                                        Upload File
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {/* /Upload File Modal */}
         </>
     )
 }

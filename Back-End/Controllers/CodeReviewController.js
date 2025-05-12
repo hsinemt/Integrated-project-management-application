@@ -169,10 +169,25 @@ exports.submitCode = async (req, res) => {
 
             console.error('Error during code analysis:', analysisError);
 
-            // Provide more informative error message
-            const errorMessage = analysisError.message.includes('SonarCloud')
-                ? 'SonarCloud analysis failed. The system is currently unable to process your code.'
-                : `Analysis failed: ${analysisError.message}`;
+            // Provide more informative error message based on the type of error
+            let errorMessage = '';
+            let errorType = 'Analysis';
+
+            if (analysisError.message.includes('SonarCloud')) {
+                errorMessage = 'SonarCloud analysis failed. The system is currently unable to process your code.';
+                errorType = 'SonarCloud';
+            } else if (analysisError.message.includes('ZIP validation')) {
+                errorMessage = `ZIP file error: ${analysisError.message}. Please ensure your ZIP file is not corrupted.`;
+                errorType = 'ZIP';
+            } else if (analysisError.message.includes('RAR validation')) {
+                errorMessage = `RAR file error: ${analysisError.message}. Please ensure your RAR file is not corrupted.`;
+                errorType = 'RAR';
+            } else if (analysisError.message.includes('Archive extraction')) {
+                errorMessage = `Archive extraction failed: ${analysisError.message}. Please try a different archive file.`;
+                errorType = 'Archive';
+            } else {
+                errorMessage = `Analysis failed: ${analysisError.message}`;
+            }
 
             // Update status to Failed if analysis fails
             await CodeMark.findByIdAndUpdate(
@@ -180,6 +195,7 @@ exports.submitCode = async (req, res) => {
                 {
                     status: 'Failed',
                     feedback: errorMessage,
+                    errorType: errorType, // Add error type for better UI handling
                     updatedAt: new Date()
                 },
                 { new: true }

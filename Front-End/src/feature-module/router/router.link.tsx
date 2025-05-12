@@ -2,6 +2,7 @@ import { Navigate, Route } from "react-router";
 import { all_routes } from "./all_routes";
 import React from "react";
 import RootRedirect from "./RootRedirect";
+import RoleProtectedRoute from "./RoleProtectedRoute";
 import ComingSoon from "../pages/comingSoon";
 import Error404 from "../pages/error";
 import Error500 from "../pages/error/error-500";
@@ -17,6 +18,7 @@ import ApiKeys from "../pages/api-keys";
 import UnderConstruction from "../pages/underConstruction";
 import Gallery from "../pages/gallery";
 import Assets from "../administration/asset";
+import Chat from "../application/chat";
 import AssetsCategory from "../administration/asset-category";
 import Users from "../administration/user-management/users";
 import RolesPermission from "../administration/user-management/rolePermission";
@@ -26,6 +28,7 @@ import ProjectDetails from "../projects/project/projectdetails";
 import ProjectList from "../projects/project/projectlist";
 import Task from "../projects/task/task";
 import TaskDetails from "../projects/task/taskdetails";
+import Todo from "../application/todo/todo";
 import Companies from "../super-admin/companies";
 import Subscription from "../super-admin/subscription";
 import Packages from "../super-admin/packages/packagelist";
@@ -89,6 +92,19 @@ export const publicRoutes = [
     route: Route,
   },
   {
+    path: routes.AddGroupForm,
+    element: (
+      <AddGroupForm
+        availableProjects={[]}  // Passez un tableau vide ici, mais vous pouvez le remplir par la suite avec l'appel API
+        onSubmit={(data: { emails: string[]; selectedProjects: string[]; motivations: { [key: string]: string; }; }) => {
+          // Implémentez ici ce que vous voulez faire avec les données soumises
+          console.log(data);
+        }}
+      />
+    ),
+    route: Route,
+  },
+  {
     path: routes.adminDashboard,
     element: <AdminDashboard />,
     route: Route,
@@ -135,6 +151,11 @@ export const publicRoutes = [
   {
     path: routes.permissionpage,
     element: <PermissionPage />,
+  },
+  {
+    path: routes.todo,
+    element: <Todo />,
+    route: Route,
   },
 
 
@@ -385,17 +406,4 @@ export const authRoutes = [
     path: routes.resetPasswordSuccess3,
     element: <ResetPasswordSuccess3 />,
   },
-  {
-    path: routes.AddGroupForm,
-    element: (
-      <AddGroupForm
-        availableProjects={[]}  // Passez un tableau vide ici, mais vous pouvez le remplir par la suite avec l'appel API
-        onSubmit={(data: { emails: string[]; selectedProjects: string[]; motivations: { [key: string]: string; }; }) => {
-          // Implémentez ici ce que vous voulez faire avec les données soumises
-          console.log(data);
-        }}
-      />
-    ),
-    route: Route,
-  }
 ];

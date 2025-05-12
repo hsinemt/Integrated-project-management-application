@@ -27,7 +27,7 @@ export interface ProjectType {
     difficulty?: 'Easy' | 'Medium' | 'Hard' | 'Very Hard';
     status?: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed' | 'Cancelled';
     speciality?: 'Twin' | 'ERP/BI' | 'AI' | 'SAE' | 'SE' | 'SIM' | 'NIDS' | 'SLEAM' | 'GAMIX' | 'WIN' | 'IoSyS' | 'ArcTic';
-    projectLogo?: string;
+    projectAvatar?: string;
     creator?: CreatorType;
     assignedTutor?: TutorType;
     createdAt?: string;
@@ -124,7 +124,7 @@ export const addProject = async (projectData: ProjectType, logoFile?: File): Pro
             formData.append('difficulty', projectData.difficulty || 'Medium');
             formData.append('status', projectData.status || 'Not Started');
             formData.append('speciality', projectData.speciality || 'Twin');
-            formData.append('projectLogo', logoFile);
+            formData.append('projectAvatar', logoFile);
             formData.append('userId', userId);
 
             const response = await axios.post<ApiResponse<ProjectType>>(
@@ -238,6 +238,47 @@ export const getAllProjects = async (): Promise<ProjectType[]> => {
     }
 };
 
+export interface ProjectsBySpecialityResponse {
+    success: boolean;
+    count: number;
+    speciality: string;
+    projects: ProjectType[];
+    viewType: 'all' | 'group' | 'assigned';
+    inGroup?: boolean;
+    hasAssignedProjects?: boolean;
+    groupNames?: string[];
+}
+
+export const getProjectsByUserSpeciality = async (): Promise<{
+    projects: ProjectType[], 
+    speciality: string,
+    viewType: 'all' | 'group' | 'assigned',
+    inGroup?: boolean,
+    hasAssignedProjects?: boolean,
+    groupNames?: string[]
+}> => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get<ProjectsBySpecialityResponse>(`${API_URL}/project/getProjectsByUserSpeciality`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            withCredentials: true
+        });
+        return {
+            projects: response.data.projects,
+            speciality: response.data.speciality,
+            viewType: response.data.viewType,
+            inGroup: response.data.inGroup,
+            hasAssignedProjects: response.data.hasAssignedProjects,
+            groupNames: response.data.groupNames
+        };
+    } catch (error: any) {
+        console.error('Error fetching projects by speciality:', error);
+        throw error.response ? error.response.data : {message: 'Failed to fetch projects by speciality, please try again later.'};
+    }
+};
+
 export const getProjectById = async (id: string): Promise<ProjectType> => {
     try {
         const token = localStorage.getItem('token');
@@ -277,7 +318,7 @@ export const updateProject = async (id: string, projectData: ProjectType, logoFi
             formData.append('difficulty', projectData.difficulty || 'Medium');
             formData.append('status', projectData.status || 'Not Started');
             formData.append('speciality', projectData.speciality || 'Twin');
-            formData.append('projectLogo', logoFile);
+            formData.append('projectAvatar', logoFile);
 
             formData.append('userId', userId);
 

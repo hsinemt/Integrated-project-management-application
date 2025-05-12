@@ -11,6 +11,7 @@ import {
 } from "../../data/redux/themeSettingSlice";
 import usePreviousRoute from "./usePreviousRoute";
 import { SidebarDataTest } from "../../data/json/sidebarMenu";
+import { getConditionalSidebarData } from "../../data/json/conditionalSidebarMenu";
 import { all_routes } from "../../../feature-module/router/all_routes";
 
 
@@ -28,6 +29,7 @@ interface SubmenuItem {
   tittle?: string;
   dot?: boolean;
   themeSetting?: boolean;
+  customSubmenuTwo?: boolean;
 }
 
 const Sidebar = () => {
@@ -35,7 +37,22 @@ const Sidebar = () => {
   const Location = useLocation();
   const [subOpen, setSubopen] = useState<any>("Dashboard");
   const [subsidebar, setSubsidebar] = useState("");
+  const [sidebarData, setSidebarData] = useState(SidebarDataTest);
   const routes = all_routes;
+
+  // Fetch conditional sidebar data when component mounts
+  useEffect(() => {
+    const fetchSidebarData = async () => {
+      try {
+        const data = await getConditionalSidebarData();
+        setSidebarData(data);
+      } catch (error) {
+        console.error('Error fetching sidebar data:', error);
+      }
+    };
+
+    fetchSidebarData();
+  }, []);
 
   const toggleSidebar = (title: any) => {
     localStorage.setItem("menuOpened", title);
@@ -93,7 +110,7 @@ const Sidebar = () => {
         return menuLabel !== 'Admin';
       case 'tutor':
 
-        return ['Tutor', 'Student'].includes(menuLabel);
+        return menuLabel === 'Tutor' || menuLabel === 'Projects' ;
       case 'student':
 
         return menuLabel === 'Student';
@@ -148,6 +165,13 @@ const Sidebar = () => {
         base2: 'project-list',
         base3: 'project-details',
       },
+      {
+        label: 'To Do',
+        showSubRoute: false,
+        link: routes.todo,
+        customSubmenuTwo: false,
+        base: 'todo',
+      },
     ],
   };
 
@@ -155,7 +179,8 @@ const Sidebar = () => {
   const filterOutProjects = (submenuItems: SubmenuItem[] | undefined): SubmenuItem[] => {
     if (!submenuItems) return [];
 
-    return submenuItems.filter((item: SubmenuItem) => !item.tittle || item.tittle !== 'PROJECTS');
+    // Don't filter out PROJECTS section to allow To Do button to be visible
+    return submenuItems;
   };
 
   return (
@@ -195,7 +220,7 @@ const Sidebar = () => {
             <div className="sidebar-inner slimscroll">
               <div id="sidebar-menu" className="sidebar-menu">
                 <ul>
-                  {SidebarDataTest?.map((mainLabel, index) => (
+                  {sidebarData?.map((mainLabel, index) => (
                       <React.Fragment key={`main-${index}`}>
                         <>
                           <li className="menu-title">
