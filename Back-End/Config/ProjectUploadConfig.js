@@ -2,24 +2,18 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadDir = './public/uploads/project-logos';
+const uploadDir = './uploads/projects';
 
 
 const createUploadDirectories = () => {
     try {
-        if (!fs.existsSync('./public')) {
-            fs.mkdirSync('./public');
-            console.log('Created public directory');
-        }
-
-        if (!fs.existsSync('./public/uploads')) {
-            fs.mkdirSync('./public/uploads');
-            console.log('Created uploads directory');
+        if (!fs.existsSync('./uploads')) {
+            fs.mkdirSync('./uploads');
         }
 
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
-            console.log('Created project-logos directory');
+
         }
     } catch (error) {
         console.error('Error creating upload directories:', error);
@@ -38,7 +32,7 @@ const storage = multer.diskStorage({
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         const ext = path.extname(file.originalname);
-        cb(null, 'project-logo-' + uniqueSuffix + ext);
+        cb(null, 'project-avatar-' + uniqueSuffix + ext);
     }
 });
 
@@ -81,8 +75,8 @@ const handleMulterError = (err, req, res, next) => {
     next();
 };
 
-const uploadProjectLogo = (req, res, next) => {
-    upload.single('projectLogo')(req, res, (err) => {
+const uploadProjectAvatar = (req, res, next) => {
+    upload.single('projectAvatar')(req, res, (err) => {
         if (err) {
             console.error('Multer error:', err);
             return res.status(400).json({
@@ -95,7 +89,7 @@ const uploadProjectLogo = (req, res, next) => {
 };
 
 module.exports = {
-    uploadProjectLogo,
+    uploadProjectAvatar,
     handleMulterError,
     upload
 };

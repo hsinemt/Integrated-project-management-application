@@ -12,6 +12,12 @@ const statusHistorySchema = new mongoose.Schema({
     default: Date.now
   }
 }, { _id: false }); // We don't need IDs for subdocuments
+// Define the question subdocument schema
+const questionSchema = new mongoose.Schema({
+    text: { type: String, required: true },
+    options: { type: [String], required: true },
+    correctAnswer: { type: Number, required: true }
+}, { _id: true }); // Ensure each question has an _id
 
 // Main task schema
 const taskSchema = new mongoose.Schema({
@@ -37,7 +43,7 @@ const taskSchema = new mongoose.Schema({
         enum: ['To Do', 'In Progress', 'Completed', 'In Review'],
         default: 'To Do',
     },
-    statusHistory: [statusHistorySchema], // Array of status history records
+    statusHistory: [statusHistorySchema],
     noteGit: {
         type: String,
         required: false
@@ -60,7 +66,8 @@ const taskSchema = new mongoose.Schema({
         ref: 'Groupes', // Reference to the Groupe model
         required: true,
     },
-    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Assignation d'un étudiant
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+
     // Keep the original fields for backward compatibility
     code: {
         type: String,
@@ -78,7 +85,18 @@ const taskSchema = new mongoose.Schema({
     codeFiles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CodeFile'
-    }]
+    }],
+    quizScore: {
+        type: Number,
+        required: false,
+        default: null
+    },
+    quizId: {
+        type: String,
+        required: false
+    },
+    quizTheme: String,
+    quizQuestions: [questionSchema] // New field to store quiz questions
 });
 
 module.exports = mongoose.model('Task', taskSchema);

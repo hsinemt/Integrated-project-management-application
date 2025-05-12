@@ -140,10 +140,10 @@ exports.submitCode = async (req, res) => {
                 statusMessage = 'Pending';
             } else if (analysisResult.analysisSource === 'localAnalyzer') {
                 feedbackMessage = 'Analysis completed using local analyzer. For more detailed results, contact your instructor.';
-                statusMessage = 'Analyzed';
+                statusMessage = 'Pending';
             } else if (analysisResult.analysisSource === 'defaultFallback') {
                 feedbackMessage = 'Analysis based on file properties. Limited metrics available.';
-                statusMessage = 'Limited';
+                statusMessage = 'Pending';
             }
 
             await CodeMark.findByIdAndUpdate(

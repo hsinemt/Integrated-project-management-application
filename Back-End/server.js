@@ -21,7 +21,8 @@ const choixRoutes = require('./Routes/choixRoutes');
 const tutorRoutes = require('./Routes/tutorRoutes');
 const codeFileRoutes = require('./Routes/codeFileRoutes');
 const activityRoutes = require('./Routes/activityRoutes');
-const codeReviewRouter = require('./Routes/codeFileRoutes');
+const codeReviewRouter = require('./Routes/codeReviewRoutes');
+const zipProjectRouter = require('./Routes/zipProjectRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -231,8 +232,15 @@ app.use(cors({
   credentials: true,
   origin: 'http://localhost:3000',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization','X-Upload-Field']
 }));
+app.use('/uploads', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+}, express.static(path.join(__dirname, 'uploads')));
+
 
 // Security with Helmet
 app.use(helmet({
@@ -247,7 +255,7 @@ app.use(helmet({
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: {
@@ -279,12 +287,13 @@ app.use('/messages', require('./Routes/messageRoutes')); // Nouvelle route pour 
 app.use('/api', codeFileRoutes);
 app.use('/api', activityRoutes);
 app.use('/api/code-review', codeReviewRouter);
+app.use('/api/zip-project', zipProjectRouter);
 
 // AI and NLP routes
 app.use('/nlp', nlpController);
 app.use('/nlp', (req, res, next) => {
-    console.log(`AI route accessed: ${req.method} ${req.originalUrl}`);
-    console.log('Request body:', req.body);
+    //console.log(`AI route accessed: ${req.method} ${req.originalUrl}`);
+    //console.log('Request body:', req.body);
     next();
 }, aiGenerationLimiter, AiProjectGenController);
 

@@ -31,12 +31,10 @@ exports.createProject = async (req, res) => {
         //console.log('Extracted userId:', userId);
         //console.log('Project fields:', { title, description, difficulty, status, speciality });
 
-        let projectLogo;
+        let projectAvatar;
         if (req.file) {
-            projectLogo = `/uploads/project-logos/${req.file.filename}`;
-            console.log('Project logo uploaded:', projectLogo);
-        } else {
-            console.log('No logo file uploaded');
+            projectAvatar = `/uploads/projects/${req.file.filename}`;
+            console.log('Project avatar uploaded:', projectAvatar);
         }
 
         if (!userId) {
@@ -83,7 +81,7 @@ exports.createProject = async (req, res) => {
             difficulty: difficulty || 'Medium',
             status: status || 'Not Started',
             speciality,
-            projectLogo,
+            projectAvatar,
             creator: creatorInfo,
             createdAt: new Date(),
             updatedAt: new Date()
@@ -187,7 +185,7 @@ exports.updateProject = async (req, res) => {
         };
 
         if (req.file) {
-            updateData.projectLogo = `/uploads/project-logos/${req.file.filename}`;
+            updateData.projectAvatar = `/uploads/projects/${req.file.filename}`;
         }
 
         const updatedProject = await Project.findByIdAndUpdate(
@@ -401,7 +399,7 @@ exports.getProjectsByUserSpeciality = async (req, res) => {
     try {
         // Récupérer l'ID de l'utilisateur directement depuis req.user (défini par le middleware)
         const userId = req.user.id;
-        
+
         if (!userId) {
             return res.status(401).json({
                 success: false,
@@ -411,7 +409,7 @@ exports.getProjectsByUserSpeciality = async (req, res) => {
 
         // Trouver l'utilisateur dans la base de données
         const user = await UserModel.findById(userId);
-        
+
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -419,7 +417,7 @@ exports.getProjectsByUserSpeciality = async (req, res) => {
             });
         }
 
-        // Le reste de la fonction reste inchangé
+        // Vérifier si l'utilisateur a une spécialité définie
         if (!user.speciality) {
             return res.status(400).json({
                 success: false,
@@ -427,6 +425,85 @@ exports.getProjectsByUserSpeciality = async (req, res) => {
             });
         }
 
+        // Si l'utilisateur est un tuteur, on renvoie tous les projets qui lui sont assignés (comportement inchangé)
+        if (user.role === 'tutor') {
+            const projects = await Project.find({ 
+                'assignedTutor.tutorId': userId 
+            }).sort({ createdAt: -1 });
+
+            return res.status(200).json({
+                success: true,
+                count: projects.length,
+                speciality: 'Assigned to you',
+                projects,
+                viewType: 'assigned'
+            });
+        }
+
+        // Si l'utilisateur est un étudiant, on applique les règles de visibilité conditionnelles
+        if (user.role === 'student') {
+            // Importer le modèle de groupe
+            const GroupeModel = require('../Models/Group');
+
+            // Trouver les groupes auxquels l'étudiant appartient
+            const userGroups = await GroupeModel.find({ id_students: userId });
+
+            // Vérifier si l'étudiant appartient à un groupe
+            if (userGroups.length === 0) {
+                // L'étudiant n'appartient à aucun groupe, on montre tous les projets correspondant à sa spécialité
+                const projects = await Project.find({ 
+                    speciality: user.speciality 
+                }).sort({ createdAt: -1 });
+
+                return res.status(200).json({
+                    success: true,
+                    count: projects.length,
+                    speciality: user.speciality,
+                    projects,
+                    viewType: 'all',
+                    inGroup: false
+                });
+            }
+
+            // Vérifier si les groupes de l'étudiant ont des projets assignés
+            const groupsWithProjects = userGroups.filter(group => group.id_project);
+
+            if (groupsWithProjects.length === 0) {
+                // Les groupes de l'étudiant n'ont pas de projets assignés, on montre tous les projets correspondant à sa spécialité
+                const projects = await Project.find({ 
+                    speciality: user.speciality 
+                }).sort({ createdAt: -1 });
+
+                return res.status(200).json({
+                    success: true,
+                    count: projects.length,
+                    speciality: user.speciality,
+                    projects,
+                    viewType: 'all',
+                    inGroup: true,
+                    hasAssignedProjects: false
+                });
+            } else {
+                // Les groupes de l'étudiant ont des projets assignés, on montre uniquement ces projets
+                const assignedProjectIds = groupsWithProjects.map(group => group.id_project);
+                const projects = await Project.find({ 
+                    _id: { $in: assignedProjectIds } 
+                }).sort({ createdAt: -1 });
+
+                return res.status(200).json({
+                    success: true,
+                    count: projects.length,
+                    speciality: user.speciality,
+                    projects,
+                    viewType: 'group',
+                    inGroup: true,
+                    hasAssignedProjects: true,
+                    groupNames: groupsWithProjects.map(group => group.nom_groupe)
+                });
+            }
+        }
+
+        // Pour les autres rôles (admin, manager, etc.), on montre tous les projets correspondant à leur spécialité
         const projects = await Project.find({ 
             speciality: user.speciality 
         }).sort({ createdAt: -1 });
@@ -435,10 +512,12 @@ exports.getProjectsByUserSpeciality = async (req, res) => {
             success: true,
             count: projects.length,
             speciality: user.speciality,
-            projects
+            projects,
+            viewType: 'all'
         });
 
     } catch (error) {
+        console.error('Error in getProjectsByUserSpeciality:', error);
         res.status(500).json({
             success: false,
             message: 'Échec de la récupération des projets par spécialité',

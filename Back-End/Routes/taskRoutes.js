@@ -12,13 +12,34 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploadsimage/' });
 const mongoose = require('mongoose');
 
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { authenticateJWT } = require('../Middlewares/authMiddleware');
+const PDFDocument = require('pdfkit');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
+
 const TutorModel = require('../Models/Tutor');
 router.post('/preview', taskController.previewTasks);
 router.post('/save', taskController.saveTasks);
 
 router.get('/:projectId/tasks',userToken, taskController.getTasksByProjectId);
 require('dotenv').config();
-const { authMiddleware, isAdmin} = require('../Middlewares/UserValidation');
+const { authMiddleware, isAdmin } = require('../Middlewares/UserValidation');
+
+// Initialize services
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const QUIZ_GENERATION_TIMEOUT = 30000; // 30 seconds
+
+// Email transporter setup
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.SENDER_EMAIL,
+        pass: process.env.SENDER_PASSWORD
+    }
+});
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -62,7 +83,307 @@ router.put('/tasks/:taskId/image', upload.single('image'), async (req, res) => {
         res.status(500).json({ message: "Server error while updating task image" });
     }
 });
+// Generate quiz for a task
+router.get('/tasks/:taskId/quiz', authenticateJWT, async (req, res) => {
+    const { taskId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+        return res.status(400).json({ success: false, message: 'ID de tâche invalide' });
+    }
+
+    try {
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, message: 'Tâche non trouvée' });
+        }
+
+        if (!task.quizTheme) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun thème de quiz défini pour cette tâche'
+            });
+        }
+
+        console.log(`Génération quiz pour tâche ${taskId} - Thème: ${task.quizTheme}`);
+
+        // Check if quiz already exists in the task
+        if (task.quizQuestions && task.quizQuestions.length > 0) {
+            return res.json({
+                success: true,
+                quiz: {
+                    quizId: task.quizId,
+                    taskTheme: task.quizTheme,
+                    questions: task.quizQuestions
+                }
+            });
+        }
+
+        const prompt = `
+      Génère un quiz en français avec 5 questions sur ${task.quizTheme}.
+      Exigences:
+      - Questions spécifiques à ${task.quizTheme}
+      - 4 options par question
+      - Format JSON strict:
+      {
+        "taskTheme": "${task.quizTheme}",
+        "questions": [
+          {
+            "text": "Question spécifique?",
+            "options": ["Option1", "Option2", "Option3", "Option4"],
+            "correctAnswer": 0
+          }
+        ]
+      }
+      - Uniquement le JSON, pas de texte supplémentaire
+    `;
+
+        const generateQuiz = () => new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Quiz generation timed out'));
+            }, QUIZ_GENERATION_TIMEOUT);
+
+            model.generateContent(prompt)
+                .then(result => {
+                    clearTimeout(timeout);
+                    resolve(result);
+                })
+                .catch(err => {
+                    clearTimeout(timeout);
+                    reject(err);
+                });
+        });
+
+        let result;
+        try {
+            result = await generateQuiz();
+        } catch (error) {
+            console.error('Erreur lors de la génération du quiz par Gemini:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Échec de la génération du quiz - timeout ou erreur API',
+                error: error.message
+            });
+        }
+
+        const response = await result.response;
+        let responseText = response.text();
+
+        responseText = responseText
+            .replace(/```json/g, '')
+            .replace(/```/g, '')
+            .trim();
+
+        let quiz;
+        try {
+            quiz = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('Réponse brute de Gemini:', responseText);
+            return res.status(500).json({
+                success: false,
+                message: 'Erreur de parsing du quiz',
+                error: parseError.message
+            });
+        }
+
+        if (quiz.taskTheme !== task.quizTheme) {
+            return res.status(500).json({
+                success: false,
+                message: `Incohérence de thème: ${quiz.taskTheme} au lieu de ${task.quizTheme}`
+            });
+        }
+
+        const quizId = new mongoose.Types.ObjectId().toString();
+        const questionsWithIds = quiz.questions.map(question => ({
+            ...question,
+            _id: new mongoose.Types.ObjectId().toString()
+        }));
+
+        const updateResult = await Task.updateOne(
+            { _id: taskId },
+            {
+                $set: {
+                    quizId: quizId,
+                    quizQuestions: questionsWithIds
+                }
+            }
+        );
+
+        if (updateResult.matchedCount === 0) {
+            return res.status(500).json({
+                success: false,
+                message: 'Échec de la mise à jour du quizId dans la tâche'
+            });
+        }
+
+        res.json({
+            success: true,
+            quiz: {
+                quizId,
+                taskTheme: quiz.taskTheme,
+                questions: questionsWithIds
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur génération quiz:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Échec de la génération du quiz',
+            error: error.message
+        });
+    }
+});
+
+// Submit quiz answers
+router.post('/tasks/:taskId/quiz-submit', authenticateJWT, async (req, res) => {
+    const { taskId } = req.params;
+    const { answers, quizId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+        return res.status(400).json({ success: false, message: 'ID de tâche invalide' });
+    }
+
+    try {
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: 'Tâche non trouvée'
+            });
+        }
+
+        if (!task.quizQuestions || task.quizQuestions.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Quiz non trouvé pour cette tâche'
+            });
+        }
+
+        if (task.quizId !== quizId) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de quiz invalide'
+            });
+        }
+
+        let points = 0;
+        const pointsPerQuestion = 2; // 2 points per correct answer
+        const maxPoints = task.quizQuestions.length * pointsPerQuestion; // 10 points for 5 questions
+
+        task.quizQuestions.forEach((question, index) => {
+            if (answers[index] === question.correctAnswer) { // Compare indices directly
+                points += pointsPerQuestion;
+            }
+        });
+
+        const score = Math.round((points / maxPoints) * 100); // Convert to percentage
+        console.log(`Calculated score for task ${taskId}: ${points}/${maxPoints} = ${score}%`);
+
+        const updateResult = await Task.updateOne(
+            { _id: taskId },
+            { $set: { quizScore: score } }
+        );
+
+        console.log('Update result:', updateResult);
+
+        if (updateResult.matchedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Aucune tâche correspondante trouvée pour mise à jour'
+            });
+        }
+
+        if (updateResult.modifiedCount === 0) {
+            console.log('No modification needed, score might already be set');
+        }
+
+        if (score === 100) {
+            await generateAndSendCertificate(task, req.user.id);
+        }
+
+        res.json({
+            success: true,
+            score,
+            message: score === 100 ?
+                'Certificat envoyé par email' :
+                'Quiz soumis avec succès'
+        });
+
+    } catch (error) {
+        console.error('Erreur soumission quiz:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Erreur serveur'
+        });
+    }
+});
+
+// Fonction helper pour le certificat
+async function generateAndSendCertificate(task, userId) {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape' });
+    doc.text(`Certificat pour ${task.name}`, 100, 100);
+    doc.text(`Utilisateur: ${user.name} ${user.lastname}`, 100, 150);
+    doc.text(`Score: 100%`, 100, 200);
+    doc.end();
+
+    const generatePdfBuffer = () => new Promise((resolve, reject) => {
+        const chunks = [];
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+    });
+
+    const mailOptions = {
+        from: process.env.SENDER_EMAIL,
+        to: user.email,
+        subject: `Certificat pour ${task.name}`,
+        text: `Félicitations pour votre score parfait!`,
+        attachments: [{
+            filename: `certificat-${task._id}.pdf`,
+            content: await generatePdfBuffer()
+        }]
+    };
+
+    await transporter.sendMail(mailOptions);
+}
+
+// Update quiz theme
+router.put('/tasks/:taskId/quiz-theme', authenticateJWT, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { quizTheme } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(taskId)) {
+            return res.status(400).json({ message: "Invalid task ID" });
+        }
+
+        const task = await Task.findByIdAndUpdate(
+            taskId,
+            { quizTheme },
+            { new: true }
+        );
+
+        if (!task) {
+            return res.status(404).json({ message: "Task not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Quiz theme updated successfully",
+            task
+        });
+    } catch (error) {
+        console.error('Error updating quiz theme:', error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update quiz theme",
+            error: error.message
+        });
+    }
+});
 // POST a new task for a specific project
 router.post('/:projectId/tasks', async (req, res) => {
     const projectId = req.params.projectId;
@@ -348,6 +669,44 @@ router.get('/by-student/:studentId', async (req, res) => {
     }
   });
 
+router.get('/:taskId/history', async (req, res) => {
+    const { taskId } = req.params;
+
+    // Validate taskId
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+        return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    try {
+        // Find task by ID and select only the statusHistory field
+        const task = await Task.findById(taskId)
+            .select('statusHistory')
+            .lean();
+
+        if (!task) {
+            return res.status(404).json({ message: "Task not found" });
+        }
+
+        // Sort history by changedAt date (most recent first)
+        const sortedHistory = (task.statusHistory || []).sort((a, b) =>
+            b.changedAt - a.changedAt
+        );
+
+        res.status(200).json({
+            success: true,
+            history: sortedHistory
+        });
+    } catch (error) {
+        console.error("Error fetching task history:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error while fetching task history"
+        });
+    }
+});
+
+router.get("/projects", taskController.getAllProjects);
+router.get("/groups", taskController.getAllGroups);
 // Get a task by ID
 router.get('/tasks/:taskId', taskController.getTaskById);
 

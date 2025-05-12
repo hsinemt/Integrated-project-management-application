@@ -10,6 +10,9 @@ interface Task {
     état: string;
     image: string;
     git?: string;
+    quizTheme?: string;
+    quizScore?: number;
+    quizId?: string;
     estimatedTime: string;
     assignedTo: {
         name: string;
@@ -24,7 +27,9 @@ interface TaskColumnProps {
     openModal: (image: string) => void;
     onGitBranchUpdate?: (taskId: string, gitBranch: string) => void;
     isCompletedColumn?: boolean;
+    openQuizForTask?: (taskId: string, quizTheme: string) => void;
     openCamera?: () => void;
+    changingTaskIds?: Set<string>;
 }
 
 const TaskColumn = forwardRef<HTMLDivElement, TaskColumnProps>(({ 
@@ -34,7 +39,10 @@ const TaskColumn = forwardRef<HTMLDivElement, TaskColumnProps>(({
     openModal, 
     onGitBranchUpdate,
     isCompletedColumn = false,
-    openCamera
+    openCamera,
+    changingTaskIds = new Set(),
+    openQuizForTask
+
 }, ref) => {
     const columnClasses = `p-3 rounded w-100 me-3 ${
         isCompletedColumn 
@@ -86,7 +94,9 @@ const TaskColumn = forwardRef<HTMLDivElement, TaskColumnProps>(({
                         openModal={openModal}
                         onGitBranchUpdate={onGitBranchUpdate}
                         isCompletedColumn={isCompletedColumn}
+                        openQuizForTask={openQuizForTask}
                         openCamera={openCamera}
+                        isStatusChanging={changingTaskIds.has(task._id)}
                     />
                 ))}
             </div>

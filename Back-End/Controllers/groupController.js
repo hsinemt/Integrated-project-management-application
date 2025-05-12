@@ -40,9 +40,15 @@ exports.getGroupesByProjectId = async (req, res) => {
                 message: "Project ID is required"
             });
         }
-        const groupes = await GroupeModel.find({ id_project: projectId });
+        const groupes = await GroupeModel.find({ id_project: projectId })
+            .populate('id_students', 'name lastname email')
+            .populate('id_tutor', 'name lastname email')
+            .populate('id_project', 'title');
 
-        return res.status(200).json(groupes);
+        return res.status(200).json({
+            success: true,
+            groups: groupes
+        });
     } catch (error) {
         console.error("Error fetching groups by project ID:", error);
         return res.status(500).json({

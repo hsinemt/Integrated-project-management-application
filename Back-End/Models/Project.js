@@ -32,7 +32,7 @@ const projectSchema = new mongoose.Schema({
         enum: ['Not Started', 'In Progress', 'On Hold', 'Completed', 'Cancelled'],
         default: 'Not Started'
     },
-    projectLogo: {
+    projectAvatar: {
         type: String,
         default: null
     },

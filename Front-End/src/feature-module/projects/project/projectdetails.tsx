@@ -11,6 +11,8 @@ import {
     getAllTutors,
     assignTutorToProject,
     updateProject,
+    getGroupsByProjectId,
+    GroupType,
 } from "../../../api/projectsApi/project/projectApi";
 import { getTasksByProjectId, TaskType, updateTaskStatus } from "../../../api/projectsApi/task/taskApi";
 
@@ -28,13 +30,15 @@ const ProjectDetails = () => {
     const [assignLoading, setAssignLoading] = useState<boolean>(false);
     const [assignSuccess, setAssignSuccess] = useState<boolean>(false);
     const [assignError, setAssignError] = useState<string | null>(null);
+    const [groups, setGroups] = useState<GroupType[]>([]);
+    const [groupsLoading, setGroupsLoading] = useState<boolean>(false);
 
 
     const [editActiveTab, setEditActiveTab] = useState<string>("basic-info");
     const [editFormData, setEditFormData] = useState<ProjectType | null>(null);
     const [editKeywords, setEditKeywords] = useState<string[]>([]);
-    const [editSelectedLogo, setEditSelectedLogo] = useState<File | null>(null);
-    const [editLogoPreview, setEditLogoPreview] = useState<string | null>(null);
+    const [editSelectedAvatar, setEditSelectedAvatar] = useState<File | null>(null);
+    const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
     const [editLoading, setEditLoading] = useState<boolean>(false);
 
 
@@ -94,6 +98,17 @@ const ProjectDetails = () => {
                     } catch (err: any) {
                         console.error("Error fetching tutors:", err);
                     }
+                }
+
+                // Fetch groups and students assigned to this project
+                try {
+                    setGroupsLoading(true);
+                    const groupsData = await getGroupsByProjectId(id);
+                    setGroups(groupsData);
+                    setGroupsLoading(false);
+                } catch (err: any) {
+                    console.error("Error fetching groups:", err);
+                    setGroupsLoading(false);
                 }
 
                 setLoading(false);
@@ -182,10 +197,10 @@ const ProjectDetails = () => {
         setEditKeywords(project.keywords || []);
         setEditActiveTab("basic-info");
 
-        if (project.projectLogo) {
-            setEditLogoPreview(`http://localhost:9777${project.projectLogo}`);
+        if (project.projectAvatar) {
+            setEditAvatarPreview(`http://localhost:9777${project.projectAvatar}`);
         } else {
-            setEditLogoPreview(null);
+            setEditAvatarPreview(null);
         }
     };
 
@@ -203,22 +218,27 @@ const ProjectDetails = () => {
         });
     };
 
-    const handleEditLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setEditSelectedLogo(file);
+            setEditSelectedAvatar(file);
             const previewUrl = URL.createObjectURL(file);
-            setEditLogoPreview(previewUrl);
+            setEditAvatarPreview(previewUrl);
         }
     };
 
-    const clearEditLogo = () => {
-        setEditSelectedLogo(null);
-        if (editLogoPreview && !project?.projectLogo) {
-            URL.revokeObjectURL(editLogoPreview);
-            setEditLogoPreview(null);
-        } else if (project?.projectLogo) {
-            setEditLogoPreview(project.projectLogo);
+    const clearEditAvatar = () => {
+        setEditSelectedAvatar(null);
+        if (editAvatarPreview && !project?.projectAvatar) {
+            URL.revokeObjectURL(editAvatarPreview);
+            setEditAvatarPreview(null);
+        } else if (project?.projectAvatar) {
+            // Ensure the path is correctly formatted for the server
+            const avatarPath = project.projectAvatar.includes('/project-avatars/') 
+                ? project.projectAvatar  // Keep as is if it already has the correct path
+                : project.projectAvatar.replace('/uploads/', '/uploads/projects/');  // Fix path if needed
+
+            setEditAvatarPreview(`http://localhost:9777${avatarPath}`);
         }
     };
 
@@ -242,7 +262,7 @@ const ProjectDetails = () => {
                 keywords: editKeywords,
             };
 
-            const response = await updateProject(project._id, submissionData, editSelectedLogo || undefined);
+            const response = await updateProject(project._id, submissionData, editSelectedAvatar || undefined);
 
             if (response.success) {
                 setProject(response.data || editFormData);
@@ -496,7 +516,7 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
 
-                                    {localStorage.getItem("role") === "manager" || localStorage.getItem("role") === "admin" && (
+                                    {localStorage.getItem("role") === "manager"  && (
                                         <div className="mb-4">
                                             <h5 className="mb-3">Assign Tutor</h5>
                                             <div className="bg-light p-3 rounded">
@@ -607,13 +627,16 @@ const ProjectDetails = () => {
                                     <div className="bg-light rounded p-3 mb-3">
                                         <div className="d-flex align-items-center">
                                             <Link to="#" className="flex-shrink-0 me-2">
-                                                {project.projectLogo ? (
+                                                {project.projectAvatar ? (
                                                     <img
-                                                        src={`http://localhost:9777${project.projectLogo}`}
+                                                        src={`http://localhost:9777${project.projectAvatar.includes('/project-avatars/') 
+                                                            ? project.projectAvatar 
+                                                            : project.projectAvatar.replace('/uploads/', '/uploads/projects/')}`}
                                                         alt={project.title}
                                                         style={{ width: "60px", height: "60px", borderRadius: "50%" }} // Added borderRadius for fully rounded logo
                                                         className="rounded"
                                                         onError={(e) => {
+                                                            console.error(`Failed to load image: ${project.projectAvatar}`);
                                                             const target = e.target as HTMLImageElement;
                                                             target.onerror = null;
                                                             target.src = "assets/img/social/project-01.svg";
@@ -706,6 +729,51 @@ const ProjectDetails = () => {
                                                     </>
                                                 )}
                                             </div>
+                                        </div>
+
+                                        <div className="col-sm-3">
+                                            <p className="d-flex align-items-center mb-3">
+                                                <i className="ti ti-users me-2" />
+                                                Assigned Students
+                                            </p>
+                                        </div>
+                                        <div className="col-sm-9">
+                                            {groupsLoading ? (
+                                                <div className="d-flex align-items-center mb-3">
+                                                    <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <span>Loading students...</span>
+                                                </div>
+                                            ) : groups.length > 0 ? (
+                                                <div className="mb-3">
+                                                    {groups.map((group) => (
+                                                        <div key={group._id} className="mb-2">
+                                                            <h6 className="mb-2">Group: {group.nom_groupe}</h6>
+                                                            {group.id_students && group.id_students.length > 0 ? (
+                                                                <div className="d-flex flex-wrap gap-2">
+                                                                    {group.id_students.map((student) => (
+                                                                        <div 
+                                                                            key={student._id} 
+                                                                            className="badge bg-light-secondary text-dark d-flex align-items-center p-2"
+                                                                            style={{ fontSize: '0.9rem' }}
+                                                                        >
+                                                                            <span className="avatar avatar-xs avatar-rounded bg-primary text-white me-2">
+                                                                                {student.name.charAt(0).toUpperCase()}
+                                                                            </span>
+                                                                            {student.name} {student.lastname}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-muted">No students in this group</p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-muted mb-3">No groups assigned to this project</p>
+                                            )}
                                         </div>
                                         <div className="col-sm-12">
                                             <div className="mb-3">
@@ -967,9 +1035,9 @@ const ProjectDetails = () => {
                                                     <div className="col-md-12">
                                                         <div className="d-flex align-items-center flex-wrap row-gap-3 bg-light w-100 rounded p-3 mb-4">
                                                             <div className="d-flex align-items-center justify-content-center avatar avatar-xxl rounded-circle border border-dashed me-2 flex-shrink-0 text-dark frames">
-                                                                {editLogoPreview ? (
+                                                                {editAvatarPreview ? (
                                                                     <img
-                                                                        src={editLogoPreview}
+                                                                        src={editAvatarPreview}
                                                                         alt="Project Logo"
                                                                         className="img-fluid rounded-circle" // Already rounded-circle
                                                                         style={{
@@ -999,13 +1067,13 @@ const ProjectDetails = () => {
                                                                             type="file"
                                                                             className="form-control image-sign"
                                                                             accept="image/*"
-                                                                            onChange={handleEditLogoChange}
+                                                                            onChange={handleEditAvatarChange}
                                                                         />
                                                                     </div>
                                                                     <button
                                                                         type="button"
                                                                         className="btn btn-light btn-sm"
-                                                                        onClick={clearEditLogo}
+                                                                        onClick={clearEditAvatar}
                                                                     >
                                                                         Cancel
                                                                     </button>

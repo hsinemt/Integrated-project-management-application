@@ -7,8 +7,11 @@ import Modal from 'react-modal';
 import styles from "./page.module.css";
 import TaskCard from './TaskCard';
 import TaskColumn from './TaskColumn';
+import SkeletonTaskColumn from './SkeletonTaskColumn';
 import Webcam from 'react-webcam';
 import io from 'socket.io-client';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import CourseQuiz from './CourseQuiz';
 
 Modal.setAppElement('#root');
 
@@ -22,6 +25,9 @@ interface Task {
     image: string;
     estimatedTime: string;
     git?: string;
+    quizTheme?: string;
+    quizScore?: number;
+    quizId?: string;
     assignedTo: {
         name: string;
         lastname: string;
@@ -82,12 +88,16 @@ const TaskBoard = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [projectName, setProjectName] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [selectedPriority, setSelectedPriority] = useState<string>('All');
+    const [filterLoading, setFilterLoading] = useState(false);
     const [updatedTasks, setUpdatedTasks] = useState<Map<string, string>>(new Map());
+    const [changingTaskIds, setChangingTaskIds] = useState<Set<string>>(new Set());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
     const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
     const [verificationStatus, setVerificationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -95,8 +105,12 @@ const TaskBoard = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState<string>('');
     const [groupId, setGroupId] = useState<string | null>(null);
+    const [groupName, setGroupName] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [chatError, setChatError] = useState<string | null>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+    const [currentQuizTheme, setCurrentQuizTheme] = useState<string | null>(null);
     const webcamRef = useRef<Webcam>(null);
     const toDoTasksRef = useRef<HTMLDivElement>(null);
     const inProgressTasksRef = useRef<HTMLDivElement>(null);
@@ -104,11 +118,12 @@ const TaskBoard = () => {
     const completedTasksRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const emojiButtonRef = useRef<HTMLButtonElement>(null);
     const navigate = useNavigate();
 
     const handleGitBranchUpdate = (taskId: string, gitBranch: string) => {
-        setTasks(prevTasks => 
-            prevTasks.map(task => 
+        setTasks(prevTasks =>
+            prevTasks.map(task =>
                 task._id === taskId ? { ...task, git: gitBranch } : task
             )
         );
@@ -134,8 +149,8 @@ const TaskBoard = () => {
             const errorMessage = error.response?.status === 401
                 ? 'Session expirée. Veuillez vous reconnecter.'
                 : error.message === 'No token available'
-                ? 'Veuillez vous connecter pour accéder au chat.'
-                : `Impossible de charger les messages: ${error.message}`;
+                    ? 'Veuillez vous connecter pour accéder au chat.'
+                    : `Impossible de charger les messages: ${error.message}`;
             setChatError(errorMessage);
         }
     };
@@ -153,8 +168,10 @@ const TaskBoard = () => {
 
             const fetchedGroupId = response.data.group?._id;
             const fetchedUserId = response.data.user?._id;
+            const fetchedGroupName = response.data.group?.nom_groupe;
             setGroupId(fetchedGroupId);
             setUserId(fetchedUserId);
+            setGroupName(fetchedGroupName || 'Group Chat');
 
             if (fetchedUserId && fetchedGroupId) {
                 socket.auth = { userId: fetchedUserId };
@@ -202,74 +219,100 @@ const TaskBoard = () => {
         }
     };
 
-    useEffect(() => {
-        const initializeData = async () => {
+    const initializeData = async () => {
+        try {
+            setLoadError(null);
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.error('No token found in localStorage');
+                setLoadError('Authentication required. Please log in to view tasks.');
+                setLoading(false);
+                return;
+            }
+
             try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    console.error('No token found in localStorage');
-                    setLoading(false);
-                    return;
-                }
-
                 await fetchTasksAndProject(token);
+            } catch (taskError: any) {
+                console.error('Error fetching tasks:', taskError);
+                setLoadError('Failed to load tasks. Please try again.');
+                setLoading(false);
+                return;
+            }
 
-                try {
-                    await fetchUserAndGroupForSocket(token);
-                } catch (socketError: any) {
-                    if (socketError.response?.status === 401) {
-                        const storedUserId = localStorage.getItem('userId');
-                        const storedRole = localStorage.getItem('role');
-                        if (storedUserId && storedRole) {
-                            setUserId(storedUserId);
-                            try {
-                                const groupResponse = await axios.get(`http://localhost:9777/group/by-user/${storedUserId}`);
-                                console.log('Fetched groups:', groupResponse.data);
-                                if (groupResponse.data.success && groupResponse.data.groups.length > 0) {
-                                    const fetchedGroupId = groupResponse.data.groups[0]._id;
-                                    setGroupId(fetchedGroupId);
-                                    socket.auth = { userId: storedUserId };
-                                    socket.connect();
-                                    console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', storedUserId);
-                                    socket.emit('joinGroup', { groupId: fetchedGroupId, userId: storedUserId });
-                                } else {
-                                    setChatError('Aucun groupe trouvé pour cet utilisateur.');
-                                }
-                            } catch (groupError: any) {
-                                console.error('Error fetching groups:', groupError.response?.data || groupError.message);
-                                setChatError('Erreur lors de la récupération des groupes: ' + (groupError.response?.data?.message || groupError.message));
+            try {
+                await fetchUserAndGroupForSocket(token);
+            } catch (socketError: any) {
+                if (socketError.response?.status === 401) {
+                    const storedUserId = localStorage.getItem('userId');
+                    const storedRole = localStorage.getItem('role');
+                    if (storedUserId && storedRole) {
+                        setUserId(storedUserId);
+                        try {
+                            const groupResponse = await axios.get(`http://localhost:9777/group/by-user/${storedUserId}`);
+                            console.log('Fetched groups:', groupResponse.data);
+                            if (groupResponse.data.success && groupResponse.data.groups.length > 0) {
+                                const fetchedGroupId = groupResponse.data.groups[0]._id;
+                                const fetchedGroupName = groupResponse.data.groups[0].nom_groupe;
+                                setGroupId(fetchedGroupId);
+                                setGroupName(fetchedGroupName || 'Group Chat');
+                                socket.auth = { userId: storedUserId };
+                                socket.connect();
+                                console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', storedUserId);
+                                socket.emit('joinGroup', { groupId: fetchedGroupId, userId: storedUserId });
+                            } else {
+                                setChatError('Aucun groupe trouvé pour cet utilisateur.');
                             }
-                        } else {
-                            setChatError('Session expirée. Veuillez vous reconnecter.');
-                            setTimeout(() => {
-                                navigate('/login');
-                            }, 2000);
+                        } catch (groupError: any) {
+                            console.error('Error fetching groups:', groupError.response?.data || groupError.message);
+                            setChatError('Erreur lors de la récupération des groupes: ' + (groupError.response?.data?.message || groupError.message));
                         }
                     } else {
-                        setChatError(`Erreur lors du chargement des données du groupe: ${socketError.message}`);
+                        setChatError('Session expirée. Veuillez vous reconnecter.');
+                        setTimeout(() => {
+                            navigate('/login');
+                        }, 2000);
                     }
-                }
-
-                setLoading(false);
-            } catch (error: any) {
-                console.error('Error initializing data:', error.response?.data || error.message);
-                if (error.response?.status === 401) {
-                    setChatError('Session expirée. Veuillez vous reconnecter.');
-                    setTimeout(() => {
-                        navigate('/login');
-                    }, 2000);
                 } else {
-                    setChatError(`Erreur lors du chargement des données: ${error.message}`);
+                    setChatError(`Erreur lors du chargement des données du groupe: ${socketError.message}`);
                 }
-                setLoading(false);
             }
-        };
 
+            setLoading(false);
+        } catch (error: any) {
+            console.error('Error initializing data:', error.response?.data || error.message);
+            if (error.response?.status === 401) {
+                setLoadError('Session expired. Please log in again.');
+                setChatError('Session expirée. Veuillez vous reconnecter.');
+                setTimeout(() => {
+                    navigate('/login');
+                }, 2000);
+            } else {
+                setLoadError(`Failed to load data: ${error.message}`);
+                setChatError(`Erreur lors du chargement des données: ${error.message}`);
+            }
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         initializeData();
 
         socket.on('receiveMessage', (message: Message) => {
             console.log('Received message:', message);
-            setMessages((prev) => [...prev, message]);
+            setMessages((prev) => {
+                // Replace the temporary message with the server-confirmed one
+                const tempIndex = prev.findIndex((msg) => msg._id.startsWith('temp-'));
+                if (tempIndex !== -1) {
+                    const updatedMessages = [...prev];
+                    updatedMessages[tempIndex] = message;
+                    return updatedMessages;
+                }
+                // If no temp message, append only if not a duplicate
+                if (!prev.some((msg) => msg._id === message._id)) {
+                    return [...prev, message];
+                }
+                return prev;
+            });
         });
 
         socket.on('error', (error: { message: string }) => {
@@ -334,6 +377,15 @@ const TaskBoard = () => {
             if (taskId && newEtat) {
                 console.log('Updating task status:', { taskId, newEtat });
                 setUpdatedTasks((prev) => new Map(prev).set(taskId, newEtat));
+
+                // Add a small delay to show the loading state
+                setTimeout(() => {
+                    setChangingTaskIds(prev => {
+                        const newSet = new Set(prev);
+                        newSet.add(taskId);
+                        return newSet;
+                    });
+                }, 300);
             }
         });
 
@@ -352,8 +404,13 @@ const TaskBoard = () => {
 
     const saveTaskStatusChanges = async () => {
         try {
+            // Mark all updated tasks as changing
+            const taskIds = Array.from(updatedTasks.keys());
+            setChangingTaskIds(new Set(taskIds));
+
             const token = localStorage.getItem('token');
             console.log('Saving task status with token:', token ? token.substring(0, 20) + '...' : 'No token');
+
             const statusUpdates = Array.from(updatedTasks.entries()).map(([taskId, newEtat]) =>
                 axios.put(`http://localhost:9777/api/tasks/tasks/${taskId}/status`, { etat: newEtat }, {
                     headers: {
@@ -361,10 +418,20 @@ const TaskBoard = () => {
                     },
                 })
             );
+
             await Promise.all(statusUpdates);
-            window.location.reload();
+
+            // Add a minimum delay to ensure loading state is visible
+            setTimeout(() => {
+                setChangingTaskIds(new Set());
+                window.location.reload();
+            }, 500);
         } catch (error) {
             console.error('Error saving task status changes:', error);
+            // Clear loading states on error
+            setChangingTaskIds(new Set());
+            // Show error message
+            alert('Failed to update task status. Please try again.');
         }
     };
 
@@ -423,18 +490,43 @@ const TaskBoard = () => {
         setIsCameraOpen(false);
     };
 
+    const openQuizForTask = (taskId: string, quizTheme: string) => {
+        setCurrentTaskId(taskId);
+        setCurrentQuizTheme(quizTheme);
+        setIsCameraOpen(true);
+        setVerificationStatus('idle');
+        setVerificationMessage(null);
+    };
+
+    const closeQuizModal = () => {
+        setIsQuizModalOpen(false);
+        setCurrentTaskId(null);
+        setCurrentQuizTheme(null);
+    };
+
+    const handleQuizSubmit = (taskId: string, score: number) => {
+        setTasks((prevTasks) =>
+            prevTasks.map((task) => (task._id === taskId ? { ...task, quizScore: score } : task))
+        );
+        setIsQuizModalOpen(false);
+        setCurrentTaskId(null);
+        setCurrentQuizTheme(null);
+    };
+
     const verifyFace = async () => {
         try {
             if (!webcamRef.current) {
                 setVerificationStatus('error');
-                setVerificationMessage('Camera not available');
+                setVerificationMessage('Webcam not available. Please ensure your camera is connected and permissions are granted.');
+                console.error('Webcam reference is null');
                 return;
             }
 
             const imageSrc = webcamRef.current.getScreenshot();
             if (!imageSrc) {
                 setVerificationStatus('error');
-                setVerificationMessage('Failed to capture image');
+                setVerificationMessage('Failed to capture image. Please ensure your camera is working.');
+                console.error('Failed to capture image from webcam');
                 return;
             }
 
@@ -442,33 +534,59 @@ const TaskBoard = () => {
             setVerificationMessage('Verifying your face...');
 
             const token = localStorage.getItem('token');
-            console.log('Verifying face with token:', token ? token.substring(0, 20) + '...' : 'No token');
+            if (!token) {
+                setVerificationStatus('error');
+                setVerificationMessage('Authentication token missing. Please log in again.');
+                console.error('No token available');
+                return;
+            }
+
+            console.log('Sending verification request with token:', token.substring(0, 10) + '...');
+            console.log('Image data size:', imageSrc.length, 'bytes');
+            const startTime = Date.now();
 
             const response = await axios.post(
                 'http://localhost:9777/user/loginWithFace',
                 { imageData: imageSrc },
                 {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: token,
-                    },
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    timeout: 30000, // Increased to 30 seconds
                 }
             );
 
+            const endTime = Date.now();
+            console.log(`Verification request completed in ${(endTime - startTime) / 1000} seconds`);
+            console.log('Verification response:', response.data);
+
             if (response.data.success) {
                 setVerificationStatus('success');
-                setVerificationMessage('Face verification successful! Quiz passed.');
+                setVerificationMessage('Face verification successful! Opening quiz...');
                 setTimeout(() => {
                     closeCamera();
+                    if (currentTaskId && currentQuizTheme) {
+                        setIsQuizModalOpen(true);
+                    } else {
+                        setVerificationStatus('error');
+                        setVerificationMessage('No task or quiz theme selected.');
+                    }
                 }, 3000);
             } else {
                 setVerificationStatus('error');
-                setVerificationMessage('Face verification failed. Please try again.');
+                setVerificationMessage(`Face verification failed: ${response.data.message || 'Unknown error'}. Please try again.`);
+                console.error('Verification failed:', response.data.message);
             }
         } catch (error) {
             console.error('Error during face verification:', error);
-            setVerificationStatus('error');
-            setVerificationMessage('Error during verification. Please try again.');
+            if (axios.isAxiosError(error)) {
+                setVerificationStatus('error');
+                setVerificationMessage(
+                    `Error during verification: ${error.response?.data?.message || error.message}. Please try again.`
+                );
+                console.error('Axios error details:', error.response?.data || error.message);
+            } else {
+                setVerificationStatus('error');
+                setVerificationMessage('Error during verification. Please try again.');
+            }
         }
     };
 
@@ -483,18 +601,58 @@ const TaskBoard = () => {
     const toggleChatExpand = () => {
         console.log('Toggling chat expand, current isChatExpanded:', isChatExpanded);
         setIsChatExpanded(!isChatExpanded);
+        setShowEmojiPicker(false);
+    };
+
+    const toggleEmojiPicker = () => {
+        setShowEmojiPicker((prev) => !prev);
+    };
+
+    const handleEmojiClick = (emojiData: EmojiClickData) => {
+        setNewMessage((prev) => prev + emojiData.emoji);
+        setShowEmojiPicker(false);
+        inputRef.current?.focus();
     };
 
     const sendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (newMessage.trim() && groupId && userId) {
             console.log('Sending message:', { groupId, userId, content: newMessage });
+
+            // Optimistic update with temporary ID
+            const tempMessageId = `temp-${Date.now()}`;
+            const tempMessage: Message = {
+                _id: tempMessageId,
+                group: groupId,
+                sender: {
+                    _id: userId,
+                    name: 'You',
+                    lastname: '',
+                    role: 'user',
+                },
+                content: newMessage,
+                timestamp: new Date().toISOString(),
+            };
+
+            setMessages((prev) => [...prev, tempMessage]);
+
+            // Emit to server
             socket.emit('sendMessage', {
                 groupId,
                 userId,
                 content: newMessage,
+            }, (serverMessage: Message) => {
+                // Callback to replace the temporary message with the server-confirmed one
+                setMessages((prev) => {
+                    const updatedMessages = prev.map((msg) =>
+                        msg._id === tempMessageId ? serverMessage : msg
+                    );
+                    return updatedMessages;
+                });
             });
+
             setNewMessage('');
+            setShowEmojiPicker(false);
         } else {
             console.log('Cannot send message:', { newMessage, groupId, userId });
             setChatError('Erreur: Impossible d\'envoyer le message. Vérifiez votre connexion ou reconnectez-vous.');
@@ -519,12 +677,117 @@ const TaskBoard = () => {
     };
 
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-        console.error('Image failed to load:', e.currentTarget.src);
+        console.log('Image failed to load:', e.currentTarget.src);
         e.currentTarget.src = '/assets/img/fallback-avatar.jpg';
     };
 
+    const handleRetry = () => {
+        setLoading(true);
+        initializeData();
+    };
+
     if (loading) {
-        return <div>Loading...</div>;
+        return (
+            <div className="page-wrapper">
+                <div className="content">
+                    <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
+                        <div className="my-auto mb-2">
+                            <h2 className="mb-1">
+                                <div className="bg-light" style={{ width: '200px', height: '32px', borderRadius: '4px' }}></div>
+                            </h2>
+                            <nav>
+                                <ol className="breadcrumb mb-0">
+                                    <li className="breadcrumb-item">
+                                        <div className="bg-light" style={{ width: '20px', height: '16px', borderRadius: '4px' }}></div>
+                                    </li>
+                                    <li className="breadcrumb-item">
+                                        <div className="bg-light" style={{ width: '60px', height: '16px', borderRadius: '4px' }}></div>
+                                    </li>
+                                    <li className="breadcrumb-item active">
+                                        <div className="bg-light" style={{ width: '80px', height: '16px', borderRadius: '4px' }}></div>
+                                    </li>
+                                </ol>
+                            </nav>
+                        </div>
+                    </div>
+                    <div className="card">
+                        <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
+                            <h4>
+                                <div className="bg-light" style={{ width: '150px', height: '24px', borderRadius: '4px' }}></div>
+                            </h4>
+                        </div>
+                        <div className="card-body">
+                            <div className="row">
+                                <div className="col-lg-4">
+                                    <div className="d-flex align-items-center flex-wrap row-gap-3 mb-3">
+                                        <h6 className="me-2">Priority</h6>
+                                        <ul className="nav nav-pills border d-inline-flex p-1 rounded bg-light todo-tabs">
+                                            <li className="nav-item">
+                                                <button className="nav-link active">All</button>
+                                            </li>
+                                            <li className="nav-item">
+                                                <button className="nav-link">High</button>
+                                            </li>
+                                            <li className="nav-item">
+                                                <button className="nav-link">Medium</button>
+                                            </li>
+                                            <li className="nav-item">
+                                                <button className="nav-link">Low</button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="tab-content">
+                                <div className="tab-pane fade show active">
+                                    <div className="d-flex align-items-start overflow-auto project-status pb-4">
+                                        <SkeletonTaskColumn title="To Do" count={3} />
+                                        <SkeletonTaskColumn title="In Progress" count={2} />
+                                        <SkeletonTaskColumn title="In Review" count={2} />
+                                        <SkeletonTaskColumn title="Completed" count={1} isCompletedColumn={true} />
+                                    </div>
+                                </div>
+                            </div>
+                            <style>
+                                {`
+                                    @keyframes shimmer {
+                                        0% {
+                                            background-position: -200% 0;
+                                        }
+                                        100% {
+                                            background-position: 200% 0;
+                                        }
+                                    }
+                                `}
+                            </style>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="page-wrapper">
+                <div className="content">
+                    <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '60vh' }}>
+                        <div className="alert alert-danger text-center" role="alert">
+                            <i className="ti ti-alert-circle me-2" style={{ fontSize: '1.5rem' }}></i>
+                            <p className="mb-3">{loadError}</p>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleRetry}
+                                aria-label="Retry loading tasks"
+                            >
+                                <i className="ti ti-refresh me-2"></i>
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     const totalTasks = tasks.length;
@@ -645,22 +908,85 @@ const TaskBoard = () => {
                                         <h6 className="me-2">Priority</h6>
                                         <ul className="nav nav-pills border d-inline-flex p-1 rounded bg-light todo-tabs" id="pills-tab" role="tablist">
                                             <li className="nav-item" role="presentation">
-                                                <button className={`nav-link ${selectedPriority === 'All' ? 'active' : ''}`} onClick={() => setSelectedPriority('All')}>All</button>
+                                                <button
+                                                    className={`nav-link ${selectedPriority === 'All' ? 'active' : ''}`}
+                                                    onClick={() => {
+                                                        if (selectedPriority !== 'All') {
+                                                            setFilterLoading(true);
+                                                            setTimeout(() => {
+                                                                setSelectedPriority('All');
+                                                                setFilterLoading(false);
+                                                            }, 500);
+                                                        }
+                                                    }}
+                                                    disabled={filterLoading}
+                                                >
+                                                    All
+                                                </button>
                                             </li>
                                             <li className="nav-item" role="presentation">
-                                                <button className={`nav-link ${selectedPriority === 'High' ? 'active' : ''}`} onClick={() => setSelectedPriority('High')}>High</button>
+                                                <button
+                                                    className={`nav-link ${selectedPriority === 'High' ? 'active' : ''}`}
+                                                    onClick={() => {
+                                                        if (selectedPriority !== 'High') {
+                                                            setFilterLoading(true);
+                                                            setTimeout(() => {
+                                                                setSelectedPriority('High');
+                                                                setFilterLoading(false);
+                                                            }, 500);
+                                                        }
+                                                    }}
+                                                    disabled={filterLoading}
+                                                >
+                                                    High
+                                                </button>
                                             </li>
                                             <li className="nav-item" role="presentation">
-                                                <button className={`nav-link ${selectedPriority === 'Medium' ? 'active' : ''}`} onClick={() => setSelectedPriority('Medium')}>Medium</button>
+                                                <button
+                                                    className={`nav-link ${selectedPriority === 'Medium' ? 'active' : ''}`}
+                                                    onClick={() => {
+                                                        if (selectedPriority !== 'Medium') {
+                                                            setFilterLoading(true);
+                                                            setTimeout(() => {
+                                                                setSelectedPriority('Medium');
+                                                                setFilterLoading(false);
+                                                            }, 500);
+                                                        }
+                                                    }}
+                                                    disabled={filterLoading}
+                                                >
+                                                    Medium
+                                                </button>
                                             </li>
                                             <li className="nav-item" role="presentation">
-                                                <button className={`nav-link ${selectedPriority === 'Low' ? 'active' : ''}`} onClick={() => setSelectedPriority('Low')}>Low</button>
+                                                <button
+                                                    className={`nav-link ${selectedPriority === 'Low' ? 'active' : ''}`}
+                                                    onClick={() => {
+                                                        if (selectedPriority !== 'Low') {
+                                                            setFilterLoading(true);
+                                                            setTimeout(() => {
+                                                                setSelectedPriority('Low');
+                                                                setFilterLoading(false);
+                                                            }, 500);
+                                                        }
+                                                    }}
+                                                    disabled={filterLoading}
+                                                >
+                                                    Low
+                                                </button>
                                             </li>
                                         </ul>
                                     </div>
                                 </div>
                                 <div className="col-lg-8">
-                                    {/* Additional content can go here */}
+                                    {filterLoading && (
+                                        <div className="d-flex align-items-center">
+                                            <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                                <span className="visually-hidden">Loading...</span>
+                                            </div>
+                                            <span>Filtering tasks...</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="tab-content" id="pills-tabContent">
@@ -673,6 +999,7 @@ const TaskBoard = () => {
                                             openModal={openModal}
                                             ref={toDoTasksRef}
                                             onGitBranchUpdate={handleGitBranchUpdate}
+                                            changingTaskIds={changingTaskIds}
                                         />
                                         <TaskColumn
                                             etat="In Progress"
@@ -680,6 +1007,7 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={inProgressTasksRef}
+                                            changingTaskIds={changingTaskIds}
                                         />
                                         <TaskColumn
                                             etat="In Review"
@@ -687,6 +1015,7 @@ const TaskBoard = () => {
                                             handleImageChange={handleImageChange}
                                             openModal={openModal}
                                             ref={inReviewTasksRef}
+                                            changingTaskIds={changingTaskIds}
                                         />
                                         <TaskColumn
                                             etat="Completed"
@@ -696,6 +1025,8 @@ const TaskBoard = () => {
                                             ref={completedTasksRef}
                                             isCompletedColumn={true}
                                             openCamera={openCamera}
+                                            openQuizForTask={openQuizForTask}
+                                            changingTaskIds={changingTaskIds}
                                         />
                                     </div>
                                 </div>
@@ -788,6 +1119,29 @@ const TaskBoard = () => {
                 </div>
             </Modal>
 
+            <Modal
+                isOpen={isQuizModalOpen}
+                onRequestClose={closeQuizModal}
+                contentLabel="Quiz Modal"
+                className={styles.modal}
+                overlayClassName="overlay"
+            >
+                <div className="quiz-modal">
+                    <h3>Task Quiz</h3>
+                    {currentTaskId && (
+                        <CourseQuiz
+                            courseId={currentTaskId}
+                            quizTheme={currentQuizTheme || ''}
+                            onClose={closeQuizModal}
+                            onSubmit={handleQuizSubmit}
+                        />
+                    )}
+                    <button className="btn btn-secondary mt-3" onClick={closeQuizModal} style={{ marginLeft: '10px' }}>
+                        Close
+                    </button>
+                </div>
+            </Modal>
+
             {isChatOpen && (
                 <div
                     style={{
@@ -795,37 +1149,53 @@ const TaskBoard = () => {
                         right: 0,
                         top: 0,
                         bottom: 0,
-                        width: isChatExpanded ? '300px' : '50px',
-                        backgroundColor: '#fff',
-                        boxShadow: '-2px 0 5px rgba(0,0,0,0.2)',
+                        width: isChatExpanded ? '350px' : '60px',
+                        background: 'linear-gradient(145deg, #ffffff, #f8fafc)',
+                        boxShadow: '-4px 0 12px rgba(0,0,0,0.1)',
                         zIndex: 2000,
-                        transition: 'width 0.3s ease-in-out',
+                        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         display: 'flex',
                         flexDirection: 'column',
+                        borderLeft: '1px solid #e2e8f0',
                     }}
                 >
                     <div
                         style={{
-                            padding: '10px',
-                            backgroundColor: '#f97316',
-                            color: '#fff',
+                            padding: '12px 16px',
+                            background: '#f97316',
+                            color: '#ffffff',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
+                            borderBottom: '1px solid rgba(255,255,255,0.1)',
                         }}
                     >
-                        {isChatExpanded && <h3 style={{ fontSize: '16px', margin: 0, color: '#fff' }}>Discussion avec le groupe</h3>}
+                        {isChatExpanded && (
+                            <h3 style={{
+                                fontSize: '18px',
+                                margin: 0,
+                                fontWeight: 600,
+                                letterSpacing: '0.2px'
+                            }}>
+                                {groupName}
+                            </h3>
+                        )}
                         <button
                             onClick={toggleChatExpand}
                             style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#fff',
+                                color: '#ffffff',
                                 cursor: 'pointer',
+                                padding: '8px',
+                                borderRadius: '6px',
+                                transition: 'background-color 0.2s',
                             }}
-                            title={isChatExpanded ? 'Réduire' : 'Agrandir'}
+                            title={isChatExpanded ? 'Minimize' : 'Expand'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                         >
-                            <i className={`ti ${isChatExpanded ? 'ti-chevron-right' : 'ti-chevron-left'}`} style={{ fontSize: '20px' }}></i>
+                            <i className={`ti ${isChatExpanded ? 'ti-chevron-right' : 'ti-chevron-left'}`} style={{ fontSize: '24px' }}></i>
                         </button>
                     </div>
                     {isChatExpanded && (
@@ -833,15 +1203,26 @@ const TaskBoard = () => {
                             <div
                                 style={{
                                     flex: 1,
-                                    padding: '10px',
+                                    padding: '16px',
                                     overflowY: 'auto',
-                                    backgroundColor: '#fff',
+                                    background: '#ffffff',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px',
                                 }}
                             >
                                 {chatError ? (
-                                    <div style={{ color: '#dc2626', textAlign: 'center', fontSize: '14px' }}>
+                                    <div style={{
+                                        textAlign: 'center',
+                                        padding: '16px',
+                                        background: '#fef2f2',
+                                        borderRadius: '8px',
+                                        color: '#dc2626',
+                                        fontSize: '14px',
+                                        border: '1px solid #fee2e2'
+                                    }}>
                                         {chatError}
-                                        <div>
+                                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                             <button
                                                 onClick={() => {
                                                     setChatError(null);
@@ -850,66 +1231,99 @@ const TaskBoard = () => {
                                                     }
                                                 }}
                                                 style={{
-                                                    marginTop: '10px',
-                                                    padding: '5px 10px',
-                                                    backgroundColor: '#f97316',
-                                                    color: '#fff',
+                                                    padding: '8px 16px',
+                                                    background: '#f97316',
+                                                    color: '#ffffff',
                                                     border: 'none',
-                                                    borderRadius: '4px',
+                                                    borderRadius: '6px',
                                                     cursor: 'pointer',
+                                                    fontSize: '14px',
+                                                    transition: 'background-color 0.2s',
                                                 }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ea580c'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f97316'}
                                             >
-                                                Réessayer
+                                                Retry
                                             </button>
                                             {chatError.includes('Session expirée') && (
                                                 <button
                                                     onClick={handleReconnect}
                                                     style={{
-                                                        marginTop: '10px',
-                                                        marginLeft: '10px',
-                                                        padding: '5px 10px',
-                                                        backgroundColor: '#dc2626',
-                                                        color: '#fff',
+                                                        padding: '8px 16px',
+                                                        background: '#dc2626',
+                                                        color: '#ffffff',
                                                         border: 'none',
-                                                        borderRadius: '4px',
+                                                        borderRadius: '6px',
                                                         cursor: 'pointer',
+                                                        fontSize: '14px',
+                                                        transition: 'background-color 0.2s',
                                                     }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
                                                 >
-                                                    Reconnexion
+                                                    Reconnect
                                                 </button>
                                             )}
                                         </div>
                                     </div>
                                 ) : messages.length === 0 ? (
-                                    <div style={{ color: '#6b7280', textAlign: 'center', fontSize: '14px' }}>
-                                        Aucun message pour le moment.
+                                    <div style={{
+                                        color: '#6b7280',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        padding: '24px',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        No messages yet. Start the conversation!
                                     </div>
                                 ) : (
                                     messages.map((message) => (
                                         <div
                                             key={message._id}
                                             style={{
-                                                marginBottom: '10px',
-                                                textAlign: message.sender._id === userId ? 'right' : 'left',
+                                                display: 'flex',
+                                                flexDirection: message.sender._id === userId ? 'row-reverse' : 'row',
+                                                gap: '8px',
+                                                marginBottom: '12px',
+                                                opacity: 0,
+                                                animation: 'fadeIn 0.3s ease-in forwards',
                                             }}
                                         >
                                             <div
                                                 style={{
-                                                    display: 'inline-block',
-                                                    padding: '8px',
-                                                    borderRadius: '6px',
-                                                    backgroundColor:
-                                                        message.sender._id === userId ? '#f97316' : '#e5e7eb',
-                                                    color: message.sender._id === userId ? '#fff' : '#111827',
-                                                    fontSize: '14px',
-                                                    maxWidth: '80%',
+                                                    maxWidth: '70%',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '12px',
+                                                    background: message.sender._id === userId
+                                                        ? 'linear-gradient(135deg, #f97316, #fb923c)'
+                                                        : '#f1f5f9',
+                                                    color: message.sender._id === userId ? '#ffffff' : '#1f2937',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                                    transition: 'transform 0.2s',
                                                 }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                                             >
-                                                <p style={{ fontWeight: 'bold', fontSize: '12px', margin: '0 0 4px 0', color: message.sender._id === userId ? '#fff' : '#111827' }}>
-                                                    {message.sender.name} {message.sender.lastname} ({message.sender.role})
+                                                <p style={{
+                                                    fontWeight: 600,
+                                                    fontSize: '13px',
+                                                    margin: '0 0 6px 0',
+                                                    color: message.sender._id === userId ? '#ffffff' : '#1f2937'
+                                                }}>
+                                                    {message.sender.name} {message.sender.lastname}
+                                                    <span style={{ fontWeight: 400, color: message.sender._id === userId ? '#fed7aa' : '#6b7280' }}>
+                                                        ({message.sender.role})
+                                                    </span>
                                                 </p>
-                                                <p style={{ margin: 0 }}>{message.content}</p>
-                                                <p style={{ fontSize: '10px', color: message.sender._id === userId ? '#fff' : '#6b7280', marginTop: '4px' }}>
+                                                <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+                                                    {message.content}
+                                                </p>
+                                                <p style={{
+                                                    fontSize: '11px',
+                                                    color: message.sender._id === userId ? '#fed7aa' : '#9ca3af',
+                                                    marginTop: '6px',
+                                                    textAlign: 'right'
+                                                }}>
                                                     {new Date(message.timestamp).toLocaleTimeString()}
                                                 </p>
                                             </div>
@@ -918,15 +1332,39 @@ const TaskBoard = () => {
                                 )}
                                 <div ref={messagesEndRef} />
                             </div>
-                            <form
-                                onSubmit={sendMessage}
+                            <div
                                 style={{
-                                    padding: '10px',
-                                    borderTop: '1px solid #e5e7eb',
-                                    backgroundColor: '#fff',
+                                    padding: '12px 16px',
+                                    borderTop: '1px solid #e2e8f0',
+                                    background: '#ffffff',
+                                    boxShadow: '0 -2px 4px rgba(0,0,0,0.05)',
+                                    position: 'relative',
                                 }}
                             >
-                                <div style={{ display: 'flex' }}>
+                                {showEmojiPicker && (
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: '60px',
+                                            right: '16px',
+                                            zIndex: 1000,
+                                        }}
+                                    >
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} />
+                                    </div>
+                                )}
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    background: '#f8fafc',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    overflow: 'hidden',
+                                    transition: 'border-color 0.2s'
+                                }}
+                                     onFocus={(e) => e.currentTarget.style.borderColor = '#f97316'}
+                                     onBlur={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                >
                                     <input
                                         ref={inputRef}
                                         type="text"
@@ -935,40 +1373,66 @@ const TaskBoard = () => {
                                         onClick={handleInputClick}
                                         style={{
                                             flex: 1,
-                                            padding: '8px',
-                                            border: '1px solid #d1d5db',
-                                            borderRadius: '4px 0 0 4px',
+                                            padding: '12px 16px',
+                                            border: 'none',
                                             fontSize: '14px',
                                             outline: 'none',
-                                            pointerEvents: 'auto',
-                                            cursor: 'text',
-                                            backgroundColor: '#fff',
-                                            zIndex: 2500,
+                                            background: 'transparent',
+                                            color: '#1f2937',
+                                            cursor: chatError ? 'not-allowed' : 'text',
                                         }}
-                                        placeholder="Tapez votre message..."
+                                        placeholder="Type your message..."
                                         disabled={!!chatError}
                                     />
                                     <button
-                                        type="submit"
+                                        ref={emojiButtonRef}
+                                        type="button"
+                                        onClick={toggleEmojiPicker}
                                         style={{
                                             padding: '8px 12px',
-                                            backgroundColor: '#f97316',
-                                            color: '#fff',
+                                            background: showEmojiPicker ? '#f1f5f9' : 'none',
                                             border: 'none',
-                                            borderRadius: '0 4px 4px 0',
-                                            cursor: 'pointer',
-                                            fontSize: '14px',
+                                            color: '#64748b',
+                                            cursor: chatError ? 'not-allowed' : 'pointer',
+                                            fontSize: '18px',
                                         }}
+                                        title="Add emoji"
                                         disabled={!!chatError}
                                     >
-                                        Envoyer
+                                        😊
+                                    </button>
+                                    <button
+                                        onClick={sendMessage}
+                                        style={{
+                                            padding: '12px 16px',
+                                            background: '#f97316',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            cursor: chatError ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px',
+                                            fontWeight: 500,
+                                            transition: 'background-color 0.2s',
+                                        }}
+                                        disabled={!!chatError}
+                                        onMouseEnter={(e) => !chatError && (e.currentTarget.style.backgroundColor = '#ea580c')}
+                                        onMouseLeave={(e) => !chatError && (e.currentTarget.style.backgroundColor = '#f97316')}
+                                    >
+                                        Send
                                     </button>
                                 </div>
-                            </form>
+                            </div>
                         </>
                     )}
                 </div>
             )}
+            <style>
+                {`
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: translateY(10px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                `}
+            </style>
         </>
     );
 };

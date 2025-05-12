@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios, { AxiosError } from "axios";
 import { Chart } from "primereact/chart";
 import io from 'socket.io-client';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 interface User {
   _id: string;
@@ -13,7 +14,8 @@ interface User {
 
 interface Group {
   _id: string;
-  nom_groupe: string;
+  name?: string;             // Support both name formats
+  nom_groupe?: string;       // Support both name formats
   progress: number;
   completedTasks: number;
   totalTasks: number;
@@ -26,6 +28,11 @@ interface Group {
 interface DashboardData {
   tutorId: string;
   groups: Group[];
+  tutor?: {
+    name: string;
+    lastname: string;
+    role: string;
+  };
 }
 
 interface BulkUsersResponse {
@@ -56,6 +63,16 @@ interface Message {
   timestamp: string;
 }
 
+interface Project {
+  _id: string;
+  title: string;
+}
+
+interface GroupOption {
+  _id: string;
+  nom_groupe: string;
+}
+
 const socket = io('http://localhost:9777', { autoConnect: false });
 
 const DealsDashboard = () => {
@@ -73,13 +90,23 @@ const DealsDashboard = () => {
   const [taskSuccess, setTaskSuccess] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string>("");
   const [groupId, setGroupId] = useState<string>("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [groups, setGroups] = useState<GroupOption[]>([]);
   const [isChatOpen, setIsChatOpen] = useState<string | null>(null);
   const [isChatExpanded, setIsChatExpanded] = useState<boolean>(true);
   const [messages, setMessages] = useState<{ [key: string]: Message[] }>({});
   const [newMessage, setNewMessage] = useState<string>("");
   const [chatError, setChatError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('You');
+  const [userLastname, setUserLastname] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('tutor');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [groupName, setGroupName] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:9777";
@@ -105,7 +132,7 @@ const DealsDashboard = () => {
     };
   };
 
-  // Fetch dashboard data
+  // Fetch dashboard data and tutor info
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -125,12 +152,18 @@ const DealsDashboard = () => {
         }
 
         const data = response.data as DashboardData;
+
         setDashboardData(data);
         setUserId(data.tutorId);
+        // Set tutor info for chat
+        setUserName(data.tutor?.name || 'You');
+        setUserLastname(data.tutor?.lastname || '');
+        setUserRole(data.tutor?.role || 'tutor');
+
         if (data.groups && data.groups.length > 0) {
           setChartData({
             labels: data.groups.map((group: Group) =>
-              `${group.nom_groupe}${group.projectName ? ` (${group.projectName})` : ''}`
+                `${getGroupName(group)}${group.projectName ? ` (${group.projectName})` : ''}`
             ),
             datasets: [{
               label: 'Progress %',
@@ -154,12 +187,50 @@ const DealsDashboard = () => {
     fetchDashboardData();
   }, [API_URL]);
 
+  // Helper function to get group name regardless of property naming
+  const getGroupName = (group?: Group | null): string => {
+    if (!group) return 'Unknown Group';
+    return group.name || group.nom_groupe || 'Unknown Group';
+  };
+
+  // Fetch projects and groups
+  useEffect(() => {
+    const fetchProjectsAndGroups = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("No authentication token found. Please log in.");
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const [projectsResponse, groupsResponse] = await Promise.all([
+          axios.get(`${API_URL}/api/tasks/projects`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_URL}/api/tasks/groups`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        setProjects(projectsResponse.data.projects || []);
+        setGroups(groupsResponse.data.groups || []);
+      } catch (err: any) {
+        console.error("Error fetching projects or groups:", err);
+        setError("Failed to load projects or groups");
+      }
+    };
+
+    fetchProjectsAndGroups();
+  }, [API_URL, navigate]);
+
   // Fetch student data
   useEffect(() => {
     let isMounted = true;
 
     if (dashboardData?.groups) {
       const studentIds = dashboardData.groups.flatMap(group => group.id_students || []);
+
       const uniqueStudentIds = Array.from(new Set(studentIds.filter(id => id)));
 
       const fetchStudents = async () => {
@@ -173,13 +244,13 @@ const DealsDashboard = () => {
           }
 
           const response = await axios.post<BulkUsersResponse>(
-            `${API_URL}/tutor/bulk`,
-            { ids: uniqueStudentIds },
-            {
-              headers: {
-                Authorization: `${localStorage.getItem('token')}`
+              `${API_URL}/tutor/bulk`,
+              { ids: uniqueStudentIds },
+              {
+                headers: {
+                  Authorization: `${localStorage.getItem('token')}`
+                }
               }
-            }
           );
 
           if (isMounted) {
@@ -217,10 +288,17 @@ const DealsDashboard = () => {
     }
 
     socket.on('receiveMessage', (message: Message) => {
-      setMessages(prev => ({
-        ...prev,
-        [message.group]: [...(prev[message.group] || []), message]
-      }));
+      console.log('Received message:', message);
+      setMessages(prev => {
+        const updatedMessages = { ...prev };
+        const groupMessages = updatedMessages[message.group] || [];
+        // Remove temporary message and add server-confirmed message
+        const filteredMessages = groupMessages.filter((msg) => !msg._id.startsWith('temp-'));
+        if (!filteredMessages.some((msg) => msg._id === message._id)) {
+          updatedMessages[message.group] = [...filteredMessages, message];
+        }
+        return updatedMessages;
+      });
     });
 
     socket.on('error', (error: { message: string }) => {
@@ -230,6 +308,7 @@ const DealsDashboard = () => {
 
     socket.on('connect', () => {
       console.log('Socket.IO connected');
+      setChatError(null);
     });
 
     socket.on('disconnect', () => {
@@ -253,11 +332,18 @@ const DealsDashboard = () => {
     }
   }, [isChatOpen, chatError, newMessage, groupId, userId]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isChatOpen]);
+
   const toggleChat = (groupId: string) => {
     if (isChatOpen === groupId) {
       setIsChatOpen(null);
+      setGroupName(null);
     } else {
+      const selectedGroup = dashboardData?.groups.find(g => g._id === groupId);
       setIsChatOpen(groupId);
+      setGroupName(getGroupName(selectedGroup));
       setIsChatExpanded(true);
       fetchMessages(groupId);
       socket.emit('joinGroup', { groupId, userId });
@@ -266,6 +352,17 @@ const DealsDashboard = () => {
 
   const toggleChatExpand = () => {
     setIsChatExpanded(prev => !prev);
+    setShowEmojiPicker(false);
+  };
+
+  const toggleEmojiPicker = () => {
+    setShowEmojiPicker((prev) => !prev);
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setNewMessage((prev) => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+    inputRef.current?.focus();
   };
 
   const fetchMessages = async (groupId: string) => {
@@ -279,8 +376,8 @@ const DealsDashboard = () => {
       setChatError(null);
     } catch (error: any) {
       setChatError(error.response?.status === 401
-        ? 'Session expirée. Veuillez vous reconnecter.'
-        : `Impossible de charger les messages: ${error.message}`);
+          ? 'Session expirée. Veuillez vous reconnecter.'
+          : `Impossible de charger les messages: ${error.message}`);
     }
   };
 
@@ -288,12 +385,36 @@ const DealsDashboard = () => {
     e.preventDefault();
     if (newMessage.trim() && isChatOpen && userId) {
       console.log('Sending message:', { groupId: isChatOpen, userId, content: newMessage });
+
+      // Optimistic update with real sender data
+      const tempMessageId = `temp-${Date.now()}`;
+      const tempMessage: Message = {
+        _id: tempMessageId,
+        group: isChatOpen,
+        sender: {
+          _id: userId,
+          name: userName,
+          lastname: userLastname,
+          role: userRole,
+        },
+        content: newMessage,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages(prev => ({
+        ...prev,
+        [isChatOpen]: [...(prev[isChatOpen] || []), tempMessage]
+      }));
+
+      // Emit to server
       socket.emit('sendMessage', {
         groupId: isChatOpen,
         userId,
         content: newMessage,
       });
+
       setNewMessage('');
+      setShowEmojiPicker(false);
     } else {
       console.log('Cannot send message:', { newMessage, groupId: isChatOpen, userId });
       setChatError('Erreur: Impossible d\'envoyer le message. Vérifiez votre connexion ou reconnectez-vous.');
@@ -312,9 +433,14 @@ const DealsDashboard = () => {
     }
   };
 
+  const handleReconnect = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+
   const previewTasks = async () => {
     if (!projectId || !groupId) {
-      setTaskError("Veuillez entrer un ID de projet et un ID de groupe.");
+      setTaskError("Veuillez sélectionner un projet et un groupe.");
       return;
     }
 
@@ -326,12 +452,12 @@ const DealsDashboard = () => {
       const response = await axios.post<{ success: boolean; message: string; tasks: Task[] }>(
           `${API_URL}/api/tasks/preview`,
           {
-            projectId: projectId,
-            groupId: groupId,
+            projectId,
+            groupId,
           },
           {
             headers: {
-              Authorization: `${localStorage.getItem('token')}`
+              Authorization: `Bearer ${localStorage.getItem('token')}`
             }
           }
       );
@@ -375,7 +501,7 @@ const DealsDashboard = () => {
           },
           {
             headers: {
-              Authorization: `${localStorage.getItem('token')}`
+              Authorization: `Bearer ${localStorage.getItem('token')}`
             }
           }
       );
@@ -426,7 +552,7 @@ const DealsDashboard = () => {
           label: function(context: any) {
             const group = dashboardData?.groups[context.dataIndex];
             return [
-              `Group: ${group?.nom_groupe}`,
+              `Group: ${getGroupName(group)}`,
               `Progress: ${context.raw}%`,
               `Tasks: ${group?.completedTasks}/${group?.totalTasks}`,
               `Project: ${group?.projectName || 'None'}`
@@ -477,9 +603,9 @@ const DealsDashboard = () => {
         <div className="container-fluid py-3 px-4">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h1>Tutor Dashboard</h1>
-            <button 
-              className="btn btn-outline-primary d-lg-none"
-              onClick={() => window.dispatchEvent(new CustomEvent('toggleSidebar'))}
+            <button
+                className="btn btn-outline-primary d-lg-none"
+                onClick={() => window.dispatchEvent(new CustomEvent('toggleSidebar'))}
             >
               <i className={`ti ti-${sidebarOpen ? 'layout-sidebar-right' : 'layout-sidebar'}`} />
             </button>
@@ -491,26 +617,44 @@ const DealsDashboard = () => {
             </div>
             <div className="card-body">
               <div className="mb-3">
-                <label htmlFor="projectIdInput" className="form-label">ID du Projet</label>
-                <input
-                    type="text"
-                    id="projectIdInput"
-                    className="form-control"
+                <label htmlFor="projectSelect" className="form-label">Projet</label>
+                <select
+                    id="projectSelect"
+                    className="form-select"
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
-                    placeholder="Entrez l'ID du projet"
-                />
+                    disabled={taskLoading}
+                >
+                  <option value="">Sélectionnez un projet</option>
+                  {projects.length === 0 && !taskLoading && (
+                      <option disabled>Aucun projet disponible</option>
+                  )}
+                  {projects.map((project) => (
+                      <option key={project._id} value={project._id}>
+                        {project.title}
+                      </option>
+                  ))}
+                </select>
               </div>
               <div className="mb-3">
-                <label htmlFor="groupIdInput" className="form-label">ID du Groupe</label>
-                <input
-                    type="text"
-                    id="groupIdInput"
-                    className="form-control"
+                <label htmlFor="groupSelect" className="form-label">Groupe</label>
+                <select
+                    id="groupSelect"
+                    className="form-select"
                     value={groupId}
                     onChange={(e) => setGroupId(e.target.value)}
-                    placeholder="Entrez l'ID du groupe"
-                />
+                    disabled={taskLoading}
+                >
+                  <option value="">Sélectionnez un groupe</option>
+                  {groups.length === 0 && !taskLoading && (
+                      <option disabled>Aucun groupe disponible</option>
+                  )}
+                  {groups.map((group) => (
+                      <option key={group._id} value={group._id}>
+                        {group.nom_groupe}
+                      </option>
+                  ))}
+                </select>
               </div>
               <button
                   type="button"
@@ -626,25 +770,25 @@ const DealsDashboard = () => {
                           <div key={group._id} className="col-12 col-sm-6 col-lg-4 col-xl-3">
                             <div className="card h-100 border-0 shadow-sm">
                               <div className="card-header bg-light d-flex justify-content-between align-items-center">
-                                <h3 className="h5 mb-0 text-truncate" title={group.nom_groupe}>
-                                  {group.nom_groupe}
+                                <h3 className="h5 mb-0 text-truncate" title={getGroupName(group)}>
+                                  {getGroupName(group)}
                                 </h3>
                                 <div>
                                   <span className="badge bg-primary me-2">
                                     {group.id_students?.length || 0}
                                   </span>
                                   <button
-                                    onClick={() => toggleChat(group._id)}
-                                    className="btn btn-primary d-flex align-items-center justify-content-center"
-                                    style={{
-                                      width: '30px',
-                                      height: '30px',
-                                      borderRadius: '50%',
-                                      padding: '0',
-                                      backgroundColor: '#f97316',
-                                      color: '#fff'
-                                    }}
-                                    title={`Ouvrir la discussion pour ${group.nom_groupe}`}
+                                      onClick={() => toggleChat(group._id)}
+                                      className="btn btn-primary d-flex align-items-center justify-content-center"
+                                      style={{
+                                        width: '30px',
+                                        height: '30px',
+                                        borderRadius: '50%',
+                                        padding: '0',
+                                        backgroundColor: '#f97316',
+                                        color: '#fff'
+                                      }}
+                                      title={`Ouvrir la discussion pour ${getGroupName(group)}`}
                                   >
                                     <i className="ti ti-message-circle" style={{ fontSize: '16px' }}></i>
                                   </button>
@@ -693,48 +837,48 @@ const DealsDashboard = () => {
 
                                 <div className="mt-auto">
                                   <button
-                                    className="btn btn-sm btn-outline-primary w-100 mb-2"
-                                    data-bs-toggle="collapse"
-                                    data-bs-target={`#students-${group._id}`}
-                                    aria-expanded="false"
-                                    aria-controls={`students-${group._id}`}
+                                      className="btn btn-sm btn-outline-primary w-100 mb-2"
+                                      data-bs-toggle="collapse"
+                                      data-bs-target={`#students-${group._id}`}
+                                      aria-expanded="false"
+                                      aria-controls={`students-${group._id}`}
                                   >
                                     View Students
                                   </button>
                                   <div className="collapse" id={`students-${group._id}`}>
                                     {studentsLoading ? (
-                                      <div className="text-center py-2">
-                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                          <span className="visually-hidden">Loading...</span>
+                                        <div className="text-center py-2">
+                                          <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span className="visually-hidden">Loading...</span>
+                                          </div>
                                         </div>
-                                      </div>
                                     ) : studentsError ? (
-                                      <div className="alert alert-danger py-2 mb-0 small">
-                                        {studentsError}
-                                      </div>
+                                        <div className="alert alert-danger py-2 mb-0 small">
+                                          {studentsError}
+                                        </div>
                                     ) : (
-                                      <ul className="list-group list-group-flush small">
-                                        {group.id_students?.map(studentId => {
-                                          const student = studentsData[studentId];
-                                          return student ? (
-                                            <li
-                                              key={studentId}
-                                              className="list-group-item list-group-item-action px-2 py-1 d-flex justify-content-between align-items-center"
-                                              onClick={() => navigate(`/employee-dashboard/${studentId}`)}
-                                              style={{ cursor: 'pointer' }}
-                                            >
+                                        <ul className="list-group list-group-flush small">
+                                          {group.id_students?.map(studentId => {
+                                            const student = studentsData[studentId];
+                                            return student ? (
+                                                <li
+                                                    key={studentId}
+                                                    className="list-group-item list-group-item-action px-2 py-1 d-flex justify-content-between align-items-center"
+                                                    onClick={() => navigate(`/employee-dashboard/${studentId}`)}
+                                                    style={{ cursor: 'pointer' }}
+                                                >
                                               <span>
                                                 {student.name} {student.lastname}
                                               </span>
-                                              <i className="bi bi-chevron-right small text-muted"></i>
-                                            </li>
-                                          ) : (
-                                            <li key={studentId} className="list-group-item text-muted px-2 py-1">
-                                              Unknown student
-                                            </li>
-                                          );
-                                        })}
-                                      </ul>
+                                                  <i className="bi bi-chevron-right small text-muted"></i>
+                                                </li>
+                                            ) : (
+                                                <li key={studentId} className="list-group-item text-muted px-2 py-1">
+                                                  Unknown student
+                                                </li>
+                                            );
+                                          })}
+                                        </ul>
                                     )}
                                   </div>
                                 </div>
@@ -753,201 +897,296 @@ const DealsDashboard = () => {
           </div>
 
           {isChatOpen && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                right: 0,
-                height: '100vh',
-                width: isChatExpanded ? '300px' : '50px',
-                backgroundColor: '#fff',
-                boxShadow: '-2px 0 5px rgba(0,0,0,0.2)',
-                zIndex: 2000,
-                transition: 'width 0.3s ease-in-out',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
               <div
-                style={{
-                  padding: '10px',
-                  backgroundColor: '#f97316',
-                  color: '#fff',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                {isChatExpanded && (
-                  <h3 style={{ fontSize: '16px', margin: 0, color: '#fff' }}>
-                    Discussion avec {dashboardData.groups.find(g => g._id === isChatOpen)?.nom_groupe}
-                  </h3>
-                )}
-                <button
-                  onClick={toggleChatExpand}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#fff',
-                    cursor: 'pointer',
+                    position: 'fixed',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: isChatExpanded ? '350px' : '60px',
+                    background: 'linear-gradient(145deg, #ffffff, #f8fafc)',
+                    boxShadow: '-4px 0 12px rgba(0,0,0,0.1)',
+                    zIndex: 2000,
+                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    borderLeft: '1px solid #e2e8f0',
                   }}
-                  title={isChatExpanded ? 'Réduire' : 'Agrandir'}
+              >
+                <div
+                    style={{
+                      padding: '12px 16px',
+                      background: '#f97316',
+                      color: '#ffffff',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    }}
                 >
-                  <i className={`ti ${isChatExpanded ? 'ti-chevron-right' : 'ti-chevron-left'}`} style={{ fontSize: '20px' }}></i>
-                </button>
-              </div>
-              {isChatExpanded && (
-                <>
-                  <div
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      overflowY: 'auto',
-                      backgroundColor: '#fff',
-                    }}
+                  {isChatExpanded && (
+                      <h3 style={{
+                        fontSize: '18px',
+                        margin: 0,
+                        fontWeight: 600,
+                        letterSpacing: '0.2px'
+                      }}>
+                        {groupName}
+                      </h3>
+                  )}
+                  <button
+                      onClick={toggleChatExpand}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        transition: 'background-color 0.2s',
+                      }}
+                      title={isChatExpanded ? 'Minimize' : 'Expand'}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    {chatError ? (
-                      <div style={{ color: '#dc2626', textAlign: 'center', fontSize: '14px' }}>
-                        {chatError}
-                        <div>
-                          <button
-                            onClick={() => {
-                              setChatError(null);
-                              if (groupId) {
-                                const token = localStorage.getItem('token');
-                                if (token) {
-                                  axios.get(`${API_URL}/messages/group/${groupId}`, {
-                                    headers: { Authorization: `Bearer ${token}` },
-                                  }).then(response => {
-                                    setMessages(prev => ({ ...prev, [groupId]: response.data.messages }));
-                                    setChatError(null);
-                                  }).catch(err => {
-                                    setChatError(`Erreur: ${err.message}`);
-                                  });
-                                }
-                              }
-                            }}
-                            style={{
-                              marginTop: '10px',
-                              padding: '5px 10px',
-                              backgroundColor: '#f97316',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Réessayer
-                          </button>
-                          {chatError.includes('Session expirée') && (
-                            <button
-                              onClick={() => {
-                                localStorage.removeItem('token');
-                                window.location.href = '/login';
-                              }}
-                              style={{
-                                marginTop: '10px',
-                                marginLeft: '10px',
-                                padding: '5px 10px',
-                                backgroundColor: '#dc2626',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Reconnexion
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ) : messages[isChatOpen]?.length === 0 ? (
-                      <div style={{ color: '#6b7280', textAlign: 'center', fontSize: '14px' }}>
-                        Aucun message pour le moment.
-                      </div>
-                    ) : (
-                      messages[isChatOpen]?.map((message) => (
-                        <div
-                          key={message._id}
+                    <i className={`ti ${isChatExpanded ? 'ti-chevron-right' : 'ti-chevron-left'}`} style={{ fontSize: '24px' }}></i>
+                  </button>
+                </div>
+                {isChatExpanded && (
+                    <>
+                      <div
                           style={{
-                            marginBottom: '10px',
-                            textAlign: message.sender._id === userId ? 'right' : 'left',
+                            flex: 1,
+                            padding: '16px',
+                            overflowY: 'auto',
+                            background: '#ffffff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px',
                           }}
-                        >
-                          <div
-                            style={{
-                              display: 'inline-block',
-                              padding: '8px',
-                              borderRadius: '6px',
-                              backgroundColor: message.sender._id === userId ? '#f97316' : '#e5e7eb',
-                              color: message.sender._id === userId ? '#fff' : '#111827',
-                              fontSize: '14px',
-                              maxWidth: '80%',
-                            }}
-                          >
-                            <p style={{ fontWeight: 'bold', fontSize: '12px', margin: '0 0 4px 0', color: message.sender._id === userId ? '#fff' : '#111827' }}>
-                              {message.sender.name} {message.sender.lastname} ({message.sender.role})
-                            </p>
-                            <p style={{ margin: 0 }}>{message.content}</p>
-                            <p style={{ fontSize: '10px', color: message.sender._id === userId ? '#fff' : '#6b7280', marginTop: '4px' }}>
-                              {new Date(message.timestamp).toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <form
-                    onSubmit={sendMessage}
-                    style={{
-                      padding: '10px',
-                      borderTop: '1px solid #e5e7eb',
-                      backgroundColor: '#fff',
-                    }}
-                  >
-                    <div style={{ display: 'flex' }}>
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={newMessage}
-                        onChange={handleInputChange}
-                        onClick={handleInputClick}
-                        style={{
-                          flex: 1,
-                          padding: '8px',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px 0 0 4px',
-                          fontSize: '14px',
-                          outline: 'none',
-                          pointerEvents: 'auto',
-                          cursor: 'text',
-                          backgroundColor: '#fff',
-                          zIndex: 2500,
-                        }}
-                        placeholder="Tapez votre message..."
-                        disabled={!!chatError}
-                      />
-                      <button
-                        type="submit"
-                        style={{
-                          padding: '8px 12px',
-                          backgroundColor: '#f97316',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '0 4px 4px 0',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
-                        disabled={!!chatError}
                       >
-                        Envoyer
-                      </button>
-                    </div>
-                  </form>
-                </>
-              )}
-            </div>
+                        {chatError ? (
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '16px',
+                              background: '#fef2f2',
+                              borderRadius: '8px',
+                              color: '#dc2626',
+                              fontSize: '14px',
+                              border: '1px solid #fee2e2'
+                            }}>
+                              {chatError}
+                              <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <button
+                                    onClick={() => {
+                                      setChatError(null);
+                                      if (isChatOpen) {
+                                        fetchMessages(isChatOpen);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: '#f97316',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '14px',
+                                      transition: 'background-color 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ea580c'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f97316'}
+                                >
+                                  Retry
+                                </button>
+                                {chatError.includes('Session expirée') && (
+                                    <button
+                                        onClick={handleReconnect}
+                                        style={{
+                                          padding: '8px 16px',
+                                          background: '#dc2626',
+                                          color: '#ffffff',
+                                          border: 'none',
+                                          borderRadius: '6px',
+                                          cursor: 'pointer',
+                                          fontSize: '14px',
+                                          transition: 'background-color 0.2s',
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                                    >
+                                      Reconnect
+                                    </button>
+                                )}
+                              </div>
+                            </div>
+                        ) : !messages[isChatOpen] || messages[isChatOpen]?.length === 0 ? (
+                            <div style={{
+                              color: '#6b7280',
+                              textAlign: 'center',
+                              fontSize: '14px',
+                              padding: '24px',
+                              fontStyle: 'italic'
+                            }}>
+                              No messages yet. Start the conversation!
+                            </div>
+                        ) : (
+                            messages[isChatOpen]?.map((message) => (
+                                <div
+                                    key={message._id}
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: message.sender._id === userId ? 'row-reverse' : 'row',
+                                      gap: '8px',
+                                      marginBottom: '12px',
+                                      opacity: 0,
+                                      animation: 'fadeIn 0.3s ease-in forwards',
+                                    }}
+                                >
+                                  <div
+                                      style={{
+                                        maxWidth: '70%',
+                                        padding: '12px 16px',
+                                        borderRadius: '12px',
+                                        background: message.sender._id === userId
+                                            ? 'linear-gradient(135deg, #f97316, #fb923c)'
+                                            : '#f1f5f9',
+                                        color: message.sender._id === userId ? '#ffffff' : '#1f2937',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                        transition: 'transform 0.2s',
+                                      }}
+                                      onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                  >
+                                    <p style={{
+                                      fontWeight: 600,
+                                      fontSize: '13px',
+                                      margin: '0 0 6px 0',
+                                      color: message.sender._id === userId ? '#ffffff' : '#1f2937'
+                                    }}>
+                                      {message.sender.name} {message.sender.lastname}
+                                      <span style={{ fontWeight: 400, color: message.sender._id === userId ? '#fed7aa' : '#6b7280' }}>
+                                        ({message.sender.role})
+                                      </span>
+                                    </p>
+                                    <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+                                      {message.content}
+                                    </p>
+                                    <p style={{
+                                      fontSize: '11px',
+                                      color: message.sender._id === userId ? '#fed7aa' : '#9ca3af',
+                                      marginTop: '6px',
+                                      textAlign: 'right'
+                                    }}>
+                                      {new Date(message.timestamp).toLocaleTimeString()}
+                                    </p>
+                                  </div>
+                                </div>
+                            ))
+                        )}
+                        <div ref={messagesEndRef} />
+                      </div>
+                      <div
+                          style={{
+                            padding: '12px 16px',
+                            borderTop: '1px solid #e2e8f0',
+                            background: '#ffffff',
+                            boxShadow: '0 -2px 4px rgba(0,0,0,0.05)',
+                            position: 'relative',
+                          }}
+                      >
+                        {showEmojiPicker && (
+                            <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: '60px',
+                                  right: '16px',
+                                  zIndex: 1000,
+                                }}
+                            >
+                              <EmojiPicker onEmojiClick={handleEmojiClick} />
+                            </div>
+                        )}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          background: '#f8fafc',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0',
+                          overflow: 'hidden',
+                          transition: 'border-color 0.2s'
+                        }}
+                             onFocus={(e) => e.currentTarget.style.borderColor = '#f97316'}
+                             onBlur={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
+                        >
+                          <input
+                              ref={inputRef}
+                              type="text"
+                              value={newMessage}
+                              onChange={handleInputChange}
+                              onClick={handleInputClick}
+                              style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                border: 'none',
+                                fontSize: '14px',
+                                outline: 'none',
+                                background: 'transparent',
+                                color: '#1f2937',
+                                cursor: chatError ? 'not-allowed' : 'text',
+                              }}
+                              placeholder="Type your message..."
+                              disabled={!!chatError}
+                          />
+                          <button
+                              ref={emojiButtonRef}
+                              type="button"
+                              onClick={toggleEmojiPicker}
+                              style={{
+                                padding: '8px 12px',
+                                background: showEmojiPicker ? '#f1f5f9' : 'none',
+                                border: 'none',
+                                color: '#64748b',
+                                cursor: chatError ? 'not-allowed' : 'pointer',
+                                fontSize: '18px',
+                              }}
+                              title="Add emoji"
+                              disabled={!!chatError}
+                          >
+                            😊
+                          </button>
+                          <button
+                              onClick={sendMessage}
+                              style={{
+                                padding: '12px 16px',
+                                background: '#f97316',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: chatError ? 'not-allowed' : 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                transition: 'background-color 0.2s',
+                              }}
+                              disabled={!!chatError}
+                              onMouseEnter={(e) => !chatError && (e.currentTarget.style.backgroundColor = '#ea580c')}
+                              onMouseLeave={(e) => !chatError && (e.currentTarget.style.backgroundColor = '#f97316')}
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                )}
+              </div>
           )}
+          <style>
+            {`
+              @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}
+          </style>
         </div>
       </div>
   );

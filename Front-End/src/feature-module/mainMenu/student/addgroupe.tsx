@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Form, Button, ListGroup, Alert, Card, Container, Row, Col } from "react-bootstrap";
 import axios from "axios";
 import Swal from "sweetalert2";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { all_routes } from "../../router/all_routes";
 
 interface AddGroupFormProps {
   onSubmit: (data: { nom_groupe: string; emails: string[]; selectedProjects: string[]; motivations: { [key: string]: string } }) => void;
@@ -43,7 +44,7 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
       return response.data.available;
     } catch (error) {
-      console.error("Erreur lors de la vérification de l'email :", error);
+      console.error("Error checking email:", error);
       return false;
     }
   };
@@ -63,16 +64,16 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
       return response.data.id;
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'ID de l'étudiant :", error);
+      console.error("Error retrieving student ID:", error);
       return null;
     }
   };
   const fetchStudentSkills = async (email: string) => {
     try {
       const response = await axios.get(`http://localhost:9777/user/check-email?email=${email}`);
-      return response.data.skills || []; // Retourne un tableau vide si `skills` n'est pas défini
+      return response.data.skills || []; // Returns an empty array if `skills` is not defined
     } catch (error) {
-      console.error("Erreur lors de la récupération des compétences de l'étudiant :", error);
+      console.error("Error retrieving student skills:", error);
       return [];
     }
   };
@@ -80,15 +81,15 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
 
   const addStudent = async () => {
     if (!isValidEmail(email)) {
-      setError("Veuillez entrer un email valide.");
+      setError("Please enter a valid email.");
       return;
     }
     if (emails.some((student) => student.email === email)) {
-      setError("Cet étudiant est déjà ajouté.");
+      setError("This student is already added.");
       return;
     }
     if (emails.length >= 6) {
-      setError("Un groupe ne peut pas contenir plus de 6 étudiants.");
+      setError("A group cannot contain more than 6 students.");
       return;
     }
 
@@ -97,19 +98,40 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       if (isAvailable) {
         const studentSkills = await fetchStudentSkills(email);
         const studentId = await fetchStudentId(email);
+
         if (studentId) {
-          setEmails([...emails, { email, id: studentId }]);
-          setEmail("");
-          setError("");
-          setShowAlert(false);
+          // Check if the student is already in a group
+          try {
+            const groupResponse = await axios.get(`http://localhost:9777/choix/check-student?studentId=${studentId}`);
+
+            if (groupResponse.data.isInGroup) {
+              setError("This student is already a member of another group and cannot be added.");
+              Swal.fire({
+                title: "Error",
+                text: "This student is already a member of another group and cannot be added.",
+                icon: "error",
+                confirmButtonText: "Ok",
+              });
+              return;
+            }
+
+            // If not in a group, add the student
+            setEmails([...emails, { email, id: studentId }]);
+            setEmail("");
+            setError("");
+            setShowAlert(false);
+          } catch (error) {
+            console.error("Error checking student's group:", error);
+            setError("Error checking student's group.");
+          }
         } else {
-          setError("ID de l'étudiant introuvable.");
+          setError("Student ID not found.");
         }
       } else {
         setShowAlert(true);
       }
     } catch (error) {
-      console.error("Erreur lors de l'ajout de l'étudiant :", error);
+      console.error("Error adding student:", error);
       setShowAlert(true);
     }
   };
@@ -130,35 +152,35 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
 
   const suggestProjects = async () => {
     try {
-      // Récupérer les compétences de tous les étudiants
+      // Get skills from all students
       const skillsPromises = emails.map(async (student) => await fetchStudentSkills(student.email));
       const skillsArrays = await Promise.all(skillsPromises);
-      const flattenedSkills = skillsArrays.flat().filter(skill => skill && skill.trim()); // Supprime les valeurs `undefined` et les chaînes vides
-  
-      // Normaliser les compétences (en minuscules)
+      const flattenedSkills = skillsArrays.flat().filter(skill => skill && skill.trim()); // Remove undefined values and empty strings
+
+      // Normalize skills (lowercase)
       const normalizedSkills = flattenedSkills.map(skill => skill.toString().toLowerCase());
-  
+
       console.log("Skills being sent to backend:", normalizedSkills); // Debugging log
-  
-      // Appeler l'API de recommandation avec les compétences
+
+      // Call recommendation API with skills
       const response = await axios.post("http://localhost:9777/project/recommend-projects", {
         skills: normalizedSkills,
       });
-  
+
       console.log("Response from backend:", response.data); // Debugging log
-  
-      // Mettre à jour la liste des projets suggérés
+
+      // Update the list of suggested projects
       setSuggestedProjects(response.data);
     } catch (error) {
-      console.error("Erreur lors de la suggestion des projets :", error);
-      setError("Erreur lors de la suggestion des projets.");
+      console.error("Error suggesting projects:", error);
+      setError("Error suggesting projects.");
     }
   };
 
   const handleSubmit = async () => {
     for (const projectId of selectedProjects) {
       if (!projectId) {
-        setError("Tous les projets doivent être sélectionnés.");
+        setError("All projects must be selected.");
         return;
       }
     }
@@ -192,9 +214,23 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
       setSelectedProjects(["", "", ""]);
       setMotivations({});
       setError("");
-    } catch (error) {
-      console.error("Erreur lors de l'ajout du groupe :", error);
-      setError("Erreur lors de l'ajout du groupe.");
+    } catch (error: any) {
+      console.error("Error adding group:", error);
+
+      // Check if the error is due to a student already being in a group
+      if (error.response && error.response.status === 400 && error.response.data.message) {
+        setError(error.response.data.message);
+
+        // Show a more user-friendly alert
+        Swal.fire({
+          title: "Error",
+          text: error.response.data.message,
+          icon: "error",
+          confirmButtonText: "Ok",
+        });
+      } else {
+        setError("Error adding group.");
+      }
     }
   };
 
@@ -202,149 +238,174 @@ const AddGroupForm: React.FC<AddGroupFormProps> = ({ onSubmit, availableProjects
     const fetchProjects = async () => {
       try {
         const token = localStorage.getItem('token');
-        
+
         if (!token) {
           throw new Error('No authentication token found');
         }
-    
-        const response = await axios.get("http://localhost:9777/project/my-speciality", {
+
+        const response = await axios.get("http://localhost:9777/project//getProjectsByUserSpeciality", {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         setAvailableProjectsState(response.data.projects);
       } catch (error) {
-        console.error("Erreur API projets :", error);
-        setError("Erreur lors de la récupération des projets.");
-        // Redirection vers le login si le token est invalide
-       
+        console.error("API projects error:", error);
+        setError("Error retrieving projects.");
+        // Redirect to login if token is invalid
+
       }
     };
     fetchProjects();
   }, []);
 
   return (
-    <Container className="mt-4">
-      <Card>
-        <Card.Header as="h3" className="d-flex justify-content-between align-items-center">
-          Créer un groupe
-          <Button variant="secondary" onClick={() => navigate("/projects-grid")}>
-            Back
-          </Button>
-        </Card.Header>
-        <Card.Body>
-          {error && <Alert variant="danger">{error}</Alert>}
-          {showAlert && <Alert variant="warning">Email non trouvé</Alert>}
+    <div className="page-wrapper">
+      <div className="content">
+        {/* Breadcrumb */}
+        <div className="d-md-flex d-block align-items-center justify-content-between page-breadcrumb mb-3">
+          <div className="my-auto mb-2">
+            <h2 className="mb-1">Add Group</h2>
+            <nav>
+              <ol className="breadcrumb mb-0">
+                <li className="breadcrumb-item">
+                  <Link to={all_routes.adminDashboard}>
+                    <i className="ti ti-smart-home" />
+                  </Link>
+                </li>
+                <li className="breadcrumb-item">Groups</li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Add Group
+                </li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+        {/* /Breadcrumb */}
 
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Nom du groupe</Form.Label>
-              <Form.Control
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="Nom du groupe"
-              />
-            </Form.Group>
+        <Container>
+          <Card>
+            <Card.Header as="h3" className="d-flex justify-content-between align-items-center">
+              Create a Group
+              <Button variant="secondary" onClick={() => navigate("/projects-grid")}>
+                Back
+              </Button>
+            </Card.Header>
+            <Card.Body>
+              {error && <Alert variant="danger">{error}</Alert>}
+              {showAlert && <Alert variant="warning">Email not found</Alert>}
 
-            <Form.Group className="mb-3">
-              <Form.Label>Ajouter un étudiant (Email)</Form.Label>
-              <Row>
-                <Col>
+              <Form>
+                <Form.Group className="mb-3">
+                  <Form.Label>Group Name</Form.Label>
                   <Form.Control
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="exemple@domaine.com"
+                    type="text"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="Group Name"
                   />
-                </Col>
-                <Col xs="auto">
-                  <Button variant="primary" onClick={addStudent} disabled={!email}>
-                    Ajouter
-                  </Button>
-                </Col>
-              </Row>
-            </Form.Group>
+                </Form.Group>
 
-            <h5 className="mt-4">Étudiants ajoutés :</h5>
-            <ListGroup>
-              {emails.map((student, index) => (
-                <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
-                  {student.email}
-                  <Button variant="danger" size="sm" onClick={() => removeStudent(student.email)}>
-                    Supprimer
-                  </Button>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
+                <Form.Group className="mb-3">
+                  <Form.Label>Add a Student (Email)</Form.Label>
+                  <Row>
+                    <Col>
+                      <Form.Control
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="example@domain.com"
+                      />
+                    </Col>
+                    <Col xs="auto">
+                      <Button variant="primary" onClick={addStudent} disabled={!email}>
+                        Add
+                      </Button>
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-            <Button variant="primary" onClick={suggestProjects} className="mt-4" disabled={emails.length < 4}>
-              Suggérer Projets
-            </Button>
-
-            {suggestedProjects.length > 0 && (
-              <div className="mt-4">
-                <h5>Projets Suggérés :</h5>
+                <h5 className="mt-4">Added Students:</h5>
                 <ListGroup>
-                  {suggestedProjects.map((project) => (
-                    <ListGroup.Item key={project._id}>
-                      {project.title} - Score: {project.score}
+                  {emails.map((student, index) => (
+                    <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
+                      {student.email}
+                      <Button variant="danger" size="sm" onClick={() => removeStudent(student.email)}>
+                        Remove
+                      </Button>
                     </ListGroup.Item>
                   ))}
                 </ListGroup>
-              </div>
-            )}
 
-            <Form.Group className="mt-4">
-              <Form.Label>Choisir 3 projets</Form.Label>
-              {[0, 1, 2].map((index) => (
-                <div key={index} className="mb-3">
-                  <Form.Label>Projet {index + 1}</Form.Label>
-                  <Form.Control
-                    as="select"
-                    value={selectedProjects[index]}
-                    onChange={(e) => handleProjectChange(index, e.target.value)}
-                  >
-                    <option value="">Sélectionner un projet</option>
-                    {availableProjectsState && availableProjectsState.length > 0 ? (
-                      availableProjectsState.map((project) => (
-                        <option key={project._id} value={project._id}>
-                          {project.title}
-                        </option>
-                      ))
-                    ) : (
-                      <option disabled>Aucun projet disponible</option>
-                    )}
-                  </Form.Control>
+                <Button variant="primary" onClick={suggestProjects} className="mt-4" disabled={emails.length < 4}>
+                  Suggest Projects
+                </Button>
 
-                  {selectedProjects[index] && (
-                    <Form.Group controlId={`motivation${index}`}>
-                      <Form.Label>Motivation</Form.Label>
+                {suggestedProjects.length > 0 && (
+                  <div className="mt-4">
+                    <h5>Suggested Projects:</h5>
+                    <ListGroup>
+                      {suggestedProjects.map((project) => (
+                        <ListGroup.Item key={project._id}>
+                          {project.title} - Score: {project.score}
+                        </ListGroup.Item>
+                      ))}
+                    </ListGroup>
+                  </div>
+                )}
+
+                <Form.Group className="mt-4">
+                  <Form.Label>Choose 3 projects</Form.Label>
+                  {[0, 1, 2].map((index) => (
+                    <div key={index} className="mb-3">
+                      <Form.Label>Project {index + 1}</Form.Label>
                       <Form.Control
-                        as="textarea"
-                        rows={3}
-                        value={motivations[selectedProjects[index]] || ""}
-                        onChange={(e) => handleMotivationChange(e, selectedProjects[index])}
-                      />
-                    </Form.Group>
-                  )}
-                </div>
-              ))}
-            </Form.Group>
+                        as="select"
+                        value={selectedProjects[index]}
+                        onChange={(e) => handleProjectChange(index, e.target.value)}
+                      >
+                        <option value="">Select a project</option>
+                        {availableProjectsState && availableProjectsState.length > 0 ? (
+                          availableProjectsState.map((project) => (
+                            <option key={project._id} value={project._id}>
+                              {project.title}
+                            </option>
+                          ))
+                        ) : (
+                          <option disabled>No project available</option>
+                        )}
+                      </Form.Control>
 
-            <Button
-              variant="success"
-              onClick={handleSubmit}
-              disabled={!isFormValid()}
-              className="mt-4"
-            >
-              Ajouter le groupe
-            </Button>
-          </Form>
-        </Card.Body>
-      </Card>
-    </Container>
+                      {selectedProjects[index] && (
+                        <Form.Group controlId={`motivation${index}`}>
+                          <Form.Label>Motivation</Form.Label>
+                          <Form.Control
+                            as="textarea"
+                            rows={3}
+                            value={motivations[selectedProjects[index]] || ""}
+                            onChange={(e) => handleMotivationChange(e, selectedProjects[index])}
+                          />
+                        </Form.Group>
+                      )}
+                    </div>
+                  ))}
+                </Form.Group>
+
+                <Button
+                  variant="success"
+                  onClick={handleSubmit}
+                  disabled={!isFormValid()}
+                  className="mt-4"
+                >
+                  Add Group
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Container>
+      </div>
+    </div>
   );
 };
 

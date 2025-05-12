@@ -47,12 +47,19 @@ exports.getTaskActivities = async (req, res) => {
         // Find all activities for the task, sorted by timestamp (newest first)
         const activities = await Activity.find({ taskId })
             .sort({ timestamp: -1 })
-            .populate('userId', 'name lastname avatar') // Populate user details
+            .populate({ path: 'userId', select: 'name lastname avatar', model: 'User' }) // Populate user details
             .populate('fileId', 'fileName language'); // Populate file details if available
+
+        // Map the populated userId to user field for frontend compatibility
+        const activitiesWithUser = activities.map(activity => {
+            const activityObj = activity.toObject();
+            activityObj.user = activityObj.userId;
+            return activityObj;
+        });
 
         res.status(200).json({
             success: true,
-            activities
+            activities: activitiesWithUser
         });
     } catch (error) {
         console.error("Error fetching task activities:", error);
@@ -93,11 +100,19 @@ exports.getUserActivities = async (req, res) => {
         const activities = await Activity.find({ userId })
             .sort({ timestamp: -1 })
             .populate('taskId', 'name description') // Populate task details
+            .populate({ path: 'userId', select: 'name lastname avatar', model: 'User' }) // Populate user details
             .populate('fileId', 'fileName language'); // Populate file details if available
+
+        // Map the populated userId to user field for frontend compatibility
+        const activitiesWithUser = activities.map(activity => {
+            const activityObj = activity.toObject();
+            activityObj.user = activityObj.userId;
+            return activityObj;
+        });
 
         res.status(200).json({
             success: true,
-            activities
+            activities: activitiesWithUser
         });
     } catch (error) {
         console.error("Error fetching user activities:", error);

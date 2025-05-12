@@ -1,5 +1,6 @@
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { route } from "../../common/selectoption/selectoption";
+import useStudentGroupStatus from "../../hooks/useStudentGroupStatus";
 const routes = all_routes;
 
 
@@ -65,11 +66,11 @@ export const SidebarDataTest = [
 
         materialicons: '',
         submenuItems: [
-          {
-            label: 'Dashboard',
-            // link: routes.superAdminDashboard,
-            base: 'super-admin-dashboard',
-          },
+          // {
+          //   label: 'Dashboard',
+          //   link: routes.superAdminDashboard,
+          //   base: 'super-admin-dashboard',
+          // },
           {
             label: 'Groups List',
              link: routes.dealsDashboard,
@@ -88,21 +89,25 @@ export const SidebarDataTest = [
         base: 'application',
         materialicons: 'dashboard',
         submenuItems: [
+          // {
+          //   label: 'Group Member',
+          //   // link: routes.chat,
+          // },
           {
-            label: 'Group Member',
-            // link: routes.chat,
-
+            label: 'Add Group',
+            link: '/add-group',
+            icon: 'plus',
           },
           {
             label: 'Project Progress',
             link: routes.taskboard,
 
           },
-          {
-            label: 'Tutor Feedbacks',
-            // link: routes.chat,
-
-          },
+          // {
+          //   label: 'Tutor Feedbacks',
+          //   // link: routes.chat,
+          //
+          // },
           {
             tittle: 'PROJECTS',
             icon: 'layers',
@@ -135,6 +140,13 @@ export const SidebarDataTest = [
                     base2: 'project-list',
                     base3: 'project-details',
                   },
+                  {
+                    label: 'To Do',
+                    showSubRoute: false,
+                    link: routes.todo,
+                    customSubmenuTwo: false,
+                    base: 'todo',
+                  },
                   // { label: 'Tasks',
                   //   link: 'tasks',
                   //   base: 'tasks' },
@@ -152,5 +164,5 @@ export const SidebarDataTest = [
       },
     ],
   },
- 
+
 ];
