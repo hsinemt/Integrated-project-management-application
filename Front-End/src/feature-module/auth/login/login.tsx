@@ -89,11 +89,11 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    if (!captchaToken) {
-      setError("Veuillez valider le reCAPTCHA !");
-      setLoading(false);
-      return;
-    }
+    // if (!captchaToken) {
+    //   setError("Veuillez valider le reCAPTCHA !");
+    //   setLoading(false);
+    //   return;
+    // }
 
     if (!email || !password || (otpSent && !otp)) {
       setError("Veuillez remplir tous les champs requis.");
@@ -106,7 +106,7 @@ const Login = () => {
       const response = await axios.post("http://localhost:9777/user/login", {
         email,
         password,
-        captchaToken,
+        //captchaToken,
         otp: otpSent ? otp : undefined, // Envoyer l'OTP uniquement si nécessaire
       });
 

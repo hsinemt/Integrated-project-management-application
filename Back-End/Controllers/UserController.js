@@ -39,23 +39,23 @@ try {
 // Path to face-api models - define this properly
 const modelPath = path.join(__dirname, '../models');
 
-async function verifyRecaptcha(token) {
-    const secretKey = '6Lf7r-EqAAAAANyNeRJnpAvdhHmcdWGYEo-vGuph';  // Clé secrète reCAPTCHA
-
-    try {
-        const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
-            params: {
-                secret: secretKey,
-                response: token
-            }
-        });
-
-        return response.data.success;
-    } catch (error) {
-        console.error('Erreur de vérification reCAPTCHA:', error);
-        return false;
-    }
-}
+// async function verifyRecaptcha(token) {
+//     const secretKey = '6Lf7r-EqAAAAANyNeRJnpAvdhHmcdWGYEo-vGuph';  // Clé secrète reCAPTCHA
+//
+//     try {
+//         const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+//             params: {
+//                 secret: secretKey,
+//                 response: token
+//             }
+//         });
+//
+//         return response.data.success;
+//     } catch (error) {
+//         console.error('Erreur de vérification reCAPTCHA:', error);
+//         return false;
+//     }
+// }
 
 async function loadModels() {
     if (!faceDetectionEnabled) {
@@ -374,13 +374,13 @@ const verifyOtp = async (req, res) => {
 
   const login = async (req, res) => {
     try {
-      const { email, password, captchaToken, otp } = req.body;
+      const { email, password, otp } = req.body;
 
       // Vérification du reCAPTCHA
-      const isCaptchaValid = await verifyRecaptcha(captchaToken);
-      if (!isCaptchaValid) {
-        return res.status(400).json({ message: "Échec de la validation reCAPTCHA" });
-      }
+      // const isCaptchaValid = await verifyRecaptcha(captchaToken);
+      // if (!isCaptchaValid) {
+      //   return res.status(400).json({ message: "Échec de la validation reCAPTCHA" });
+      // }
 
       // Recherche de l'utilisateur dans la base de données
       const user = await UserModel.findOne({ email });
