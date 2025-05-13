@@ -132,43 +132,38 @@ const TaskBoard = () => {
     const fetchMessagesWithBearer = async (groupId: string) => {
         try {
             const token = localStorage.getItem('token');
-            console.log('Fetching messages with Bearer token:', token ? `Bearer ${token.substring(0, 20)}...` : 'No token');
-            if (!token) {
-                throw new Error('No token available');
-            }
+            if (!token) throw new Error('No token available');
+
             const response = await axios.get(`http://localhost:9777/messages/group/${groupId}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
-            console.log('Fetched messages:', response.data.messages);
+
             setMessages(response.data.messages);
             setChatError(null);
         } catch (error: any) {
             console.error('Error fetching messages:', error.response?.data || error.message);
-            const errorMessage = error.response?.status === 401
-                ? 'Session expirée. Veuillez vous reconnecter.'
-                : error.message === 'No token available'
-                    ? 'Veuillez vous connecter pour accéder au chat.'
-                    : `Impossible de charger les messages: ${error.message}`;
+            const errorMessage =
+                error.response?.status === 401
+                    ? 'Session expirée. Veuillez vous reconnecter.'
+                    : error.message === 'No token available'
+                        ? 'Veuillez vous connecter pour accéder au chat.'
+                        : `Impossible de charger les messages: ${error.message}`;
+
             setChatError(errorMessage);
         }
     };
 
+
     const fetchUserAndGroupForSocket = async (token: string) => {
         try {
-            console.log('Fetching user and group for Socket.IO with Bearer token:', `Bearer ${token.substring(0, 20)}...`);
             const response = await axios.get('http://localhost:9777/user/profilegroupe', {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
-
-            console.log('User and group response for Socket.IO:', response.data);
 
             const fetchedGroupId = response.data.group?._id;
             const fetchedUserId = response.data.user?._id;
             const fetchedGroupName = response.data.group?.nom_groupe;
+
             setGroupId(fetchedGroupId);
             setUserId(fetchedUserId);
             setGroupName(fetchedGroupName || 'Group Chat');
@@ -176,7 +171,6 @@ const TaskBoard = () => {
             if (fetchedUserId && fetchedGroupId) {
                 socket.auth = { userId: fetchedUserId };
                 socket.connect();
-                console.log('Socket.IO connecting, joining group:', fetchedGroupId, 'with user:', fetchedUserId);
                 socket.emit('joinGroup', { groupId: fetchedGroupId, userId: fetchedUserId });
             } else {
                 console.error('Missing userId or groupId for Socket.IO:', { fetchedUserId, fetchedGroupId });
@@ -189,6 +183,7 @@ const TaskBoard = () => {
             throw error;
         }
     };
+
 
     const fetchTasksAndProject = async (token: string) => {
         try {
