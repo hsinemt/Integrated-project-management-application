@@ -8,6 +8,7 @@ export const all_routes = {
   dealsDashboard: "/deals-dashboard",
   AddGroupForm: "/add-group",
 
+
   //Application routes
   chat: "/application/chat",
   voiceCall: "/application/voice-call",
