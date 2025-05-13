@@ -282,6 +282,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Generate a token on SonarCloud and add it to your GitHub repository secrets
+        with:
+          args: >
+            -Dsonar.branch.name=Deploy
 
   notification:
     name: Notification
