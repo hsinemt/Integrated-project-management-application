@@ -36,6 +36,38 @@ exports.getAllGroups = async (req, res) => {
     }
 };
 
+exports.getAllProjects = async (req, res) => {
+    try {
+        const projects = await ProjectModel.find({}, "_id title");
+        res.status(200).json({
+            success: true,
+            projects,
+        });
+    } catch (error) {
+        console.error("Error fetching projects:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error while fetching projects",
+        });
+    }
+};
+
+exports.getAllGroups = async (req, res) => {
+    try {
+        const groups = await GroupeModel.find({}, "_id nom_groupe");
+        res.status(200).json({
+            success: true,
+            groups,
+        });
+    } catch (error) {
+        console.error("Error fetching groups:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error while fetching groups",
+        });
+    }
+};
+
 // Helper function to get file extension based on language
 const getFileExtension = (language) => {
     switch (language) {

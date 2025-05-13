@@ -24,6 +24,8 @@ const activityRoutes = require('./Routes/activityRoutes');
 const codeReviewRouter = require('./Routes/codeReviewRoutes');
 const zipProjectRouter = require('./Routes/zipProjectRoutes');
 const statsRoutes = require('./Routes/statsRoutes');
+const finalGradeRoutes = require('./Routes/FinalGradeRoutes');
+
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -291,11 +293,12 @@ app.use('/api/code-review', codeReviewRouter);
 app.use('/api/zip-project', zipProjectRouter);
 app.use('/api', statsRoutes);
 
+app.use('/grades', finalGradeRoutes);
 // AI and NLP routes
 app.use('/nlp', nlpController);
 app.use('/nlp', (req, res, next) => {
-    //console.log(`AI route accessed: ${req.method} ${req.originalUrl}`);
-    //console.log('Request body:', req.body);
+    console.log(`AI route accessed: ${req.method} ${req.originalUrl}`);
+    console.log('Request body:', req.body);
     next();
 }, aiGenerationLimiter, AiProjectGenController);
 

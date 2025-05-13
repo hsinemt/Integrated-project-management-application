@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 interface Task {
+  progressAnalysis: any;
   _id: string;
   name: string;
   description: string;
@@ -13,6 +14,8 @@ interface Task {
   image?: string;
   commits?: Commit[];
   git?: string;
+  progressAnalysisNote?: string;
+  scoreProgress?: number;
 }
 
 interface Commit {
@@ -58,6 +61,9 @@ const StudentTasksPage = () => {
   const [commitsError, setCommitsError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [evaluatingCommits, setEvaluatingCommits] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const [progressAnalysisLoading, setProgressAnalysisLoading] = useState(false);
 
   // Handle sidebar toggle events
   useEffect(() => {
@@ -191,6 +197,105 @@ const StudentTasksPage = () => {
       setHistoryLoading(false);
     }
   };
+
+  const evaluateCommits = async (taskId: string) => {
+    try {
+      setEvaluatingCommits(true);
+      setEvaluationError(null);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setEvaluationError('You must be logged in to evaluate commits. Please log in and try again.');
+        return;
+      }
+
+      const response = await axios.get(
+        `${API_URL}/api/tasks/${taskId}/evaluate`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token
+          }
+        }
+      );
+
+      if (response.data) {
+        // Après l'évaluation, recharge toutes les tâches pour avoir la note à jour
+        const refreshed = await axios.get(`${API_URL}/api/tasks/by-student/${studentId}`);
+        if (refreshed.data.success) {
+          setTasks(refreshed.data.tasks);
+        }
+        alert('Commits evaluation completed successfully!');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error evaluating commits:', error);
+      
+      if (axios.isAxiosError(error)) {
+        setEvaluationError(error.response?.data?.message || 'Failed to evaluate commits');
+      } else {
+        setEvaluationError('An unexpected error occurred');
+      }
+    } finally {
+      setEvaluatingCommits(false);
+    }
+  };
+
+  const generateProgressAnalysis = async (taskId: string) => {
+    try {
+      setProgressAnalysisLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setEvaluationError('You must be logged in to evaluate progress analysis. Please log in and try again.');
+        return;
+      }
+      const response = await axios.get(
+        `${API_URL}/api/tasks/${taskId}/progress-analysis`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token
+          }
+        }
+      );
+      if (response.data) {
+        // Met à jour la note dans la tâche courante pour affichage immédiat
+        const updatedTasks = tasks.map(task => {
+          if (task._id === taskId) {
+            return {
+              ...task,
+              progressAnalysisNote: response.data.scoreProgress
+            };
+          }
+          return task;
+        });
+        setTasks(updatedTasks);
+
+        // Recharge toutes les tâches pour avoir la note à jour côté backend
+        const refreshed = await axios.get(`${API_URL}/api/tasks/by-student/${studentId}`);
+        if (refreshed.data.success) {
+          setTasks(refreshed.data.tasks);
+        }
+        alert('Progress analysis evaluation completed successfully!');
+      }
+    } catch (error) {
+      setEvaluationError('Failed to evaluate progress analysis');
+    } finally {
+      setProgressAnalysisLoading(false);
+    }
+  };
+
+  // Add useEffect to check authentication status when component mounts
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('No authentication token found');
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -344,44 +449,68 @@ const StudentTasksPage = () => {
                         </button>
                       </div>
                     ) : (
-                      <div>
-                        <h6 className="notes-title">Notes</h6>
-                        <p className="notes-content">{task.noteGit || "No notes added yet"}</p>
-                        <div className="d-flex gap-2 flex-wrap">
-                          <button 
-                            className="btn btn-primary btn-sm btn-rounded"
-                            onClick={() => {
-                              setEditingGitNote(task._id);
-                              setTempGitNote(task.noteGit || "");
-                            }}
-                          >
-                            <i className="fas fa-edit me-2"></i>{task.noteGit ? "Edit Note" : "Add Note"}
-                          </button>
-                          {task.git && (
-                            <button 
-                              className="btn btn-info btn-sm btn-rounded"
-                              onClick={() => fetchCommits(task._id, task.name)}
-                              disabled={commitsLoading}
+                        <div>
+                          <h6 className="notes-title">Notes des commits: </h6>
+                          <p className="notes-content">
+                            {task.noteGit !== undefined ? `${task.noteGit}/20` : "No notes added yet"}
+                          </p>
+                          <h6 className="notes-title">Notes des analyses de progress :</h6>
+                          <p className="notes-content"> {task.progressAnalysis?.scoreProgress !== undefined
+                              ? `${task.progressAnalysis.scoreProgress}/20`
+                              : "No progress analysis note yet"}</p>
+                          <div className="d-flex gap-2 flex-wrap">
+                            <button
+                                className="btn btn-primary btn-sm btn-rounded"
+                                onClick={() => {
+                                  setEditingGitNote(task._id);
+                                  setTempGitNote(task.noteGit || "");
+                                }}
                             >
-                              <i className="fas fa-code-branch me-2"></i>
-                              {commitsLoading ? 'Loading...' : 'Commits'}
+                              <i className="fas fa-edit me-2"></i>{task.noteGit ? "Edit Note" : "Add Note"}
                             </button>
-                          )}
-                          <button 
-                            className="btn btn-outline-secondary btn-sm btn-rounded"
-                            onClick={() => fetchTaskHistory(task._id, task.name)}
-                            disabled={historyLoading}
-                          >
-                            <i className="fas fa-history me-2"></i>
-                            {historyLoading ? 'Loading...' : 'History'}
-                          </button>
+                            {task.git && (
+                                <>
+                                  <button
+                                      className="btn btn-info btn-sm btn-rounded"
+                                      onClick={() => fetchCommits(task._id, task.name)}
+                                      disabled={commitsLoading}
+                                  >
+                                    <i className="fas fa-code-branch me-2"></i>
+                                    {commitsLoading ? 'Loading...' : 'Commits'}
+                                  </button>
+                                  <button
+                                      className="btn btn-warning btn-sm btn-rounded"
+                                      onClick={() => evaluateCommits(task._id)}
+                                      disabled={evaluatingCommits}
+                                  >
+                                    <i className="fas fa-star me-2"></i>
+                                    {evaluatingCommits ? 'Evaluating...' : 'Generate Commits Grade'}
+                                  </button>
+                                </>
+                            )}
+                            <button
+                                className="btn btn-outline-secondary btn-sm btn-rounded"
+                                onClick={() => fetchTaskHistory(task._id, task.name)}
+                                disabled={historyLoading}
+                            >
+                              <i className="fas fa-history me-2"></i>
+                              {historyLoading ? 'Loading...' : 'History'}
+                            </button>
+                            <button
+                                className="btn btn-warning btn-sm btn-rounded"
+                                onClick={() => generateProgressAnalysis(task._id)}
+                                disabled={progressAnalysisLoading}
+                            >
+                              <i className="fas fa-chart-line me-2"></i>
+                              {progressAnalysisLoading ? 'Evaluating...' : 'Generate Progress Analysis Grade'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
                     )}
                   </div>
 
                   {task.état === 'In Review' && (
-                    <div className="d-flex gap-2 flex-wrap">
+                      <div className="d-flex gap-2 flex-wrap">
                       <button 
                         className="btn btn-success btn-rounded"
                         onClick={() => updateTaskStatus(task._id, 'Completed')}

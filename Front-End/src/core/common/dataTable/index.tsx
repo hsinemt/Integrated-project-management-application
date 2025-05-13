@@ -3,7 +3,7 @@ import { Table } from "antd";
 import { DatatableProps } from "../../data/interface";
 
 
-const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection, loading }) => {
+const Datatable: React.FC<DatatableProps> = ({columns, dataSource, Selection, loading, rowKey}) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<any[]>([]);
   const [searchText, setSearchText] = useState<string>("");
   const [Selections, setSelections] = useState<any>(true);

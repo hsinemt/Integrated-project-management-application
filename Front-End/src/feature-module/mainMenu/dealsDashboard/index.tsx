@@ -132,7 +132,7 @@ const DealsDashboard = () => {
     };
   };
 
-  // Fetch dashboard data and tutor info
+  // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -152,7 +152,6 @@ const DealsDashboard = () => {
         }
 
         const data = response.data as DashboardData;
-
         setDashboardData(data);
         setUserId(data.tutorId);
         // Set tutor info for chat
@@ -412,7 +411,6 @@ const DealsDashboard = () => {
         userId,
         content: newMessage,
       });
-
       setNewMessage('');
       setShowEmojiPicker(false);
     } else {
@@ -870,6 +868,22 @@ const DealsDashboard = () => {
                                               <span>
                                                 {student.name} {student.lastname}
                                               </span>
+                                                  <button
+                                                      onClick={() =>
+                                                          window.open(`http://localhost:3000/grades/${studentId}`, '_blank')
+                                                      }
+                                                      style={{
+                                                        marginLeft: '10px',
+                                                        padding: '5px 10px',
+                                                        backgroundColor: '#1976d2',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '5px',
+                                                        cursor: 'pointer',
+                                                      }}
+                                                  >
+                                                    Évaluation
+                                                  </button>
                                                   <i className="bi bi-chevron-right small text-muted"></i>
                                                 </li>
                                             ) : (

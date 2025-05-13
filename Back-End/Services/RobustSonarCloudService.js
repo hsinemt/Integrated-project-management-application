@@ -2,7 +2,9 @@ const sonarqubeScanner = require('sonarqube-scanner').default;
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const unzipper = require('unzipper');
+// Replace unzipper with more robust alternatives
+const AdmZip = require('adm-zip');
+const { createExtractorFromFile } = require('node-unrar-js');
 const fse = require('fs-extra');
 const os = require('os');
 
@@ -41,16 +43,32 @@ class RobustSonarCloudService {
             // Track if we're using fallback or default values
             let analysisSource = 'sonarcloud';
 
-            // Handle zip files
-            const isZip = submissionPath.endsWith('.zip');
-            const extractionPath = isZip
+            // Handle archive files (ZIP and RAR)
+            const isZip = submissionPath.toLowerCase().endsWith('.zip');
+            const isRar = submissionPath.toLowerCase().endsWith('.rar');
+            const isArchive = isZip || isRar;
+            const extractionPath = isArchive
                 ? path.join(path.dirname(submissionPath), `${submissionId}-extracted`)
                 : submissionPath;
 
-            if (isZip) {
-                console.log(`[${submissionId}] Extracting zip file...`);
-                await this.extractZipFile(submissionPath, extractionPath);
-                console.log(`[${submissionId}] Zip extraction complete`);
+            let analysisPath = extractionPath;
+            if (isArchive) {
+                console.log(`[${submissionId}] Extracting archive file (${isZip ? 'ZIP' : 'RAR'})...`);
+                try {
+                    if (isZip) {
+                        // For ZIP files, we use the path returned by extractZipFile
+                        // which might be a subdirectory if the ZIP contains a single folder
+                        analysisPath = await this.extractZipFile(submissionPath, extractionPath);
+                    } else if (isRar) {
+                        // For RAR files, we use the path returned by extractRarFile
+                        // which might be a subdirectory if the RAR contains a single folder
+                        analysisPath = await this.extractRarFile(submissionPath, extractionPath);
+                    }
+                    console.log(`[${submissionId}] Archive extraction complete. Using path: ${analysisPath}`);
+                } catch (extractionError) {
+                    console.error(`[${submissionId}] Archive extraction failed:`, extractionError);
+                    throw new Error(`Archive extraction failed: ${extractionError.message}`);
+                }
             }
 
             // Create a unique project key for SonarCloud
@@ -76,7 +94,7 @@ class RobustSonarCloudService {
                 }
 
                 // Execute SonarCloud scan with retries
-                await this.runSonarScannerWithRetries(extractionPath, projectKey, submissionId, fileName);
+                await this.runSonarScannerWithRetries(analysisPath, projectKey, submissionId, fileName);
 
                 // Allow more time for SonarCloud to process the results
                 console.log(`[${submissionId}] Waiting for SonarCloud to process results...`);
@@ -126,8 +144,8 @@ class RobustSonarCloudService {
                 }
             }
 
-            // Clean up extracted files if it was a zip
-            if (isZip && fs.existsSync(extractionPath)) {
+            // Clean up extracted files if it was an archive (ZIP or RAR)
+            if (isArchive && fs.existsSync(extractionPath)) {
                 console.log(`[${submissionId}] Cleaning up extracted files...`);
                 await fse.remove(extractionPath);
                 console.log(`[${submissionId}] Cleanup complete`);
@@ -175,21 +193,131 @@ class RobustSonarCloudService {
     }
 
     /**
-     * Extract a zip file to the specified directory
+     * Extract a zip file to the specified directory with validation
+     * @returns {string} The path to use for analysis (may be a subdirectory if ZIP contains a single folder)
      */
     async extractZipFile(zipFilePath, extractionPath) {
         try {
             // Ensure extraction directory exists
             await fse.ensureDir(extractionPath);
 
-            // Extract zip file
-            await fs.createReadStream(zipFilePath)
-                .pipe(unzipper.Extract({path: extractionPath}))
-                .promise();
+            // Validate the ZIP file before extraction
+            try {
+                // Read the first few bytes to check for ZIP signature
+                const fileBuffer = fs.readFileSync(zipFilePath);
+                const zipSignature = fileBuffer.slice(0, 4).toString('hex');
 
-            console.log(`Extracted zip file to ${extractionPath}`);
+                // ZIP files start with PK signature (50 4B 03 04)
+                if (zipSignature.toLowerCase() !== '504b0304') {
+                    throw new Error(`Invalid ZIP file signature: 0x${zipSignature}`);
+                }
+
+                // Use AdmZip for more robust extraction
+                const zip = new AdmZip(zipFilePath);
+
+                // Validate ZIP entries before extraction
+                const zipEntries = zip.getEntries();
+                if (zipEntries.length === 0) {
+                    throw new Error('ZIP file is empty or corrupted');
+                }
+
+                // Extract the ZIP file
+                zip.extractAllTo(extractionPath, true);
+
+                console.log(`Extracted ZIP file to ${extractionPath} (${zipEntries.length} files)`);
+
+                // Check if the extraction created a single folder containing all files
+                // This is common with ZIP files where the archive contains a folder with the same name
+                const extractedItems = fs.readdirSync(extractionPath);
+
+                if (extractedItems.length === 1) {
+                    const singleItem = path.join(extractionPath, extractedItems[0]);
+                    const stats = fs.statSync(singleItem);
+
+                    if (stats.isDirectory()) {
+                        // If there's a single directory, use it as the source path
+                        console.log(`ZIP extraction created a single folder: ${extractedItems[0]}, using it for analysis`);
+                        return singleItem; // Return the path to the inner folder
+                    }
+                }
+
+                // If no single folder was found, return the original extraction path
+                return extractionPath;
+            } catch (validationError) {
+                console.error('ZIP validation or extraction error:', validationError);
+                throw new Error(`ZIP validation failed: ${validationError.message}`);
+            }
         } catch (error) {
-            console.error('Error extracting zip file:', error);
+            console.error('Error extracting ZIP file:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Extract a RAR file to the specified directory
+     * @returns {string} The path to use for analysis (may be a subdirectory if RAR contains a single folder)
+     */
+    async extractRarFile(rarFilePath, extractionPath) {
+        try {
+            // Ensure extraction directory exists
+            await fse.ensureDir(extractionPath);
+
+            // Validate the RAR file before extraction
+            try {
+                // Read the first few bytes to check for RAR signature
+                const fileBuffer = fs.readFileSync(rarFilePath);
+                const rarSignature = fileBuffer.slice(0, 6).toString('hex');
+
+                // RAR files start with Rar! signature (52 61 72 21)
+                if (!rarSignature.toLowerCase().startsWith('526172')) {
+                    throw new Error(`Invalid RAR file signature: 0x${rarSignature}`);
+                }
+
+                // Use node-unrar-js for extraction
+                const extractor = await createExtractorFromFile({
+                    filepath: rarFilePath,
+                    targetPath: extractionPath
+                });
+
+                // Extract the RAR file
+                const extracted = extractor.extract({
+                    files: [], // Empty array means extract all files
+                    overwrite: true
+                });
+
+                // Get the list of extracted files
+                const { files } = extracted;
+                const fileList = [...files];
+
+                if (fileList.length === 0) {
+                    throw new Error('RAR file is empty or corrupted');
+                }
+
+                console.log(`Extracted RAR file to ${extractionPath} (${fileList.length} files)`);
+
+                // Check if the extraction created a single folder containing all files
+                // This is common with RAR files where the archive contains a folder with the same name
+                const extractedItems = fs.readdirSync(extractionPath);
+
+                if (extractedItems.length === 1) {
+                    const singleItem = path.join(extractionPath, extractedItems[0]);
+                    const stats = fs.statSync(singleItem);
+
+                    if (stats.isDirectory()) {
+                        // If there's a single directory, use it as the source path
+                        console.log(`RAR extraction created a single folder: ${extractedItems[0]}, using it for analysis`);
+                        return singleItem; // Return the path to the inner folder
+                    }
+                }
+
+                // If no single folder was found, return the original extraction path
+                return extractionPath;
+            } catch (validationError) {
+                console.error('RAR validation or extraction error:', validationError);
+                throw new Error(`RAR validation failed: ${validationError.message}`);
+            }
+        } catch (error) {
+            console.error('Error extracting RAR file:', error);
             throw error;
         }
     }

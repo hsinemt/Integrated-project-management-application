@@ -20,7 +20,6 @@ import ApiKeys from "../pages/api-keys";
 import UnderConstruction from "../pages/underConstruction";
 import Gallery from "../pages/gallery";
 import Assets from "../administration/asset";
-// import Chat from "../application/chat";
 import AssetsCategory from "../administration/asset-category";
 import Users from "../administration/user-management/users";
 import RolesPermission from "../administration/user-management/rolePermission";
@@ -40,6 +39,7 @@ import PurchaseTransaction from "../super-admin/purchase-transaction";
 import ProjectsPage from "../administration/user-management/projects";
 import MotivationsTable from "../administration/user-management/motivations";
 import AddGroupForm from "../mainMenu/student/addgroupe";
+import FinalGradePage from "../mainMenu/employeeDashboard/FinalGradePage";
 
 // Lazy loaded authentication components
 const Login = React.lazy(() => import("../auth/login/login"));
@@ -49,7 +49,7 @@ const EmailVerification = React.lazy(() => import("../auth/emailVerification/ema
 const ResetPassword = React.lazy(() => import("../auth/resetPassword/resetPassword"));
 const ForgotPassword = React.lazy(() => import("../auth/forgotPassword/forgotPassword"));
 
-// Lazy loaded dashboards
+// Lazy loaded admin dashboard
 const AdminDashboard = React.lazy(() => import("../mainMenu/adminDashboard"));
 const ManagerDashboard = React.lazy(() => import("../mainMenu/managerDashboard"));
 const TutorDashboard = React.lazy(() => import("../mainMenu/tutorDashboard"));
@@ -282,6 +282,11 @@ export const publicRoutes = [
     element: <PurchaseTransaction />,
     route: Route,
   },
+  {
+    path: "/grades/:studentId",
+    element: <FinalGradePage />,
+    route: Route,
+  },
 ];
 
 export const authRoutes = [
@@ -425,4 +430,17 @@ export const authRoutes = [
     path: routes.resetPasswordSuccess3,
     element: <ResetPasswordSuccess3 />,
   },
+  {
+    path: routes.AddGroupForm,
+    element: (
+      <AddGroupForm
+        availableProjects={[]}  // Passez un tableau vide ici, mais vous pouvez le remplir par la suite avec l'appel API
+        onSubmit={(data: { emails: string[]; selectedProjects: string[]; motivations: { [key: string]: string; }; }) => {
+          // Implémentez ici ce que vous voulez faire avec les données soumises
+          console.log(data);
+        }}
+      />
+    ),
+    route: Route,
+  }
 ];

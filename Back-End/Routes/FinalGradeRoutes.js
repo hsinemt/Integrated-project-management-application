@@ -1,0 +1,13 @@
+const express = require('express');
+const router = express.Router();
+const FinalGradeController = require('../Controllers/FinalGradeController');
+const { authMiddleware } = require('../Middlewares/UserValidation');
+
+
+console.log("FinalGradeRoutes loaded");
+// Route pour calculer la note finale
+router.post('/calculate', authMiddleware, FinalGradeController.calculateFinalGrade);
+
+// Route pour obtenir la note finale d'un étudiant pour un projet
+router.get('/:studentId', authMiddleware, FinalGradeController.getFinalGrade);
+module.exports = router;
