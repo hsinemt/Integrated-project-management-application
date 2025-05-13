@@ -89,11 +89,10 @@ const CourseQuiz: React.FC<CourseQuizProps> = ({ courseId, quizTheme, onClose, o
         throw new Error('Quiz ID is missing. Please reload the quiz.');
       }
 
-      // Format answers as an array of indices
+      // Format answers
       const formattedAnswers = questions.map((question) => {
         const selectedOption = answers[question._id];
-        const index = question.options.findIndex((option) => option === selectedOption);
-        return index >= 0 ? index : -1; // Use -1 for unanswered questions
+        return question.options.findIndex((option) => option === selectedOption);
       });
 
       // Check if all questions are answered
@@ -102,36 +101,66 @@ const CourseQuiz: React.FC<CourseQuizProps> = ({ courseId, quizTheme, onClose, o
       }
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/tasks/tasks/${courseId}/quiz-submit`,
-        {
-          answers: formattedAnswers,
-          quizId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+          `${API_BASE_URL}/api/tasks/tasks/${courseId}/quiz-submit`,
+          {
+            answers: formattedAnswers,
+            quizId,
           },
-        }
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            responseType: 'arraybuffer',
+          }
       );
 
-      if (response.data.success) {
-        const score = response.data.score || 0;
-        onSubmit(courseId, score);
-      } else {
-        throw new Error(response.data.message || 'Failed to submit quiz.');
+      // Handle PDF response (both certificate and error report)
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      // Determine filename based on content
+      const filename = response.headers['content-disposition']?.split('filename=')[1] ||
+          (response.data.byteLength > 5000 ? 'certificat.pdf' : 'rapport-erreurs.pdf');
+
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Parse score from response if possible
+      let score = 0;
+      try {
+        const decoder = new TextDecoder('utf-8');
+        const jsonStr = decoder.decode(response.data.slice(0, 100)); // Check start of buffer
+        if (jsonStr.includes('{')) {
+          const jsonResponse = JSON.parse(jsonStr);
+          score = jsonResponse.score || 0;
+        }
+      } catch (e) {
+        // Not a JSON response, assume it's a PDF
+        score = filename.includes('certificat') ? 100 : 0;
       }
+
+      onSubmit(courseId, score);
+      onClose();
+
     } catch (err) {
       console.error('Quiz submission error:', err);
       setError(
-        axios.isAxiosError(err)
-          ? err.response?.data?.message || 'Failed to submit quiz. Please try again.'
-          : err instanceof Error ? err.message : 'An unexpected error occurred.'
+          axios.isAxiosError(err)
+              ? err.response?.data?.message || 'Failed to submit quiz. Please try again.'
+              : err instanceof Error ? err.message : 'An unexpected error occurred.'
       );
     } finally {
       setSubmitting(false);
     }
   };
+
+
 
   if (loading) {
     return (

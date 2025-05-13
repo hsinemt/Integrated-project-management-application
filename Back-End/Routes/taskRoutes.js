@@ -20,7 +20,7 @@ require('dotenv').config();
 
 const TutorModel = require('../Models/Tutor');
 const { evaluateCommits } = require('../utils/gitEvaluator');
-const { authMiddleware, isAdmin, userToken } = require('../Middlewares/UserValidation');
+// const { authMiddleware, isAdmin, userToken } = require('../Middlewares/UserValidation');
 const { calculateTaskscoreProgress } = require('../utils/taskAnalyzer');
 router.post('/preview', taskController.previewTasks);
 router.post('/save', taskController.saveTasks);
@@ -230,98 +230,131 @@ router.get('/tasks/:taskId/quiz', authenticateJWT, async (req, res) => {
 
 // Submit quiz answers
 router.post('/tasks/:taskId/quiz-submit', authenticateJWT, async (req, res) => {
-  const { taskId } = req.params;
-  const { answers, quizId } = req.body;
+    const { taskId } = req.params;
+    const { answers, quizId } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(taskId)) {
-    return res.status(400).json({ success: false, message: 'ID de tâche invalide' });
-  }
-
-  try {
-    const task = await Task.findById(taskId);
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tâche non trouvée'
-      });
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+        return res.status(400).json({ success: false, message: 'ID de tâche invalide' });
     }
 
-    if (!task.quizQuestions || task.quizQuestions.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Quiz non trouvé pour cette tâche'
-      });
-    }
-
-    if (task.quizId !== quizId) {
-      return res.status(400).json({
-        success: false,
-        message: 'ID de quiz invalide'
-      });
-    }
-
-    let points = 0;
-    const pointsPerQuestion = 2;
-    const maxPoints = task.quizQuestions.length * pointsPerQuestion;
-
-    task.quizQuestions.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        points += pointsPerQuestion;
-      }
-    });
-
-    const score = Math.round((points / maxPoints) * 100);
-    console.log(`Calculated score for task ${taskId}: ${points}/${maxPoints} = ${score}%`);
-
-    const updateResult = await Task.updateOne(
-      { _id: taskId },
-      { $set: { quizScore: score } }
-    );
-
-    console.log('Update result:', updateResult);
-
-    if (updateResult.matchedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Aucune tâche correspondante trouvée pour mise à jour'
-      });
-    }
-
-    let certificateSent = false;
-    let userEmail = 'unknown';
-    if (score === 100) {
-      try {
-        const user = await User.findById(req.user.id);
-        if (user) {
-          userEmail = user.email;
-          await generateAndSendCertificate(task, req.user.id);
-          certificateSent = true;
-        } else {
-          console.warn(`User not found for ID: ${req.user.id}`);
+    try {
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, message: 'Tâche non trouvée' });
         }
-      } catch (certError) {
-        console.error('Error sending certificate:', certError);
-      }
+
+        if (!task.quizQuestions || task.quizQuestions.length === 0) {
+            return res.status(404).json({ success: false, message: 'Quiz non trouvé pour cette tâche' });
+        }
+
+        if (task.quizId !== quizId) {
+            return res.status(400).json({ success: false, message: 'ID de quiz invalide' });
+        }
+
+        // Calculate score and collect errors
+        let points = 0;
+        const pointsPerQuestion = 2;
+        const maxPoints = task.quizQuestions.length * pointsPerQuestion;
+        const errors = [];
+
+        task.quizQuestions.forEach((question, index) => {
+            if (answers[index] === question.correctAnswer) {
+                points += pointsPerQuestion;
+            } else {
+                errors.push({
+                    question: question.text,
+                    correctAnswer: question.options[question.correctAnswer],
+                    userAnswer: answers[index] !== undefined ?
+                        question.options[answers[index]] : 'Non répondue'
+                });
+            }
+        });
+
+        const score = Math.round((points / maxPoints) * 100);
+
+        // Update task with score
+        await Task.updateOne(
+            { _id: taskId },
+            { $set: { quizScore: score } }
+        );
+
+        // Generate appropriate PDF based on score
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            throw new Error('Utilisateur non trouvé');
+        }
+
+        if (score >= 80) {
+            const certificateBuffer = await generateCertificateBuffer(task, user);
+            return sendPdfResponse(res, certificateBuffer, `certificat-${task.name}.pdf`);
+        } else {
+            const errorReportBuffer = await generateErrorReportBuffer(task, user, score, errors);
+            return sendPdfResponse(res, errorReportBuffer, `rapport-erreurs-${task.name}.pdf`);
+        }
+
+    } catch (error) {
+        console.error('Erreur soumission quiz:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Erreur serveur'
+        });
     }
-
-    res.json({
-      success: true,
-      score,
-      message: score === 100 && certificateSent ?
-        `Certificat envoyé à ${userEmail}` :
-        score === 100 && !certificateSent ?
-        'Quiz soumis avec succès, mais échec de l\'envoi du certificat' :
-        'Quiz soumis avec succès'
-    });
-
-  } catch (error) {
-    console.error('Erreur soumission quiz:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Erreur serveur'
-    });
-  }
 });
+
+// Helper function to generate error report PDF
+async function generateErrorReportBuffer(task, user, score, errors) {
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument();
+        const chunks = [];
+
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', (err) => reject(err));
+
+        // Header
+        doc.fontSize(20)
+            .text('Rapport d\'Erreurs', { align: 'center' })
+            .moveDown();
+
+        // User and task info
+        doc.fontSize(14)
+            .text(`Tâche: ${task.name}`)
+            .text(`Étudiant: ${user.name} ${user.lastname}`)
+            .text(`Score: ${score}%`)
+            .moveDown();
+
+        // Error details
+        doc.fontSize(16)
+            .text('Détails des erreurs:', { underline: true })
+            .moveDown();
+
+        errors.forEach((error, index) => {
+            doc.fontSize(12)
+                .text(`Question ${index + 1}: ${error.question}`)
+                .text(`Votre réponse: ${error.userAnswer}`, { indent: 20, color: 'red' })
+                .text(`Bonne réponse: ${error.correctAnswer}`, { indent: 20, color: 'green' })
+                .moveDown();
+        });
+
+        // Advice
+        doc.fontSize(14)
+            .text('Conseils:', { underline: true })
+            .text('Revoyez les questions erronées et consultez le matériel de cours correspondant.')
+            .text('Vous pouvez repasser le quiz après avoir étudié.');
+
+        doc.end();
+    });
+}
+
+// Helper function to send PDF response
+function sendPdfResponse(res, buffer, filename) {
+    res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename=${filename}`,
+        'Content-Length': buffer.length
+    });
+    return res.send(buffer);
+}
 
 // Helper function to generate and send certificate
 async function generateAndSendCertificate(task, userId) {
