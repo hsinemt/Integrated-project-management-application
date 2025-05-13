@@ -9,6 +9,24 @@ export type users_type = {
     role: string;
     avatar?: string;
     Status?: string;
+    speciality?: string;
+    projects?: Array<{
+        _id?: string;
+        speciality?: string;
+        [key: string]: any;
+    }>;
+}
+
+export type SpecialtyData = {
+    specialty: string;
+    count: number;
+    percentage: number;
+}
+
+export type StudentsBySpecialtyResponse = {
+    success: boolean;
+    totalStudents: number;
+    specialties: SpecialtyData[];
 }
 
 export const fetchUsers = async (): Promise<users_type[]> => {
@@ -65,6 +83,16 @@ export const deleteUser = async (userId: string) => {
         return response.data;
     } catch (error) {
         console.error('Error deleting user:', error);
+        throw error;
+    }
+};
+
+export const fetchStudentsBySpecialty = async (): Promise<StudentsBySpecialtyResponse> => {
+    try {
+        const response = await axios.get(`${API_URL}/user/students-by-specialty`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching students by specialty:", error);
         throw error;
     }
 };

@@ -80,7 +80,7 @@ export const expense_data = [
     key: "8",
     id: "EX628153",
     expenseName: "Cleaning Services",
-    description: "Monthly cleaning services",
+    description: "Monthly cleaning Services",
     category: "Services",
     date: "05 Jun 2024",
     amount: "$500",

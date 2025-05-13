@@ -3,9 +3,11 @@ import { all_routes } from "./all_routes";
 import React from "react";
 import RootRedirect from "./RootRedirect";
 import RoleProtectedRoute from "./RoleProtectedRoute";
+import ProtectedComponent from "./ProtectedComponent";
 import ComingSoon from "../pages/comingSoon";
 import Error404 from "../pages/error";
 import Error500 from "../pages/error/error-500";
+import Unauthorized from "../pages/error/unauthorized";
 import UnderMaintenance from "../pages/underMaintenance";
 import Profilesettings from "../settings/generalSettings/profile-settings";
 import ConnectedApps from "../settings/generalSettings/connected-apps";
@@ -47,8 +49,10 @@ const EmailVerification = React.lazy(() => import("../auth/emailVerification/ema
 const ResetPassword = React.lazy(() => import("../auth/resetPassword/resetPassword"));
 const ForgotPassword = React.lazy(() => import("../auth/forgotPassword/forgotPassword"));
 
-// Lazy loaded admin dashboard
+// Lazy loaded dashboards
 const AdminDashboard = React.lazy(() => import("../mainMenu/adminDashboard"));
+const ManagerDashboard = React.lazy(() => import("../mainMenu/managerDashboard"));
+const TutorDashboard = React.lazy(() => import("../mainMenu/tutorDashboard"));
 
 // Lazy loaded additional authentication components
 const Login2 = React.lazy(() => import("../auth/login/login-2"));
@@ -106,7 +110,17 @@ export const publicRoutes = [
   },
   {
     path: routes.adminDashboard,
-    element: <AdminDashboard />,
+    element: <ProtectedComponent allowedRoles={['admin']} component={<AdminDashboard />} />,
+    route: Route,
+  },
+  {
+    path: routes.managerDashboard,
+    element: <ProtectedComponent allowedRoles={['manager']} component={<ManagerDashboard />} />,
+    route: Route,
+  },
+  {
+    path: routes.tutorDashboard,
+    element: <ProtectedComponent allowedRoles={['tutor']} component={<TutorDashboard />} />,
     route: Route,
   },
   {
@@ -379,6 +393,11 @@ export const authRoutes = [
   {
     path: routes.error500,
     element: <Error500 />,
+    route: Route,
+  },
+  {
+    path: routes.unauthorized,
+    element: <Unauthorized />,
     route: Route,
   },
   {

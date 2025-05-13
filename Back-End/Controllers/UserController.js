@@ -695,7 +695,7 @@ const addStudent = async (req, res) => {
 };
 const getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({}, { name: 1, lastname: 1, email: 1, role: 1, avatar: 1 });
+        const users = await User.find({}, { name: 1, lastname: 1, email: 1, role: 1, avatar: 1, speciality: 1 });
         res.status(200).json(users);
     } catch (error) {
         // console.error("Error fetching users:", error);
@@ -1226,6 +1226,44 @@ const updateSdent = async (req, res) => {
     }
 };
 
+// Get students grouped by specialty
+const getStudentsBySpecialty = async (req, res) => {
+    try {
+        // Find all users with role 'student' and group them by specialty
+        const students = await UserModel.aggregate([
+            { $match: { role: 'student' } },
+            { $group: { 
+                _id: '$speciality', 
+                count: { $sum: 1 } 
+            }},
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Get total count of students
+        const totalStudents = await UserModel.countDocuments({ role: 'student' });
+
+        // Format the response
+        const specialties = students.map(item => ({
+            specialty: item._id || 'Unknown',
+            count: item.count,
+            percentage: Math.round((item.count / totalStudents) * 100)
+        }));
+
+        res.status(200).json({
+            success: true,
+            totalStudents,
+            specialties
+        });
+    } catch (error) {
+        console.error('Error fetching students by specialty:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching students by specialty',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     signup,
     sendVerifyOtp,
@@ -1246,5 +1284,6 @@ module.exports = {
     updateUser,
     deleteUser,
     updateUserAvatar,
-    updateSdent
+    updateSdent,
+    getStudentsBySpecialty
 };

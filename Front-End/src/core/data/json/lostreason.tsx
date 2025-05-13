@@ -47,7 +47,7 @@ export const lostReason = [
   {
     id: "6",
     si_no: "",
-    title: "They couldn't afford our services",
+    title: "They couldn't afford our Services",
     created_date: "08 Nov 2023, 05:23 am",
     status: "Active",
     action: "",

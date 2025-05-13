@@ -21,7 +21,7 @@ export const expense_category_data = [
     key: '4',
     id: 'EXC617450',
     category: 'Transportation',
-    description: 'Expenses for school transportation services',
+    description: 'Expenses for school transportation Services',
   },
   {
     key: '5',
@@ -57,6 +57,6 @@ export const expense_category_data = [
     key: '10',
     id: 'EXC617444',
     category: 'Food Services',
-    description: 'Expenses for cafeteria services and food supplies',
+    description: 'Expenses for cafeteria Services and food supplies',
   }
 ];

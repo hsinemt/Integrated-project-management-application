@@ -27,10 +27,10 @@ export const SidebarDataTest = [
             link: routes.usersDashboard,
             base: 'usersManagement',
           },
-          { label: "Manager Management",},
-          { label: "Student Management",  },
-          { label: "Tutor Management"},
-          { label: "Project Management"},
+          // { label: "Manager Management",},
+          // { label: "Student Management",  },
+          // { label: "Tutor Management"},
+          // { label: "Project Management"},
 
 
         ],
@@ -45,16 +45,18 @@ export const SidebarDataTest = [
         materialicons: 'dashboard',
         submenuItems: [
           {
-            label: 'Tutor Management',
-            // link: routes.chat,
-
+            label: 'Manager Dashboard',
+            link: routes.managerDashboard,
+            base: 'manager-dashboard',
           },
-          {
-            label: 'Project Management',
-            // link: routes.chat,
-
-          },
-
+          // {
+          //   label: 'Tutor Management',
+          //   // link: routes.chat,
+          // },
+          // {
+          //   label: 'Project Management',
+          //   // link: routes.chat,
+          // },
         ],
       },
       {
@@ -63,21 +65,18 @@ export const SidebarDataTest = [
         submenu: true,
         showSubRoute: false,
         icon: 'user-star',
-
         materialicons: '',
         submenuItems: [
-          // {
-          //   label: 'Dashboard',
-          //   link: routes.superAdminDashboard,
-          //   base: 'super-admin-dashboard',
-          // },
+          {
+            label: 'Tutor Dashboard',
+            link: routes.tutorDashboard,
+            base: 'tutor-dashboard',
+          },
           {
             label: 'Groups List',
-             link: routes.dealsDashboard,
+            link: routes.dealsDashboard,
             base: 'companies',
           },
-
-
         ],
       },
       {

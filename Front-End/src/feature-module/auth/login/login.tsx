@@ -127,11 +127,23 @@ const Login = () => {
 
         // Rediriger après un court délai
         setTimeout(() => {
-          if (['manager', 'tutor', 'student'].includes(response.data.role)) {
-            navigate("/projects-grid");
-          } else {
-            const redirectTo = response.data.redirectTo || "/index";
-            navigate(redirectTo);
+          // Redirect based on user role
+          switch(response.data.role) {
+            case 'admin':
+              navigate("/index");
+              break;
+            case 'manager':
+              navigate("/manager/dashboard");
+              break;
+            case 'tutor':
+              navigate("/tutor/dashboard");
+              break;
+            case 'student':
+              navigate("/projects-grid");
+              break;
+            default:
+              const redirectTo = response.data.redirectTo || "/index";
+              navigate(redirectTo);
           }
         }, 2000);
       } else {

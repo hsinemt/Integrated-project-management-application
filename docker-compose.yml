@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ./Back-End
+      dockerfile: Dockerfile
+    container_name: projexus-backend
+    restart: unless-stopped
+    ports:
+      - "9777:9777"
+    volumes:
+      - ./Back-End/uploads:/usr/src/app/uploads
+    env_file:
+      - ./Back-End/.env
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    environment:
+      - NODE_ENV=development
+      - ORT_LOGGING_LEVEL=info
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - TF_FORCE_GPU_ALLOW_GROWTH=true
+    networks:
+      - mern-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9777/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./Front-End
+      dockerfile: Dockerfile
+    container_name: projexus-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - mern-network
+    environment:
+      - API_URL=http://backend:9777
+      - NODE_ENV=development
+
+networks:
+  mern-network:
+    driver: bridge

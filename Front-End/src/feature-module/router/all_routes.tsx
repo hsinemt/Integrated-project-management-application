@@ -3,6 +3,8 @@
 export const all_routes = {
   // dashboard routes
   adminDashboard: "/index",
+  managerDashboard: "/manager/dashboard",
+  tutorDashboard: "/tutor/dashboard",
   employeeDashboard: "/employee-dashboard/:studentId",  
   usersDashboard: "/super-admin/users",
   dealsDashboard: "/deals-dashboard",
@@ -54,6 +56,7 @@ export const all_routes = {
   underConstruction: "/under-construction",
   error404: "/error-404",
   error500: "/error-500",
+  unauthorized: "/unauthorized",
   apikey: "/api-keys",
   privacyPolicy: "/privacy-policy",
   termscondition: "/terms-condition",

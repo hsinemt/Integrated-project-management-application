@@ -9,7 +9,26 @@ const Login2 = () => {
   const navigation = useNavigate();
 
   const navigationPath = () => {
-    navigation(routes.adminDashboard);
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('role');
+
+    // Redirect based on user role
+    switch(userRole) {
+      case 'admin':
+        navigation(routes.adminDashboard);
+        break;
+      case 'manager':
+        navigation(routes.managerDashboard);
+        break;
+      case 'tutor':
+        navigation(routes.tutorDashboard);
+        break;
+      case 'student':
+        navigation("/projects-grid");
+        break;
+      default:
+        navigation(routes.adminDashboard);
+    }
   };
   const [passwordVisibility, setPasswordVisibility] = useState({
     password: false,

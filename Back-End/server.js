@@ -23,6 +23,7 @@ const codeFileRoutes = require('./Routes/codeFileRoutes');
 const activityRoutes = require('./Routes/activityRoutes');
 const codeReviewRouter = require('./Routes/codeReviewRoutes');
 const zipProjectRouter = require('./Routes/zipProjectRoutes');
+const statsRoutes = require('./Routes/statsRoutes');
 
 const nlpController = require('./Controllers/nlpController');
 const AiProjectGenController = require('./Controllers/AiProjectGenController');
@@ -48,8 +49,8 @@ require('./Models/Message'); // Ajout du modèle Message
 require('./Models/Activity');
 
 // Passport configuration
-require('./config/passportConfig');
-require('./config/passportGoogle');
+require('./Config/passportConfig');
+require('./Config/passportGoogle');
 
 const app = express();
 const server = http.createServer(app); // Créer un serveur HTTP pour Socket.IO
@@ -255,11 +256,11 @@ app.use(helmet({
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'fallback-secret-key-for-development',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false, // Changed to false to avoid creating empty sessions
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: process.env.NODE_ENV === 'production', // Set to true in production with HTTPS
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
@@ -288,6 +289,7 @@ app.use('/api', codeFileRoutes);
 app.use('/api', activityRoutes);
 app.use('/api/code-review', codeReviewRouter);
 app.use('/api/zip-project', zipProjectRouter);
+app.use('/api', statsRoutes);
 
 // AI and NLP routes
 app.use('/nlp', nlpController);

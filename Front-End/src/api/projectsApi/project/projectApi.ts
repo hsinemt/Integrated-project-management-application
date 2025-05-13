@@ -30,6 +30,7 @@ export interface ProjectType {
     projectAvatar?: string;
     creator?: CreatorType;
     assignedTutor?: TutorType;
+    tutors?: string[];
     createdAt?: string;
     updatedAt?: string;
 }
@@ -477,10 +478,19 @@ export interface GroupsResponse {
     groups: GroupType[];
 }
 
+// This function is kept for backward compatibility but will be replaced with client-side filtering
 export const getGroupsByProjectId = async (projectId: string): Promise<GroupType[]> => {
+    console.warn('getGroupsByProjectId is deprecated - endpoint does not exist in backend');
+    console.warn('Using client-side filtering instead in the component');
+
+    // Return empty array since the endpoint doesn't exist
+    return [];
+
+    // Original implementation kept for reference:
+    /*
     try {
         const token = localStorage.getItem('token');
-        const response = await axios.get<GroupsResponse>(`${API_URL}/groupe/by-project/${projectId}`, {
+        const response = await axios.get<GroupsResponse>(`${API_URL}/groups/by-project/${projectId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             },
@@ -489,6 +499,54 @@ export const getGroupsByProjectId = async (projectId: string): Promise<GroupType
         return response.data.groups || [];
     } catch (error: any) {
         console.error('Error fetching groups by project ID:', error);
+        throw error.response ? error.response.data : {message: 'Failed to fetch groups, please try again later.'};
+    }
+    */
+};
+
+/**
+ * Fetches groups where the specified user is the tutor
+ * 
+ * This function uses the /group/by-user/:userId endpoint which returns groups where the user
+ * is either a student or a tutor, and then filters the results to only include groups
+ * where the user is the tutor.
+ * 
+ * @param tutorId - The ID of the tutor to fetch groups for
+ * @returns Promise resolving to an array of GroupType objects where the user is the tutor
+ */
+export const getGroupsByTutorId = async (tutorId: string): Promise<GroupType[]> => {
+    try {
+        const token = localStorage.getItem('token');
+        // Use the existing endpoint that returns groups where the user is either a student or a tutor
+        const response = await axios.get<GroupsResponse>(`${API_URL}/group/by-user/${tutorId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            withCredentials: true
+        });
+
+        // Log the raw response for debugging
+        console.log(`Raw response from /group/by-user/${tutorId}:`, response.data);
+
+        if (!response.data.groups || response.data.groups.length === 0) {
+            console.warn(`No groups found for user ${tutorId} in the response`);
+            return [];
+        }
+
+        // Filter to only include groups where the user is the tutor
+        const tutorGroups = response.data.groups.filter(group => {
+            // Check if id_tutor exists and matches the tutorId
+            const isTutor = group.id_tutor && group.id_tutor._id === tutorId;
+            if (!isTutor) {
+                console.log(`Group ${group._id} has tutor ${group.id_tutor?._id} which doesn't match ${tutorId}`);
+            }
+            return isTutor;
+        }) || [];
+
+        console.log(`Found ${tutorGroups.length} groups where user ${tutorId} is the tutor`);
+        return tutorGroups;
+    } catch (error: any) {
+        console.error('Error fetching groups by tutor ID:', error);
         throw error.response ? error.response.data : {message: 'Failed to fetch groups, please try again later.'};
     }
 };

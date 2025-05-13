@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { transporter } = require('../Config/nodemailer');
-const User = require('../Models/user');
+const User = require('../Models/User');
 
 exports.sendResetPasswordOTP = async (req, res) => {
     const { email } = req.body;

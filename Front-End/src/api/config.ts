@@ -3,8 +3,17 @@
  * Centralizes API URL and other configuration settings
  */
 
-// API base URL
-export const API_URL = 'http://localhost:9777';
+// Get environment variables from window.env (set at runtime)
+declare global {
+    interface Window {
+        env: {
+            API_URL: string;
+        };
+    }
+}
+
+// API base URL - use window.env if available, otherwise fallback to localhost
+export const API_URL = window.env?.API_URL || 'http://localhost:9777';
 
 // Function to resolve avatar URLs
 export const getFullAvatarUrl = (avatarPath: string | undefined): string => {

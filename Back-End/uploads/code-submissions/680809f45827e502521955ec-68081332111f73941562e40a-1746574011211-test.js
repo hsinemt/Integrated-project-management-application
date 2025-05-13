@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const GroupeModel = require('../Models/Group');
 const ProjectModel = require('../Models/Project');
 const TaskModel = require('../Models/tasks');
-const { generateTasks } = require('../services/taskGenerator');
+const { generateTasks } = require('../Services/taskGenerator');
 
 // Helper function to get file extension based on language
 const getFileExtension = (language) => {

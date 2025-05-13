@@ -5,7 +5,7 @@ const ZipFile = require('../Models/ZipFile');
 const Project = require('../Models/Project');
 const User = require('../Models/User');
 const CodeMark = require('../Models/CodeMark');
-const zipProjectAnalyzer = require('../services/ZipProjectAnalyzer');
+const zipProjectAnalyzer = require('../Services/ZipProjectAnalyzer');
 
 
 exports.uploadZipFile = async (req, res) => {

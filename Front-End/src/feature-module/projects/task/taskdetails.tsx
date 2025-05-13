@@ -1705,17 +1705,17 @@ const TaskDetails: React.FC = () => {
                                 </Link>
                             </h6>
                             <div className="d-flex">
-                                <div className="text-end">
-                                    <Link
-                                        to="#"
-                                        className="btn btn-primary"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#edit_task"
-                                    >
-                                        <i className="ti ti-edit me-1" />
-                                        Edit Task
-                                    </Link>
-                                </div>
+                                {/*<div className="text-end">*/}
+                                {/*    <Link*/}
+                                {/*        to="#"*/}
+                                {/*        className="btn btn-primary"*/}
+                                {/*        data-bs-toggle="modal"*/}
+                                {/*        data-bs-target="#edit_task"*/}
+                                {/*    >*/}
+                                {/*        <i className="ti ti-edit me-1" />*/}
+                                {/*        Edit Task*/}
+                                {/*    </Link>*/}
+                                {/*</div>*/}
                                 <div className="head-icons ms-2 text-end">
                                     <CollapseHeader />
                                 </div>
@@ -2145,14 +2145,14 @@ const TaskDetails: React.FC = () => {
                                             <p className="mb-0">Due Date</p>
                                             <h6 className="fw-normal">{task.date ? formatDate(task.date) : 'Not set'}</h6>
                                         </div>
-                                        <div className="d-flex align-items-center justify-content-between border-bottom p-3">
-                                            <p className="mb-0">Creation Date</p>
-                                            <h6 className="fw-normal">{task.createdAt ? formatDate(task.createdAt) : 'Not available'}</h6>
-                                        </div>
-                                        <div className="d-flex align-items-center justify-content-between p-3">
-                                            <p className="mb-0">Created By</p>
-                                            <h6 className="fw-normal">{task.createdBy || 'Not available'}</h6>
-                                        </div>
+                                        {/*<div className="d-flex align-items-center justify-content-between border-bottom p-3">*/}
+                                        {/*    <p className="mb-0">Creation Date</p>*/}
+                                        {/*    <h6 className="fw-normal">{task.createdAt ? formatDate(task.createdAt) : 'Not available'}</h6>*/}
+                                        {/*</div>*/}
+                                        {/*<div className="d-flex align-items-center justify-content-between p-3">*/}
+                                        {/*    <p className="mb-0">Created By</p>*/}
+                                        {/*    <h6 className="fw-normal">{task.createdBy || 'Not available'}</h6>*/}
+                                        {/*</div>*/}
                                     </div>
                                 </div>
                             </div>

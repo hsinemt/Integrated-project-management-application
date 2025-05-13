@@ -17,7 +17,8 @@ const {
     loginWithFace,
     updateUser,
     deleteUser,
-    updateSdent
+    updateSdent,
+    getStudentsBySpecialty
 } = require('../Controllers/UserController');
 
 const User = require("../Models/User");
@@ -26,7 +27,7 @@ const {signupValidation, userToken} = require('../Middlewares/UserValidation');
 const {
     sendResetPasswordOTP,
     resetPassword
-} = require('../Controllers/forgotPasswordController');
+} = require('../Controllers/ForgotPasswordController');
 const multer = require("multer");
 const path = require("path");
 const fs = require('fs');
@@ -192,6 +193,7 @@ router.post('/addStudentWithPhoto', userToken, (req, res, next) => {
     });
 });
 router.get('/getUsers', getAllUsers);
+router.get('/students-by-specialty', getStudentsBySpecialty);
 router.put('/update-skills', userToken, updateStudentSkills);
 router.get('/profile', authMiddleware, getProfile);
 router.get('/profilegroupe', authMiddleware, getStudentProfile);

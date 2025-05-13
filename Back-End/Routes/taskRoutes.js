@@ -26,7 +26,7 @@ router.get('/:projectId/tasks',userToken, taskController.getTasksByProjectId);
 require('dotenv').config();
 const { authMiddleware, isAdmin } = require('../Middlewares/UserValidation');
 
-// Initialize services
+// Initialize Services
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 const QUIZ_GENERATION_TIMEOUT = 30000; // 30 seconds
