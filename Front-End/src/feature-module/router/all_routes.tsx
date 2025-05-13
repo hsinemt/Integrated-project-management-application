@@ -7,7 +7,7 @@ export const all_routes = {
   usersDashboard: "/super-admin/users",
   dealsDashboard: "/deals-dashboard",
   AddGroupForm: "/add-group",
-
+  FinalGrade: "/grades/:studentId/:projectId",
 
   //Application routes
   chat: "/application/chat",

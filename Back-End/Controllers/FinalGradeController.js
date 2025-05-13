@@ -124,7 +124,6 @@ const FinalGradeController = {
             });
         }
     },
-
     getFinalGrade: async (req, res) => {
         try {
             const { studentId, projectId } = req.params;
@@ -140,9 +139,29 @@ const FinalGradeController = {
                 });
             }
 
+            // On extrait les champs pour le front
             return res.status(200).json({
                 success: true,
-                data: finalGrade
+                data: {
+                    finalGrade: {
+                        studentId: finalGrade.studentId,
+                        projectId: finalGrade.projectId,
+                        finalGrade: finalGrade.finalGrade,
+                    },
+                    averages: finalGrade.averages || {
+                        quiz: 0,
+                        progress: 0,
+                        git: 0,
+                        code: 0
+                    },
+                    weights: finalGrade.weights || {
+                        quizWeight: 0,
+                        progressWeight: 0,
+                        gitWeight: 0,
+                        codeWeight: 0
+                    },
+                    customGrade: finalGrade.customGrade || { score: 0, weight: 0 }
+                }
             });
 
         } catch (error) {

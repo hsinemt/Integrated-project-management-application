@@ -3,6 +3,8 @@ const router = express.Router();
 const FinalGradeController = require('../Controllers/FinalGradeController');
 const { authMiddleware } = require('../Middlewares/UserValidation');
 
+
+console.log("FinalGradeRoutes loaded");
 // Route pour calculer la note finale
 router.post('/calculate', authMiddleware, FinalGradeController.calculateFinalGrade);
 

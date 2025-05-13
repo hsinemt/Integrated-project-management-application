@@ -22,7 +22,7 @@ const tutorRoutes = require('./Routes/tutorRoutes');
 const codeFileRoutes = require('./Routes/codeFileRoutes');
 const activityRoutes = require('./Routes/activityRoutes');
 const codeReviewRouter = require('./Routes/codeReviewRoutes');
-const finalGradeRoutes = require('./Routes/finalGradeRoutes');
+const finalGradeRoutes = require('./Routes/FinalGradeRoutes');
 
 
 const nlpController = require('./Controllers/nlpController');
@@ -32,6 +32,7 @@ const AiProjectGenController = require('./Controllers/AiProjectGenController');
 const { handleMulterError } = require('./Config/ProjectUploadConfig');
 const { aiGenerationLimiter } = require('./Middlewares/rateLimitMiddleware');
 
+console.log("Server.js started");
 
 require('dotenv').config();
 require('./Config/db');

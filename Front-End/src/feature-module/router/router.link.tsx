@@ -38,6 +38,7 @@ import PurchaseTransaction from "../super-admin/purchase-transaction";
 import ProjectsPage from "../administration/user-management/projects";
 import MotivationsTable from "../administration/user-management/motivations";
 import AddGroupForm from "../mainMenu/student/addgroupe";
+import FinalGradePage from "../mainMenu/employeeDashboard/FinalGradePage";
 
 // Lazy loaded authentication components
 const Login = React.lazy(() => import("../auth/login/login"));
@@ -266,6 +267,11 @@ export const publicRoutes = [
   {
     path: routes.superAdminPurchaseTransaction,
     element: <PurchaseTransaction />,
+    route: Route,
+  },
+  {
+    path: "/grades/:studentId/:projectId",
+    element: <FinalGradePage />,
     route: Route,
   },
 ];
