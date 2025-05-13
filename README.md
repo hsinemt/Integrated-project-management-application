@@ -12,7 +12,7 @@ package.json   - Node.js project configuration
 server.js      - Main server entry point
 ```
 
-## Requirements 
+## Requirements  
 - Node.js 22.12.0
 
 ## Repository URL
