@@ -1,6 +1,6 @@
 # Project README 
 
-## Project Structure
+## Project Structure 
 ``` 
 /Config        - Configuration files
 /Controllers   - Handles business logic
