@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, development, Code-Overview, commun ]
+    branches: [ main, development, Code-Overview, commun, Deploy ]
   pull_request:
-    branches: [ main, development, Code-Overview, commun ]
+    branches: [ main, development, Code-Overview, commun, Deploy ]
 
 jobs:
   setup:
@@ -267,9 +267,25 @@ jobs:
           cd Front-End
           npm audit --production --audit-level=high || true
 
+  sonarcloud:
+    name: SonarCloud Analysis
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Generate a token on SonarCloud and add it to your GitHub repository secrets
+
   notification:
     name: Notification
-    needs: [backend, frontend]
+    needs: [backend, frontend, sonarcloud]
     runs-on: ubuntu-latest
     if: always()
 
