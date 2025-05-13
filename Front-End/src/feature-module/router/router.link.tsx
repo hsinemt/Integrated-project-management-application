@@ -270,7 +270,7 @@ export const publicRoutes = [
     route: Route,
   },
   {
-    path: "/grades/:studentId/:projectId",
+    path: "/grades/:studentId",
     element: <FinalGradePage />,
     route: Route,
   },

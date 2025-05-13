@@ -865,11 +865,27 @@ const DealsDashboard = () => {
                                                     key={studentId}
                                                     className="list-group-item list-group-item-action px-2 py-1 d-flex justify-content-between align-items-center"
                                                     onClick={() => navigate(`/employee-dashboard/${studentId}`)}
-                                                    style={{ cursor: 'pointer' }}
+                                                    style={{cursor: 'pointer'}}
                                                 >
                                               <span>
                                                 {student.name} {student.lastname}
                                               </span>
+                                                  <button
+                                                      onClick={() =>
+                                                          window.open(`http://localhost:3000/grades/${studentId}`, '_blank')
+                                                      }
+                                                      style={{
+                                                        marginLeft: '10px',
+                                                        padding: '5px 10px',
+                                                        backgroundColor: '#1976d2',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '5px',
+                                                        cursor: 'pointer',
+                                                      }}
+                                                  >
+                                                    Évaluation
+                                                  </button>
                                                   <i className="bi bi-chevron-right small text-muted"></i>
                                                 </li>
                                             ) : (

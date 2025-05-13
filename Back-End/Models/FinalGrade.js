@@ -51,6 +51,12 @@ const FinalGradeSchema = new mongoose.Schema({
             required: true
         }
     },
+    averages: {
+        quiz: { type: Number, default: 0 },
+        progress: { type: Number, default: 0 },
+        git: { type: Number, default: 0 },
+        code: { type: Number, default: 0 }
+    },
     finalGrade: {
         type: Number,
         min: 0,
@@ -67,4 +73,4 @@ const FinalGradeSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-module.exports = mongoose.model('FinalGrade', FinalGradeSchema); 
+module.exports = mongoose.model('FinalGrade', FinalGradeSchema);

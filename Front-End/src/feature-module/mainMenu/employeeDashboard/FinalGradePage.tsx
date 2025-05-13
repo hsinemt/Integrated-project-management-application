@@ -2,163 +2,243 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 
+interface GradeData {
+  studentId: {
+    _id: string;
+    name: string;
+    lastname: string;
+  };
+  projectId: {
+    _id: string;
+    title: string;
+  };
+  averages: {
+    quiz: number;
+    progress: number;
+    git: number;
+    code: number;
+  };
+  weights: {
+    quizWeight: number;
+    progressWeight: number;
+    gitWeight: number;
+    codeWeight: number;
+  };
+  customGrade: {
+    score: number;
+    weight: number;
+  };
+  finalGrade: number | null;
+  updatedAt?: string;
+}
+
 const FinalGradePage = () => {
-  const { projectId, studentId } = useParams();
-  const [role, setRole] = useState("");
-  const [data, setData] = useState<any>(null);
+  const { studentId } = useParams<{ studentId: string }>();
+  const [data, setData] = useState<GradeData | null>(null);
   const [weights, setWeights] = useState({ quizWeight: 0, progressWeight: 0, gitWeight: 0, codeWeight: 0 });
   const [customGrade, setCustomGrade] = useState({ score: 0, weight: 0 });
-  const [finalGrade, setFinalGrade] = useState<number | null>(null);
+  const [editableNotes, setEditableNotes] = useState({ quiz: 0, progress: 0, git: 0, code: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Pour édition des notes
-  const [editableNotes, setEditableNotes] = useState({
-    quiz: 0,
-    progress: 0,
-    git: 0,
-    code: 0,
-  });
-
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:9777";
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    if (user && user.role) setRole(user.role);
-  }, []);
+    if (!studentId) return;
 
-  useEffect(() => {
-    if (!studentId || !projectId) return;
-    setLoading(true);
-    setError(null);
-    axios.get(`${API_URL}/grades/${studentId}/${projectId}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    })
-      .then(res => {
-        setData(res.data.data);
-        setWeights(res.data.data.weights || { quizWeight: 0, progressWeight: 0, gitWeight: 0, codeWeight: 0 });
-        setCustomGrade(res.data.data.customGrade || { score: 0, weight: 0 });
-        setFinalGrade(res.data.data.finalGrade ?? null);
-        setEditableNotes({
-          quiz: res.data.data.averages?.quiz ?? 0,
-          progress: res.data.data.averages?.progress ?? 0,
-          git: res.data.data.averages?.git ?? 0,
-          code: res.data.data.averages?.code ?? 0,
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_URL}/grades/${studentId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
         });
-      })
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [studentId, projectId, API_URL]);
+
+        const responseData = response.data.data;
+        const formattedData: GradeData = {
+          studentId: responseData.finalGrade.studentId,
+          projectId: responseData.finalGrade.projectId,
+          finalGrade: responseData.finalGrade.finalGrade || null,
+          averages: responseData.averages,
+          weights: responseData.weights,
+          customGrade: responseData.customGrade,
+          updatedAt: responseData.finalGrade.updatedAt
+        };
+
+        setData(formattedData);
+        setWeights(responseData.weights);
+        setCustomGrade(responseData.customGrade);
+        setEditableNotes({
+          quiz: responseData.averages.quiz,
+          progress: responseData.averages.progress,
+          git: responseData.averages.git,
+          code: responseData.averages.code,
+        });
+
+      } catch (err) {
+        console.error("Error fetching grade data:", err);
+        setError("Erreur lors du chargement des données");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [studentId, API_URL]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
+
     const totalWeight = weights.quizWeight + weights.progressWeight + weights.gitWeight + weights.codeWeight + customGrade.weight;
     if (totalWeight !== 100) {
-      setError("La somme des pondérations doit être égale à 100%.");
+      setError("La somme des pondérations doit être égale à 100%");
       return;
     }
+
     try {
       const body = {
         studentId,
-        projectId,
         customGrade,
-        weights
+        weights,
+        averages: editableNotes
       };
+
       const token = localStorage.getItem("token");
-      const res = await axios.post(`${API_URL}/grades/calculate`, body, {
+      const response = await axios.post(`${API_URL}/grades/calculate`, body, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
-      setFinalGrade(res.data.data.finalGrade);
-      setData(res.data.data);
-      setSuccessMsg("Note finale calculée avec succès !");
+
+      const responseData = response.data.data;
+      setData({
+        ...data!,
+        finalGrade: responseData.finalGrade.finalGrade,
+        averages: responseData.averages,
+        weights: responseData.weights,
+        customGrade: responseData.customGrade,
+        updatedAt: responseData.finalGrade.updatedAt
+      });
+
+      setSuccessMsg("Note finale mise à jour avec succès !");
     } catch (err: any) {
-      setError(err.response?.data?.message || "Erreur lors du calcul de la note finale.");
+      setError(err.response?.data?.message || "Erreur lors du calcul de la note finale");
     }
   };
 
-  if (loading) return <div style={{ textAlign: "center", marginTop: "100px" }}>Chargement...</div>;
+  const formatFinalGrade = (grade: number | null) => {
+    if (grade === null || isNaN(grade)) return 'N/A';
+    return grade.toFixed(2);
+  };
 
- // ... existing code ...
- return (
-  <div className="container d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "80vh" }}>
-    <div className="col-md-8 col-lg-6">
-      <div className="card shadow p-4" style={{ marginTop: "40px" }}>
-        <h2 className="text-center mb-4">Note finale du projet</h2>
-        {data && (
-          <>
-            <h4 className="text-center">Étudiant : {data.finalGrade?.studentId?.name || data.studentId?.name} {data.finalGrade?.studentId?.lastname || data.studentId?.lastname}</h4>
-            <h5 className="text-center">Projet : {data.finalGrade?.projectId?.title || data.projectId?.title}</h5>
-            <div className="mt-3">
-              <strong>Détails de la note :</strong>
-              <ul>
-                <li>Quiz : <b>{data.averages?.quiz ?? 0}/20</b> (pondération : {data.weights?.quizWeight ?? 0}%)</li>
-                <li>Progress : <b>{data.averages?.progress ?? 0}/20</b> (pondération : {data.weights?.progressWeight ?? 0}%)</li>
-                <li>Git : <b>{data.averages?.git ?? 0}/20</b> (pondération : {data.weights?.gitWeight ?? 0}%)</li>
-                <li>Code : <b>{data.averages?.code ?? 0}/20</b> (pondération : {data.weights?.codeWeight ?? 0}%)</li>
-                <li>Note personnalisée : <b>{data.customGrade?.score ?? 0}/20</b> (pondération : {data.customGrade?.weight ?? 0}%)</li>
-              </ul>
-            </div>
-            {/* Formulaire pour le tuteur */}
-            {(
-              <form onSubmit={handleSubmit} className="mt-4 d-flex flex-column align-items-center">
-                <div className="row g-2 align-items-center justify-content-center mb-2">
-                  <div className="col-auto">
-                    <label htmlFor="customScore" className="col-form-label">Note personnalisée :</label>
-                  </div>
-                  <div className="col-auto">
-                    <input
+  if (loading) return <div className="text-center mt-5">Chargement en cours...</div>;
+  if (error) return <div className="alert alert-danger text-center mt-5">{error}</div>;
+  if (!data) return <div className="alert alert-warning text-center mt-5">Aucune donnée disponible</div>;
+
+  return (
+      <div className="container d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "80vh" }}>
+        <div className="col-md-8 col-lg-6">
+          <div className="card shadow p-4" style={{ marginTop: "40px" }}>
+            <h2 className="text-center mb-4">Note finale du projet</h2>
+
+            <h4 className="text-center">
+              Étudiant : {data.studentId.name} {data.studentId.lastname}
+            </h4>
+            <h5 className="text-center">Projet : {data.projectId.title}</h5>
+
+            <form onSubmit={handleSubmit} className="mt-4">
+              <div className="row g-3 mb-3">
+                {(['quiz', 'progress', 'git', 'code'] as const).map((key) => (
+                    <React.Fragment key={key}>
+                      <div className="col-md-6">
+                        <label className="form-label">{key.charAt(0).toUpperCase() + key.slice(1)} (0-20)</label>
+                        <input
+                            type="number"
+                            className="form-control"
+                            min={0}
+                            max={20}
+                            step="0.01"
+                            value={editableNotes[key].toFixed(2)} // Format to 2 decimal places
+                            onChange={(e) => setEditableNotes({
+                              ...editableNotes,
+                              [key]: parseFloat(e.target.value) || 0
+                            })}
+                            required
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Pondération (%)</label>
+                        <input
+                            type="number"
+                            className="form-control"
+                            min={0}
+                            max={100}
+                            value={weights[`${key}Weight` as keyof typeof weights]}
+                            onChange={(e) => setWeights({
+                              ...weights,
+                              [`${key}Weight`]: parseFloat(e.target.value) || 0
+                            })}
+                            required
+                        />
+                      </div>
+                    </React.Fragment>
+                ))}
+
+                <div className="col-md-6">
+                  <label className="form-label">Note personnalisée (0-20)</label>
+                  <input
                       type="number"
-                      id="customScore"
                       className="form-control"
                       min={0}
                       max={20}
-                      value={customGrade.score}
-                      onChange={e => setCustomGrade({ ...customGrade, score: Number(e.target.value) })}
+                      step="0.01"
+                      value={customGrade.score.toFixed(2)} // Format to 2 decimal places
+                      onChange={(e) => setCustomGrade({
+                        ...customGrade,
+                        score: parseFloat(e.target.value) || 0
+                      })}
                       required
-                    />
-                  </div>
-                  <div className="col-auto">
-                    <label htmlFor="customWeight" className="col-form-label">Pondération (%) :</label>
-                  </div>
-                  <div className="col-auto">
-                    <input
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Pondération (%)</label>
+                  <input
                       type="number"
-                      id="customWeight"
                       className="form-control"
                       min={0}
                       max={100}
                       value={customGrade.weight}
-                      onChange={e => setCustomGrade({ ...customGrade, weight: Number(e.target.value) })}
+                      onChange={(e) => setCustomGrade({
+                        ...customGrade,
+                        weight: parseFloat(e.target.value) || 0
+                      })}
                       required
-                    />
-                  </div>
+                  />
                 </div>
-                <button type="submit" className="btn btn-primary mt-2">Générer la note</button>
-                {error && <div className="alert alert-danger mt-3 w-100 text-center">{error}</div>}
-                {successMsg && <div className="alert alert-success mt-3 w-100 text-center">{successMsg}</div>}
-              </form>
-            )}
-            <div className="alert alert-info mt-4 text-center" style={{ fontSize: "1.3rem" }}>
-              <h5>Votre note finale :</h5>
-              {data.finalGrade && typeof data.finalGrade.finalGrade === "number" ? (
-                <span className="fw-bold" style={{ color: '#1976d2', fontSize: '2rem' }}>{data.finalGrade.finalGrade.toFixed(2)}/20</span>
-              ) : (
-                <span>Non disponible</span>
-              )}
+              </div>
+
+              <div className="d-grid gap-2">
+                <button type="submit" className="btn" style={{ backgroundColor: '#FF6200', color: 'white' }}>
+                  Calculer la note finale
+                </button>
+              </div>
+            </form>
+
+            {successMsg && <div className="alert alert-success mt-3">{successMsg}</div>}
+
+            <div className="alert alert-info mt-4 text-center">
+              <h5>Note finale :</h5>
+              <span className="fw-bold" style={{ color: '#1976d2', fontSize: '2rem' }}>
+              {formatFinalGrade(data.finalGrade)}/20
+            </span>
             </div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-);
-// ... existing code ...
+  );
 };
 
 export default FinalGradePage;

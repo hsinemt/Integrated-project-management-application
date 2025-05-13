@@ -9,6 +9,5 @@ console.log("FinalGradeRoutes loaded");
 router.post('/calculate', authMiddleware, FinalGradeController.calculateFinalGrade);
 
 // Route pour obtenir la note finale d'un étudiant pour un projet
-router.get('/:studentId/:projectId', authMiddleware, FinalGradeController.getFinalGrade);
-
+router.get('/:studentId', authMiddleware, FinalGradeController.getFinalGrade);
 module.exports = router;

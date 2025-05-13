@@ -106,10 +106,11 @@ const ALLRoutes: React.FC = () => {
                 }
               />
                 <Route
-                    path="/grades/:studentId/:projectId"
+                    path="/grades/:studentId
+"
                     element={
                         <Suspense fallback={<LoadingFallback />}>
-                            {publicRoutes.find(route => route.path === '/grades/:studentId/:projectId')?.element}
+                            {publicRoutes.find(route => route.path === '/grades/:studentId')?.element}
                         </Suspense>
                     }
                 />

@@ -5,7 +5,7 @@ const CodeMark = require('../Models/CodeMark');
 const FinalGradeController = {
     calculateFinalGrade: async (req, res) => {
         try {
-            const { studentId, projectId, customGrade, weights } = req.body;
+            const { studentId, customGrade, weights, averages } = req.body;
 
             // Validate weights sum to 100
             const totalWeight = weights.quizWeight + weights.progressWeight +
@@ -19,70 +19,53 @@ const FinalGradeController = {
                 });
             }
 
+            // Get all tasks for the student to derive projectId
+            const tasks = await Task.find({ assignedTo: studentId });
+            if (!tasks.length) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No tasks found for the student"
+                });
+            }
+            const projectId = tasks[0].project; // Assuming one project per student for simplicity
+
             // Check for existing final grade
             let finalGrade = await FinalGrade.findOne({ studentId, projectId });
 
-            // Get all tasks for the student in this project
-            const tasks = await Task.find({
-                project: projectId,
-                assignedTo: studentId
-            });
-
-            // Calculate averages
+            // Calculate averages from tasks
             let totalQuizScore = 0;
             let totalProgressScore = 0;
             let totalGitScore = 0;
             let taskCount = tasks.length;
 
             tasks.forEach(task => {
-                // Quiz score (convert from 100 to 20)
-                if (task.quizScore !== undefined) {
-                    totalQuizScore += task.quizScore / 5;
-                }
-
-                // Progress score (from progressAnalysis)
-                if (task.progressAnalysis?.scoreProgress !== undefined) {
-                    totalProgressScore += task.progressAnalysis.scoreProgress;
-                }
-
-                // Git score
-                if (task.noteGit !== undefined) {
-                    totalGitScore += task.noteGit;
-                }
+                if (task.quizScore !== undefined) totalQuizScore += task.quizScore / 5;
+                if (task.progressAnalysis?.scoreProgress !== undefined) totalProgressScore += task.progressAnalysis.scoreProgress;
+                if (task.noteGit !== undefined) totalGitScore += task.noteGit;
             });
-
-            const averages = {
-                quiz: taskCount > 0 ? totalQuizScore / taskCount : 0,
-                progress: taskCount > 0 ? totalProgressScore / taskCount : 0,
-                git: taskCount > 0 ? totalGitScore / taskCount : 0
-            };
 
             // Get CodeMark scores
-            const codeMarks = await CodeMark.find({
-                student: studentId,
-                project: projectId
-            });
-
-            // Calculate CodeMark average (convert from 100 to 20)
+            const codeMarks = await CodeMark.find({ student: studentId, project: projectId });
             let totalCodeScore = 0;
             codeMarks.forEach(mark => {
-                // Use tutor-reviewed score if available, otherwise automated score
-                const score = mark.tutorReview.reviewed ?
-                    mark.tutorReview.score :
-                    mark.score;
+                const score = mark.tutorReview.reviewed ? mark.tutorReview.score : mark.score;
                 totalCodeScore += score / 5;
             });
 
-            averages.code = codeMarks.length > 0 ?
-                totalCodeScore / codeMarks.length :
-                0;
+            // Use provided averages or calculate
+            let usedAverages = averages || {
+                quiz: taskCount > 0 ? totalQuizScore / taskCount : 0,
+                progress: taskCount > 0 ? totalProgressScore / taskCount : 0,
+                git: taskCount > 0 ? totalGitScore / taskCount : 0,
+                code: codeMarks.length > 0 ? totalCodeScore / codeMarks.length : 0
+            };
 
-            // Calculate final weighted score
+            // Calculate final score
             const finalScore = (
-                (averages.quiz * (weights.quizWeight / 100)) +
-                (averages.progress * (weights.progressWeight / 100)) +
-                (averages.git * (weights.gitWeight / 100)) +
-                (averages.code * (weights.codeWeight / 100)) +
+                (usedAverages.quiz * (weights.quizWeight / 100)) +
+                (usedAverages.progress * (weights.progressWeight / 100)) +
+                (usedAverages.git * (weights.gitWeight / 100)) +
+                (usedAverages.code * (weights.codeWeight / 100)) +
                 (customGrade.score * (customGrade.weight / 100))
             );
 
@@ -91,6 +74,7 @@ const FinalGradeController = {
                 finalGrade.customGrade = customGrade;
                 finalGrade.weights = weights;
                 finalGrade.finalGrade = finalScore;
+                finalGrade.averages = usedAverages;
                 finalGrade.updatedAt = new Date();
             } else {
                 finalGrade = new FinalGrade({
@@ -99,7 +83,7 @@ const FinalGradeController = {
                     customGrade,
                     weights,
                     finalGrade: finalScore,
-                    averages // Store the component averages
+                    averages: usedAverages
                 });
             }
 
@@ -109,7 +93,7 @@ const FinalGradeController = {
                 success: true,
                 data: {
                     finalGrade,
-                    averages,
+                    averages: usedAverages,
                     weights,
                     customGrade
                 }
@@ -124,9 +108,20 @@ const FinalGradeController = {
             });
         }
     },
+
     getFinalGrade: async (req, res) => {
         try {
-            const { studentId, projectId } = req.params;
+            const { studentId } = req.params;
+
+            // Get all tasks for the student to derive projectId
+            const tasks = await Task.find({ assignedTo: studentId });
+            if (!tasks.length) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No tasks found for the student'
+                });
+            }
+            const projectId = tasks[0].project; // Assuming one project per student for simplicity
 
             const finalGrade = await FinalGrade.findOne({ studentId, projectId })
                 .populate('studentId', 'name lastname')
@@ -139,7 +134,6 @@ const FinalGradeController = {
                 });
             }
 
-            // On extrait les champs pour le front
             return res.status(200).json({
                 success: true,
                 data: {
