@@ -85,7 +85,32 @@ const TaskColumn = forwardRef<HTMLDivElement, TaskColumnProps>(({
                     </div>
                 </div>
             </div>
-            <div className="kanban-drag-wrap" ref={ref} data-etat={etat}>
+            <div 
+                className={`kanban-drag-wrap ${isCompletedColumn ? 'completed-column' : 'draggable-column'}`} 
+                ref={ref} 
+                data-etat={etat}
+                style={{
+                    minHeight: '100px', // Ensure there's always space to drop even when empty
+                    padding: '8px',
+                    borderRadius: '8px',
+                    transition: 'background-color 0.3s ease'
+                }}
+            >
+                {tasks.length === 0 && (
+                    <div className="empty-column-placeholder" style={{
+                        padding: '15px',
+                        textAlign: 'center',
+                        color: '#6c757d',
+                        backgroundColor: 'rgba(0,0,0,0.03)',
+                        borderRadius: '6px',
+                        marginBottom: '10px',
+                        fontSize: '14px'
+                    }}>
+                        {isCompletedColumn ? 
+                            'Completed tasks will appear here' : 
+                            'Drag tasks here'}
+                    </div>
+                )}
                 {tasks.map((task) => (
                     <TaskCard
                         key={task._id}

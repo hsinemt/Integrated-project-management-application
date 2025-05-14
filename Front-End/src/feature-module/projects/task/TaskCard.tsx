@@ -131,7 +131,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
     }`;
 
   return (
-    <div key={task._id} className={cardClasses} data-task-id={task._id}>
+    <div 
+      key={task._id} 
+      className={cardClasses} 
+      data-task-id={task._id}
+      style={{
+        cursor: isCompletedColumn || isStatusChanging ? 'default' : 'grab',
+        userSelect: 'none', // Prevent text selection during drag
+      }}
+    >
       {isStatusChanging && (
         <div
           style={{
