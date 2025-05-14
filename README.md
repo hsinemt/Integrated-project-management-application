@@ -236,12 +236,31 @@ The CI/CD pipeline performs the following tasks:
   - Builds the frontend application
   - Runs security audit on frontend dependencies
 
-- **Deployment** (only on push to main branch):
+- **SonarCloud Analysis**:
+  - Performs code quality analysis
+  - Checks for code smells, bugs, and vulnerabilities
+
+The CI pipeline runs on pushes and pull requests to the main, development, and Code-Overview branches.
+
+### Docker CI/CD Pipeline (`docker-ci-cd.yml`)
+
+This dedicated Docker CI/CD pipeline automates the containerization and deployment process:
+
+- **Build and Push**:
   - Builds Docker images for both frontend and backend
   - Pushes images to GitHub Container Registry (ghcr.io)
-  - Tags images with the repository owner and latest tag
+  - Tags images with commit SHA and latest tag
+  - Sets up proper caching for faster builds
+  - Creates necessary environment files for both services
 
-The CI pipeline runs on pushes and pull requests to the main, development, and Code-Overview branches, while the CD part (deployment) only runs on pushes to the main branch.
+- **Deployment** (only on push to main or Code-Overview branches):
+  - Creates a production docker-compose file
+  - Deploys the application to a server using SSH
+  - Pulls the latest Docker images
+  - Manages container lifecycle (stop, remove, start)
+  - Cleans up old images to save disk space
+
+The Docker CI/CD pipeline runs on pushes to the main, development, and Code-Overview branches, as well as on pull requests to the main branch. The deployment step only runs on pushes to the main or Code-Overview branches.
 
 ## Contribution Guidelines
 - No one should push directly to the `main` branch.
