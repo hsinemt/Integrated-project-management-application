@@ -255,18 +255,18 @@ const Login = () => {
                             </div>
                         )}
                         {/* reCAPTCHA */}
-                        <div className="mb-3 text-center">
-                          <ReCAPTCHA
-                              sitekey="6Lf7r-EqAAAAAO4wc5S9o3ZhF5ronTLKiptJZFKp"
-                              onChange={(token: string | null) => {
-                                if (token) {
-                                  setCaptchaToken(token);
-                                } else {
-                                  setCaptchaToken(null);
-                                }
-                              }}
-                          />
-                        </div>
+                        {/*<div className="mb-3 text-center">*/}
+                        {/*  <ReCAPTCHA*/}
+                        {/*      sitekey="6Lf7r-EqAAAAAO4wc5S9o3ZhF5ronTLKiptJZFKp"*/}
+                        {/*      onChange={(token: string | null) => {*/}
+                        {/*        if (token) {*/}
+                        {/*          setCaptchaToken(token);*/}
+                        {/*        } else {*/}
+                        {/*          setCaptchaToken(null);*/}
+                        {/*        }*/}
+                        {/*      }}*/}
+                        {/*  />*/}
+                        {/*</div>*/}
 
                         {/* Bouton Send OTP */}
                         {/* Action Buttons */}
