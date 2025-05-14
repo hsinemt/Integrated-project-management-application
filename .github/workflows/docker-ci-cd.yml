@@ -6,11 +6,16 @@ on:
   pull_request:
     branches: [ main, evaluation ]
 
+# Add permissions for packages
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-push:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -87,8 +92,11 @@ jobs:
     name: Deploy with Docker Compose
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/evaluation'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -148,26 +156,27 @@ jobs:
             # Create project directory if it doesn't exist
             mkdir -p /var/www/projexus
             cd /var/www/projexus
-            
+
             # Copy docker-compose file from the runner
             echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
             scp ${{ github.workspace }}/docker-compose.prod.yml .
-            
+
             # Create uploads directory if it doesn't exist
             mkdir -p uploads
-            
+
             # Login to GitHub Container Registry
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            
+            # Using a PAT with appropriate permissions for more reliable authentication
+            echo ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
             # Pull the latest images
             docker-compose -f docker-compose.prod.yml pull
-            
+
             # Stop and remove existing containers
             docker-compose -f docker-compose.prod.yml down
-            
+
             # Start new containers
             docker-compose -f docker-compose.prod.yml up -d
-            
+
             # Clean up old images
             docker image prune -af
