@@ -12,7 +12,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/hsinemt/Integrated-project-management-application">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+    <img src="images/logo.png" alt="Logo" width="300" height="auto">
   </a>
 
 <h3 align="center">Projexus Platform</h3>
@@ -162,7 +162,7 @@ graph TD
     <li>Task assignment and progress tracking</li>
     <li>Project timelines and milestones</li>
     <li>Resource allocation and capacity planning</li>
-    <li>Multiple project view options (Kanban, list, calendar)</li>
+    <li>Multiple project view options (Kanban, list)</li>
   </ul>
 </details>
 
@@ -170,10 +170,7 @@ graph TD
   <summary><b>Team Collaboration</b></summary>
   <ul>
     <li>Real-time chat and messaging</li>
-    <li>Video and voice calls</li>
     <li>File sharing and document management</li>
-    <li>Social feed for team updates</li>
-    <li>@mentions and notifications</li>
     <li>Collaborative document editing</li>
   </ul>
 </details>
