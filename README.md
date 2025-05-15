@@ -12,7 +12,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/hsinemt/Integrated-project-management-application">
-    <img src="images/logo.png" alt="Logo" width="300" height="auto">
+    <img src="images/logo.png" alt="Projexus Logo" width="300" height="auto">
   </a>
 
 <h3 align="center">Projexus Platform</h3>
@@ -23,7 +23,7 @@
     <a href="https://github.com/hsinemt/Integrated-project-management-application"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://demo.projexusplatform.com">View Demo</a>
+    <a href="https://projexus.live/">View Live Site</a>
     ·
     <a href="https://github.com/hsinemt/Integrated-project-management-application/issues/new?labels=bug">Report Bug</a>
     ·
@@ -60,13 +60,12 @@
 
 Projexus Platform is a comprehensive project management application designed to streamline team collaboration, task management, and project tracking. The platform integrates various features including task boards, chat functionality, file management, calendars, and AI-powered tools to enhance productivity and project coordination.
 
-**[▶️ Live Demo](https://demo.projexusplatform.com)** (placeholder link)
 
 ## ✨ Key Features
 
 * **Unified Project Dashboard** - Get a bird's eye view of all your projects in one place
 * **Smart Task Management** - AI-powered task organization and priority suggestions
-* **Real-time Collaboration** - Chat, video calls, and collaborative document editing
+* **Real-time Collaboration** - Chat and collaborative document editing
 * **Advanced Analytics** - Customizable reports and performance metrics
 * **Seamless Integration** - Connect with tools you already use
 * **Enterprise-grade Security** - Role-based access control and data protection
@@ -79,7 +78,9 @@ Projexus Platform is a comprehensive project management application designed to 
 ## Screenshots
 
 [![Dashboard View][screenshot-dashboard]](https://example.com)
-
+[![Task Details][screenshot-taskboard]](https://example.com)
+[![Calendar View][screenshot-calendar]](https://example.com)
+[![Team Chat][screenshot-chat]](https://example.com)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -162,7 +163,7 @@ graph TD
     <li>Task assignment and progress tracking</li>
     <li>Project timelines and milestones</li>
     <li>Resource allocation and capacity planning</li>
-    <li>Multiple project view options (Kanban, list)</li>
+    <li>Multiple project view options (Kanban, list, calendar)</li>
   </ul>
 </details>
 
@@ -466,6 +467,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ## Contact & Support
 
 Project Link: [https://github.com/hsinemt/Integrated-project-management-application](https://github.com/hsinemt/Integrated-project-management-application)
+Official Website: [https://projexus.live/](https://projexus.live/)
 
 * **Issues & Bug Reports**: [GitHub Issues](https://github.com/hsinemt/Integrated-project-management-application/issues)
 * **Feature Requests**: [GitHub Discussions](https://github.com/hsinemt/Integrated-project-management-application/discussions)
