@@ -1,0 +1,182 @@
+name: Docker CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, evaluation, Code-Overview ]
+  pull_request:
+    branches: [ main, evaluation ]
+
+# Add permissions for packages
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/projexus-backend
+            ghcr.io/${{ github.repository_owner }}/projexus-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short
+
+      - name: Create .env file for backend
+        run: |
+          cd Back-End
+          echo "PORT=${{ secrets.PORT }}" >> .env
+          echo "MONGODB_URL=${{ secrets.MONGODB_URL }}" >> .env
+          echo "NODE_ENV=${{ secrets.NODE_ENV }}" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "SMTP_USER=${{ secrets.SMTP_USER }}" >> .env
+          echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> .env
+          echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+          echo "GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}" >> .env
+          echo "SESSION_SECRET=${{ secrets.SESSION_SECRET }}" >> .env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }}" >> .env
+          echo "COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}" >> .env
+          echo "CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}" >> .env
+          echo "CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}" >> .env
+          echo "CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}" >> .env
+
+      - name: Build and push Backend Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./Back-End
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/projexus-backend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/projexus-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create .env file for frontend
+        run: |
+          cd Front-End
+          echo "REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL || 'http://localhost:9777' }}" > .env
+          echo "NODE_ENV=${{ secrets.NODE_ENV || 'development' }}" >> .env
+
+      - name: Build and push Frontend Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./Front-End
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/projexus-frontend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/projexus-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy with Docker Compose
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/evaluation'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create docker-compose.prod.yml
+        run: |
+          cat > docker-compose.prod.yml << EOL
+          services:
+            backend:
+              image: ghcr.io/${{ github.repository_owner }}/projexus-backend:${{ github.sha }}
+              container_name: projexus-backend
+              restart: unless-stopped
+              ports:
+                - "9777:9777"
+              volumes:
+                - ./uploads:/usr/src/app/uploads
+              environment:
+                - NODE_ENV=production
+                - ORT_LOGGING_LEVEL=info
+                - NODE_OPTIONS=--max-old-space-size=4096
+                - TF_FORCE_GPU_ALLOW_GROWTH=true
+              networks:
+                - mern-network
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:9777/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 40s
+
+            frontend:
+              image: ghcr.io/${{ github.repository_owner }}/projexus-frontend:${{ github.sha }}
+              container_name: projexus-frontend
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+              depends_on:
+                - backend
+              networks:
+                - mern-network
+              environment:
+                - API_URL=http://backend:9777
+                - NODE_ENV=production
+
+          networks:
+            mern-network:
+              driver: bridge
+          EOL
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            # Create project directory if it doesn't exist
+            mkdir -p /var/www/projexus
+            cd /var/www/projexus
+
+            # Copy docker-compose file from the runner
+            echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            scp ${{ github.workspace }}/docker-compose.prod.yml .
+
+            # Create uploads directory if it doesn't exist
+            mkdir -p uploads
+
+            # Login to GitHub Container Registry
+            # Using a PAT with appropriate permissions for more reliable authentication
+            echo ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+            # Pull the latest images
+            docker-compose -f docker-compose.prod.yml pull
+
+            # Stop and remove existing containers
+            docker-compose -f docker-compose.prod.yml down
+
+            # Start new containers
+            docker-compose -f docker-compose.prod.yml up -d
+
+            # Clean up old images
+            docker image prune -af

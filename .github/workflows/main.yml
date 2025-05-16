@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, development, Code-Overview, commun, Deploy ]
+    branches: [ main, evaluation, Code-Overview, commun, Deploy ]
   pull_request:
-    branches: [ main, development, Code-Overview, commun, Deploy ]
+    branches: [ main, evaluation, Code-Overview, commun, Deploy ]
 
 jobs:
   setup:
@@ -284,7 +284,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Generate a token on SonarCloud and add it to your GitHub repository secrets
         with:
           args: >
-            -Dsonar.branch.name=Deploy
+            -Dsonar.branch.name=evaluation
 
   notification:
     name: Notification

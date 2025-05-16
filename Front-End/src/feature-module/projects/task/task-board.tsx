@@ -166,13 +166,17 @@ const TaskBoard = () => {
 
             console.log('User and group response for Socket.IO:', response.data);
 
+            // Extract IDs from student and group fields
             const fetchedGroupId = response.data.group?._id;
-            const fetchedUserId = response.data.user?._id;
+            const fetchedUserId = response.data.student?._id; // Changed from user to student
             const fetchedGroupName = response.data.group?.nom_groupe;
+
+            // Set state
             setGroupId(fetchedGroupId);
             setUserId(fetchedUserId);
             setGroupName(fetchedGroupName || 'Group Chat');
 
+            // Validate IDs before connecting to Socket.IO
             if (fetchedUserId && fetchedGroupId) {
                 socket.auth = { userId: fetchedUserId };
                 socket.connect();
@@ -186,6 +190,7 @@ const TaskBoard = () => {
             return { userId: fetchedUserId, groupId: fetchedGroupId };
         } catch (error: any) {
             console.error('Error fetching user and group for Socket.IO:', error.response?.data || error.message);
+            setChatError(`Erreur lors du chargement des données du groupe: ${error.message}`);
             throw error;
         }
     };
@@ -349,51 +354,121 @@ const TaskBoard = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    useEffect(() => {
+    // Reference to store the dragula instance
+    const dragulaRef = useRef<any>(null);
+
+    // Function to initialize or reinitialize dragula
+    const initializeDragula = () => {
+        // Clean up previous instance if it exists
+        if (dragulaRef.current) {
+            console.log('Cleaning up previous dragula instance');
+            dragulaRef.current.destroy();
+        }
+
+        // Check if refs are available
+        if (!toDoTasksRef.current || !inProgressTasksRef.current || !inReviewTasksRef.current) {
+            console.log('Refs not available yet, skipping dragula initialization');
+            return;
+        }
+
         const containers = [
             toDoTasksRef.current,
             inProgressTasksRef.current,
             inReviewTasksRef.current,
-        ].filter((container) => container !== null) as HTMLDivElement[];
+        ];
 
-        console.log('Dragula containers:', containers);
+        console.log('Initializing dragula with containers:', containers);
+        console.log('Current changingTaskIds:', Array.from(changingTaskIds));
 
+        // Create new dragula instance
         const drake = dragula(containers, {
             moves: (el, source, handle, sibling) => {
-                console.log('Dragula moves:', { el, source, handle, sibling });
-                return source !== completedTasksRef.current;
+                // Don't allow dragging from completed column
+                if (source === completedTasksRef.current) {
+                    console.log('Cannot drag from completed column');
+                    return false;
+                }
+
+                // Don't allow dragging if the task is being updated
+                const taskId = el?.getAttribute('data-task-id');
+                if (taskId && changingTaskIds.has(taskId)) {
+                    console.log('Cannot drag task that is being updated:', taskId);
+                    return false;
+                }
+
+                console.log('Can drag element:', el);
+                return true;
             },
             accepts: (el, target, source, sibling) => {
-                console.log('Dragula accepts:', { el, target, source, sibling });
-                return target !== completedTasksRef.current;
-            }
+                // Don't allow dropping to completed column
+                if (target === completedTasksRef.current) {
+                    console.log('Cannot drop to completed column');
+                    return false;
+                }
+
+                console.log('Can drop element to target:', target);
+                return true;
+            },
+            revertOnSpill: true, // Revert drag if dropped outside a container
+            removeOnSpill: false, // Don't remove element if dropped outside a container
+            copy: false, // Don't copy the element, move it
+            mirrorContainer: document.body, // Append mirror to body for better positioning
         });
 
-        drake.on('drop', (el, target) => {
-            console.log('Dragula drop:', { el, target });
-            const taskId = el.getAttribute('data-task-id');
-            const newEtat = target.getAttribute('data-etat');
+        // Set up drop event handler
+        drake.on('drop', async (el, target, source, sibling) => {
+            console.log('Dragula drop event:', { el, target, source, sibling });
+            const taskId = el?.getAttribute('data-task-id');
+            const newEtat = target?.getAttribute('data-etat');
+            const oldEtat = source?.getAttribute('data-etat');
 
-            if (taskId && newEtat) {
-                console.log('Updating task status:', { taskId, newEtat });
+            if (taskId && newEtat && oldEtat && newEtat !== oldEtat) {
+                console.log('Updating task status:', { taskId, oldEtat, newEtat });
+
+                // Add to updated tasks map for batch save button
                 setUpdatedTasks((prev) => new Map(prev).set(taskId, newEtat));
 
-                // Add a small delay to show the loading state
-                setTimeout(() => {
-                    setChangingTaskIds(prev => {
-                        const newSet = new Set(prev);
-                        newSet.add(taskId);
-                        return newSet;
-                    });
-                }, 300);
+                // Immediately update the task status
+                const success = await updateTaskStatus(taskId, newEtat);
+
+                if (!success) {
+                    console.log('Task status update failed, reverting UI');
+
+                    // If the update failed, move the element back to its original position
+                    // This will happen automatically when dragula is reinitialized in updateTaskStatus
+                }
+            } else if (newEtat === oldEtat) {
+                console.log('Task dropped in the same column, no update needed');
+            } else {
+                console.log('Missing taskId, newEtat, or oldEtat:', { taskId, newEtat, oldEtat });
             }
         });
 
+        // Store the instance in the ref
+        dragulaRef.current = drake;
+    };
+
+    // Initialize dragula when the component mounts
+    useEffect(() => {
+        console.log('Component mounted, initializing dragula');
+        initializeDragula();
+
+        // Clean up on unmount
         return () => {
-            console.log('Cleaning up dragula');
-            drake.destroy();
+            if (dragulaRef.current) {
+                console.log('Component unmounting, cleaning up dragula');
+                dragulaRef.current.destroy();
+            }
         };
-    }, [tasks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Reinitialize dragula when changingTaskIds changes
+    useEffect(() => {
+        console.log('changingTaskIds changed, reinitializing dragula');
+        initializeDragula();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [changingTaskIds]);
 
     useEffect(() => {
         console.log('Chat state updated, isChatOpen:', isChatOpen, 'chatError:', chatError, 'newMessage:', newMessage, 'groupId:', groupId, 'userId:', userId);
@@ -424,14 +499,110 @@ const TaskBoard = () => {
             // Add a minimum delay to ensure loading state is visible
             setTimeout(() => {
                 setChangingTaskIds(new Set());
-                window.location.reload();
+                setUpdatedTasks(new Map()); // Clear the updated tasks map
+
+                // Show success message
+                const successMessage = document.createElement('div');
+                successMessage.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+                successMessage.style.zIndex = '9999';
+                successMessage.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="ti ti-check-circle me-2"></i>
+                        <span>Task status updated successfully!</span>
+                    </div>
+                `;
+                document.body.appendChild(successMessage);
+
+                // Remove the message after 3 seconds
+                setTimeout(() => {
+                    document.body.removeChild(successMessage);
+                    window.location.reload(); // Reload the page to get the latest data
+                }, 1500);
             }, 500);
         } catch (error) {
             console.error('Error saving task status changes:', error);
             // Clear loading states on error
             setChangingTaskIds(new Set());
+
             // Show error message
-            alert('Failed to update task status. Please try again.');
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-3';
+            errorMessage.style.zIndex = '9999';
+            errorMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="ti ti-alert-circle me-2"></i>
+                    <span>Failed to update task status. Please try again.</span>
+                </div>
+            `;
+            document.body.appendChild(errorMessage);
+
+            // Remove the message after 5 seconds
+            setTimeout(() => {
+                document.body.removeChild(errorMessage);
+
+                // Reinitialize dragula to restore the original state
+                initializeDragula();
+            }, 3000);
+        }
+    };
+
+    // Function to handle individual task status update
+    const updateTaskStatus = async (taskId: string, newEtat: string) => {
+        try {
+            // Mark the task as changing
+            setChangingTaskIds(prev => {
+                const newSet = new Set(prev);
+                newSet.add(taskId);
+                return newSet;
+            });
+
+            const token = localStorage.getItem('token');
+            console.log(`Updating task ${taskId} status to ${newEtat}`);
+
+            await axios.put(
+                `http://localhost:9777/api/tasks/tasks/${taskId}/status`, 
+                { etat: newEtat }, 
+                {
+                    headers: {
+                        Authorization: token,
+                    },
+                }
+            );
+
+            // Update successful, remove from changing tasks
+            setTimeout(() => {
+                setChangingTaskIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(taskId);
+                    return newSet;
+                });
+
+                // Remove from updated tasks map
+                setUpdatedTasks(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(taskId);
+                    return newMap;
+                });
+            }, 500);
+
+            return true;
+        } catch (error) {
+            console.error(`Error updating task ${taskId} status:`, error);
+
+            // Update failed, remove from changing tasks
+            setChangingTaskIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(taskId);
+                return newSet;
+            });
+
+            // Show error toast
+            alert(`Failed to update task status. Please try again.`);
+
+            // Reinitialize dragula to restore the original state
+            initializeDragula();
+
+            return false;
         }
     };
 
@@ -1031,9 +1202,32 @@ const TaskBoard = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="d-flex justify-content-end mt-3">
-                                <button className="btn btn-primary" onClick={saveTaskStatusChanges}>Save</button>
-                            </div>
+                            {updatedTasks.size > 0 && (
+                                <div className="d-flex justify-content-end mt-3">
+                                    <div className="d-flex align-items-center">
+                                        <span className="me-3 text-muted">
+                                            {updatedTasks.size} task{updatedTasks.size !== 1 ? 's' : ''} pending update
+                                        </span>
+                                        <button 
+                                            className="btn btn-primary d-flex align-items-center" 
+                                            onClick={saveTaskStatusChanges}
+                                            disabled={Array.from(updatedTasks.keys()).some(id => changingTaskIds.has(id))}
+                                        >
+                                            {Array.from(updatedTasks.keys()).some(id => changingTaskIds.has(id)) ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                    Updating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="ti ti-device-floppy me-2"></i>
+                                                    Save All Changes
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
