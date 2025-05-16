@@ -79,8 +79,6 @@ Projexus Platform is a comprehensive project management application designed to 
 
 [![Dashboard View][screenshot-dashboard]](https://example.com)
 [![Task Details][screenshot-taskboard]](https://example.com)
-[![Calendar View][screenshot-calendar]](https://example.com)
-[![Team Chat][screenshot-chat]](https://example.com)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -490,7 +488,7 @@ Official Website: [https://projexus.live/](https://projexus.live/)
 [license-shield]: https://img.shields.io/github/license/hsinemt/Integrated-project-management-application.svg?style=for-the-badge
 [license-url]: https://github.com/hsinemt/Integrated-project-management-application/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/yourprofile
+[linkedin-url]: https://www.linkedin.com/in/hsine-mtiraoui/
 [screenshot-dashboard]: images/screenshot-dashboard.png
 [screenshot-taskboard]: images/screenshot-taskboard.png
 [screenshot-calendar]: images/screenshot-calendar.png
